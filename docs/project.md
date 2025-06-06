@@ -339,40 +339,38 @@ scripts/
 ```toml
 [dependencies]
 # GUI框架
-iced = { version = "0.10", features = ["canvas", "image", "svg"] }
-iced_wgpu = "0.11"
-iced_winit = "0.10"
+iced = { version = "0.13.1", features = ["canvas", "image", "svg", "tokio", "advanced"] }
 
 # 图像处理
-image = { version = "0.24", features = ["png", "jpeg", "tiff", "webp"] }
-imageproc = "0.23"
-ndarray = "0.15"
+image = { version = "0.25.6", features = ["png", "jpeg", "tiff", "webp"] }
+imageproc = "0.25"
+ndarray = "0.16"
 
 # 颜色管理
-lcms2 = "6.0"
+lcms2 = "6.1"
 palette = "0.7"
 
 # 文件IO
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 ron = "0.8"
-rfd = "0.11"  # 文件对话框
+rfd = "0.15.3"  # 文件对话框
 
 # 错误处理和日志
-anyhow = "1.0"
-thiserror = "1.0"
-tracing = "0.1"
-tracing-subscriber = "0.3"
+anyhow = "1.0.98"
+thiserror = "2.0.12"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
 
 # 异步运行时
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.45.1", features = ["full"] }
 
 # 并行处理
-rayon = "1.7"
+rayon = "1.10"
 
 # 数学计算
-nalgebra = "0.32"
-glam = "0.24"
+nalgebra = "0.33"
+glam = "0.30.3"
 
 # 插件系统(高级功能)
 mlua = { version = "0.9", optional = true }
@@ -383,11 +381,11 @@ wasmtime = { version = "13.0", optional = true }
 winapi = "0.3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.24"
+cocoa = "0.25"
 objc = "0.2"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.27"
+nix = "0.29"
 ```
 
 ## 开发流程和规范

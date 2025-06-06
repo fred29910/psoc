@@ -23,23 +23,29 @@ members = [
 
 [dependencies]
 # Error handling and logging
-anyhow = "1.0"
-thiserror = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+anyhow = "1.0.98"
+thiserror = "2.0.12"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 
-# GUI framework
-iced = { version = "0.10", features = ["canvas", "image", "svg", "tokio", "advanced"] }
+# GUI framework (optional)
+iced = { version = "0.13.1", features = ["canvas", "image", "svg", "tokio", "advanced"], optional = true }
 
 # Image processing
-image = { version = "0.24", features = ["png", "jpeg", "tiff", "webp"] }
+image = { version = "0.25.6", features = ["png", "jpeg", "tiff", "webp"] }
+
+# File dialogs (optional for GUI)
+rfd = { version = "0.15.3", optional = true }
 
 # Math
-glam = "0.24"
+glam = "0.30.3"
+
+# Async runtime
+tokio = { version = "1.45.1", features = ["full"] }
 
 # Icons and fonts (optional for now)
 # iced_aw = { version = "0.7", features = ["icons", "card", "tabs", "split"] }
@@ -52,16 +58,18 @@ psoc-ui-toolkit = { path = "crates/psoc-ui-toolkit" }
 psoc-plugins = { path = "crates/psoc-plugins", optional = true }
 
 # Optional plugin system dependencies
-mlua = { version = "0.9", optional = true }
-wasmtime = { version = "13.0", optional = true }
+mlua = { version = "0.10.5", optional = true }
+wasmtime = { version = "33.0.0", optional = true }
 
 [dev-dependencies]
-criterion = "0.5"
-proptest = "1.0"
-tempfile = "3.0"
+criterion = "0.6.0"
+proptest = "1.6.0"
+tempfile = "3.20.0"
+tokio-test = "0.4.4"
 
 [features]
-default = []
+default = ["gui"]
+gui = ["dep:iced", "dep:rfd"]
 plugins = ["psoc-plugins", "dep:mlua", "dep:wasmtime"]
 
 [profile.dev]
