@@ -16,12 +16,12 @@ pub mod utils;
 pub mod plugins;
 
 // Re-export commonly used types
-pub use app::Application;
+pub use app::{AppConfig, Application};
 pub use core::{Document, Layer};
-pub use utils::error::PsocError;
-
-/// Result type used throughout the application
-pub type Result<T> = std::result::Result<T, PsocError>;
+pub use utils::{
+    error::{ContextResult, PsocError, Result},
+    logging::{init_default_logging, init_env_logging, LogConfig, LogFormat, LogLevel},
+};
 
 /// Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
