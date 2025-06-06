@@ -58,118 +58,117 @@ impl AboutDialog {
         }
 
         // Create the dialog content
-        let content =
-            container(
-                column![
-                    // Header
-                    container(
-                        column![
-                            text(NAME)
-                                .size(24.0)
-                                .style(|_theme| iced::widget::text::Style {
-                                    color: Some(iced::Color::WHITE)
-                                }),
-                            text(format!("Version {}", VERSION))
-                                .size(14.0)
-                                .style(|_theme| iced::widget::text::Style {
-                                    color: Some(iced::Color::from_rgb(0.8, 0.8, 0.8))
-                                }),
-                        ]
-                        .align_x(iced::alignment::Horizontal::Center)
-                        .spacing(spacing::SM)
-                    )
-                    .padding(spacing::LG)
-                    .width(Length::Fill),
-                    // Description
-                    container(text(DESCRIPTION).size(12.0).style(|_theme| {
-                        iced::widget::text::Style {
-                            color: Some(iced::Color::from_rgb(0.9, 0.9, 0.9)),
-                        }
-                    }))
-                    .padding(spacing::MD)
-                    .width(Length::Fill),
-                    // System Information
-                    container(
-                        column![
-                            text("System Information").size(14.0).style(|_theme| {
-                                iced::widget::text::Style {
-                                    color: Some(iced::Color::WHITE),
-                                }
+        let content = container(
+            column![
+                // Header
+                container(
+                    column![
+                        text(NAME)
+                            .size(24.0)
+                            .style(|_theme| iced::widget::text::Style {
+                                color: Some(iced::Color::WHITE)
                             }),
-                            Space::new(Length::Shrink, Length::Fixed(8.0)),
-                            info_row("Rust Version", "1.70+"),
-                            info_row("Target", std::env::consts::ARCH),
-                            info_row(
-                                "Build Profile",
-                                if cfg!(debug_assertions) {
-                                    "Debug"
-                                } else {
-                                    "Release"
-                                }
-                            ),
-                            info_row("GUI Framework", "iced"),
-                        ]
-                        .spacing(spacing::SM)
-                    )
-                    .padding(spacing::MD)
-                    .width(Length::Fill),
-                    // License Information
-                    container(
-                        column![
-                            text("License")
-                                .size(14.0)
-                                .style(|_theme| iced::widget::text::Style {
-                                    color: Some(iced::Color::WHITE)
-                                }),
-                            Space::new(Length::Shrink, Length::Fixed(8.0)),
-                            text("Licensed under MIT OR Apache-2.0")
-                                .size(11.0)
-                                .style(|_theme| iced::widget::text::Style {
-                                    color: Some(iced::Color::from_rgb(0.8, 0.8, 0.8))
-                                }),
-                        ]
-                        .spacing(spacing::SM)
-                    )
-                    .padding(spacing::MD)
-                    .width(Length::Fill),
-                    // Credits
-                    container(
-                        column![
-                            text("Development Team").size(14.0).style(|_theme| {
-                                iced::widget::text::Style {
-                                    color: Some(iced::Color::WHITE),
-                                }
+                        text(format!("Version {}", VERSION))
+                            .size(14.0)
+                            .style(|_theme| iced::widget::text::Style {
+                                color: Some(iced::Color::from_rgb(0.8, 0.8, 0.8))
                             }),
-                            Space::new(Length::Shrink, Length::Fixed(8.0)),
-                            text("PSOC Development Team").size(11.0).style(|_theme| {
-                                iced::widget::text::Style {
-                                    color: Some(iced::Color::from_rgb(0.8, 0.8, 0.8)),
-                                }
-                            }),
-                        ]
-                        .spacing(spacing::SM)
-                    )
-                    .padding(spacing::MD)
-                    .width(Length::Fill),
-                    // Close button
-                    container(
-                        button(text("Close").size(12.0).style(|_theme| {
+                    ]
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .spacing(spacing::SM)
+                )
+                .padding(spacing::LG)
+                .width(Length::Fill),
+                // Description
+                container(text(DESCRIPTION).size(12.0).style(|_theme| {
+                    iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+                    }
+                }))
+                .padding(spacing::MD)
+                .width(Length::Fill),
+                // System Information
+                container(
+                    column![
+                        text("System Information").size(14.0).style(|_theme| {
                             iced::widget::text::Style {
                                 color: Some(iced::Color::WHITE),
                             }
-                        }))
-                        .on_press(on_close)
-                        .padding([spacing::SM, spacing::LG])
-                    )
-                    .padding(spacing::LG)
-                    .width(Length::Fill)
-                    .center_x(Length::Fill),
-                ]
-                .spacing(spacing::SM),
-            )
-            .width(Length::Fixed(400.0))
-            .height(Length::Shrink)
-            .padding(spacing::LG);
+                        }),
+                        Space::new(Length::Shrink, Length::Fixed(8.0)),
+                        info_row("Rust Version", "1.70+"),
+                        info_row("Target", std::env::consts::ARCH),
+                        info_row(
+                            "Build Profile",
+                            if cfg!(debug_assertions) {
+                                "Debug"
+                            } else {
+                                "Release"
+                            }
+                        ),
+                        info_row("GUI Framework", "iced"),
+                    ]
+                    .spacing(spacing::SM)
+                )
+                .padding(spacing::MD)
+                .width(Length::Fill),
+                // License Information
+                container(
+                    column![
+                        text("License")
+                            .size(14.0)
+                            .style(|_theme| iced::widget::text::Style {
+                                color: Some(iced::Color::WHITE)
+                            }),
+                        Space::new(Length::Shrink, Length::Fixed(8.0)),
+                        text("Licensed under MIT OR Apache-2.0")
+                            .size(11.0)
+                            .style(|_theme| iced::widget::text::Style {
+                                color: Some(iced::Color::from_rgb(0.8, 0.8, 0.8))
+                            }),
+                    ]
+                    .spacing(spacing::SM)
+                )
+                .padding(spacing::MD)
+                .width(Length::Fill),
+                // Credits
+                container(
+                    column![
+                        text("Development Team").size(14.0).style(|_theme| {
+                            iced::widget::text::Style {
+                                color: Some(iced::Color::WHITE),
+                            }
+                        }),
+                        Space::new(Length::Shrink, Length::Fixed(8.0)),
+                        text("PSOC Development Team").size(11.0).style(|_theme| {
+                            iced::widget::text::Style {
+                                color: Some(iced::Color::from_rgb(0.8, 0.8, 0.8)),
+                            }
+                        }),
+                    ]
+                    .spacing(spacing::SM)
+                )
+                .padding(spacing::MD)
+                .width(Length::Fill),
+                // Close button
+                container(
+                    button(text("Close").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(on_close)
+                    .padding([spacing::SM, spacing::LG])
+                )
+                .padding(spacing::LG)
+                .width(Length::Fill)
+                .center_x(Length::Fill),
+            ]
+            .spacing(spacing::SM),
+        )
+        .width(Length::Fixed(400.0))
+        .height(Length::Shrink)
+        .padding(spacing::LG);
 
         // Create modal overlay
         container(
