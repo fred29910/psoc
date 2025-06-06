@@ -1,12 +1,17 @@
 //! Main GUI application using iced framework
 
 use iced::{
-    widget::{button, column, container, row, text},
+    widget::{column, container},
     Application, Command, Element, Length, Settings, Theme,
 };
 use tracing::{debug, error, info, warn};
 
 use crate::{PsocError, Result};
+use super::{
+    components,
+    icons::Icon,
+    theme::{PsocTheme, spacing},
+};
 
 /// Main GUI application
 #[derive(Debug)]
@@ -30,6 +35,8 @@ pub struct AppState {
     pub current_tool: Tool,
     /// Whether the application is in debug mode
     pub debug_mode: bool,
+    /// Current theme
+    pub theme: PsocTheme,
 }
 
 /// Available tools
@@ -108,6 +115,7 @@ impl Default for AppState {
             pan_offset: (0.0, 0.0),
             current_tool: Tool::default(),
             debug_mode: cfg!(debug_assertions),
+            theme: PsocTheme::default(),
         }
     }
 }
@@ -259,7 +267,7 @@ impl Application for PsocApp {
     }
 
     fn theme(&self) -> Self::Theme {
-        Theme::Dark
+        self.state.theme.to_iced_theme()
     }
 }
 
@@ -290,141 +298,135 @@ impl PsocApp {
 
     /// Create the menu bar
     fn menu_bar(&self) -> Element<Message> {
-        row![
-            button("New").on_press(Message::NewDocument),
-            button("Open").on_press(Message::OpenDocument),
-            button("Save").on_press(Message::SaveDocument),
-            button("Exit").on_press(Message::Exit),
-        ]
-        .spacing(10)
-        .padding(10)
-        .into()
+        components::menu_bar(
+            Message::NewDocument,
+            Message::OpenDocument,
+            Message::SaveDocument,
+            Message::Exit,
+        )
     }
 
     /// Create the toolbar
     fn toolbar(&self) -> Element<Message> {
-        row![
-            button("Select")
-                .style(if self.state.current_tool == Tool::Select {
-                    iced::theme::Button::Primary
-                } else {
-                    iced::theme::Button::Secondary
-                })
-                .on_press(Message::ToolChanged(Tool::Select)),
-            button("Brush")
-                .style(if self.state.current_tool == Tool::Brush {
-                    iced::theme::Button::Primary
-                } else {
-                    iced::theme::Button::Secondary
-                })
-                .on_press(Message::ToolChanged(Tool::Brush)),
-            button("Eraser")
-                .style(if self.state.current_tool == Tool::Eraser {
-                    iced::theme::Button::Primary
-                } else {
-                    iced::theme::Button::Secondary
-                })
-                .on_press(Message::ToolChanged(Tool::Eraser)),
-            button("Move")
-                .style(if self.state.current_tool == Tool::Move {
-                    iced::theme::Button::Primary
-                } else {
-                    iced::theme::Button::Secondary
-                })
-                .on_press(Message::ToolChanged(Tool::Move)),
-            text("|").size(20),
-            button("Zoom In").on_press(Message::ZoomIn),
-            button("Zoom Out").on_press(Message::ZoomOut),
-            button("100%").on_press(Message::ZoomReset),
-        ]
-        .spacing(5)
-        .padding(10)
-        .into()
+        let tools = vec![
+            (Icon::Select, Message::ToolChanged(Tool::Select), self.state.current_tool == Tool::Select),
+            (Icon::Brush, Message::ToolChanged(Tool::Brush), self.state.current_tool == Tool::Brush),
+            (Icon::Eraser, Message::ToolChanged(Tool::Eraser), self.state.current_tool == Tool::Eraser),
+            (Icon::Move, Message::ToolChanged(Tool::Move), self.state.current_tool == Tool::Move),
+        ];
+
+        components::toolbar(
+            tools,
+            Message::ZoomIn,
+            Message::ZoomOut,
+            Message::ZoomReset,
+        )
     }
 
     /// Create the main content area
     fn main_content(&self) -> Element<Message> {
-        row![
+        iced::widget::row![
             self.left_panel(),
             self.canvas_area(),
             self.right_panel(),
         ]
-        .spacing(5)
+        .spacing(spacing::SM)
         .height(Length::Fill)
         .into()
     }
 
     /// Create the left panel (tools and layers)
     fn left_panel(&self) -> Element<Message> {
+        let tools = vec![
+            (Icon::Select, Message::ToolChanged(Tool::Select), self.state.current_tool == Tool::Select),
+            (Icon::Brush, Message::ToolChanged(Tool::Brush), self.state.current_tool == Tool::Brush),
+            (Icon::Eraser, Message::ToolChanged(Tool::Eraser), self.state.current_tool == Tool::Eraser),
+            (Icon::Move, Message::ToolChanged(Tool::Move), self.state.current_tool == Tool::Move),
+        ];
+
+        let layers_content = vec![
+            components::layer_item(
+                "Layer 1",
+                true,
+                true,
+                Message::Error("Layer visibility toggle not implemented".to_string()),
+                Message::Error("Layer selection not implemented".to_string()),
+            ),
+            components::layer_item(
+                "Background",
+                true,
+                false,
+                Message::Error("Layer visibility toggle not implemented".to_string()),
+                Message::Error("Layer selection not implemented".to_string()),
+            ),
+        ];
+
         column![
-            text("Tools").size(16),
-            text(format!("Current: {}", self.state.current_tool)),
-            text(""),
-            text("Layers").size(16),
-            text("Layer 1"),
-            text("Background"),
+            components::side_panel(
+                "Tools",
+                vec![components::tool_palette(tools)],
+                250.0
+            ),
+            components::side_panel(
+                "Layers",
+                layers_content,
+                250.0
+            ),
         ]
-        .spacing(5)
-        .padding(10)
-        .width(Length::Fixed(200.0))
+        .spacing(spacing::SM)
         .into()
     }
 
     /// Create the canvas area
     fn canvas_area(&self) -> Element<Message> {
         if self.state.document_open {
-            // For now, show a placeholder canvas area
-            container(
-                column![
-                    text("Canvas Area").size(20),
-                    text(format!("Zoom: {:.0}%", self.state.zoom_level * 100.0)),
-                    text(format!("Pan: ({:.1}, {:.1})", self.state.pan_offset.0, self.state.pan_offset.1)),
-                    text("Tool: ").size(14),
-                    text(format!("{}", self.state.current_tool)).size(14),
-                    text(""),
-                    text("Canvas implementation in progress...").size(12),
-                ]
-                .align_items(iced::Alignment::Center)
-                .spacing(10)
+            components::canvas_placeholder(
+                self.state.zoom_level,
+                self.state.pan_offset,
+                &self.state.current_tool.to_string(),
             )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x()
-            .center_y()
-            .style(iced::theme::Container::Box)
-            .into()
         } else {
-            // Show placeholder when no document is open
             container(
                 column![
-                    text("No Document Open").size(24),
-                    text("Click 'New' to create a document").size(16),
+                    iced::widget::text("No Document Open")
+                        .size(24.0)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7))),
+                    iced::widget::text("Click 'New' to create a document")
+                        .size(16.0)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
                 ]
                 .align_items(iced::Alignment::Center)
-                .spacing(10)
+                .spacing(spacing::LG)
             )
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x()
             .center_y()
-            .style(iced::theme::Container::Box)
             .into()
         }
     }
 
     /// Create the right panel (properties)
     fn right_panel(&self) -> Element<Message> {
-        column![
-            text("Properties").size(16),
-            text(format!("Tool: {}", self.state.current_tool)),
-            text(""),
-            text("Document").size(16),
-            text(if self.state.document_open { "Open" } else { "None" }),
-        ]
-        .spacing(5)
-        .padding(10)
-        .width(Length::Fixed(200.0))
-        .into()
+        let properties_content = vec![
+            components::section_header("Tool Properties"),
+            components::property_row("Current Tool", &self.state.current_tool.to_string()),
+            components::property_row("Zoom", &format!("{:.0}%", self.state.zoom_level * 100.0)),
+
+            components::section_header("Document"),
+            components::property_row("Status", if self.state.document_open { "Open" } else { "None" }),
+            components::property_row("Theme", match self.state.theme {
+                PsocTheme::Dark => "Dark",
+                PsocTheme::Light => "Light",
+                PsocTheme::HighContrast => "High Contrast",
+            }),
+        ];
+
+        components::side_panel(
+            "Properties",
+            properties_content,
+            250.0
+        )
     }
 
     /// Create the status bar
@@ -432,15 +434,11 @@ impl PsocApp {
         let status_text = if let Some(ref error) = self.error_message {
             format!("Error: {}", error)
         } else if self.state.document_open {
-            format!("Ready - Zoom: {:.0}%", self.state.zoom_level * 100.0)
+            "Ready".to_string()
         } else {
             "Ready - No document open".to_string()
         };
 
-        container(text(status_text))
-            .padding(5)
-            .width(Length::Fill)
-            .style(iced::theme::Container::Box)
-            .into()
+        components::status_bar(status_text, self.state.zoom_level)
     }
 }
