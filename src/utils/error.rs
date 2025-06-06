@@ -60,6 +60,10 @@ pub enum PsocError {
     #[error("Operation timeout: {operation} after {duration_ms}ms")]
     Timeout { operation: String, duration_ms: u64 },
 
+    /// Tool system errors
+    #[error("Tool error: {message}")]
+    Tool { message: String },
+
     /// Generic application errors
     #[error("Application error: {message}")]
     Application { message: String },
@@ -170,6 +174,13 @@ impl PsocError {
         }
     }
 
+    /// Create a new tool error
+    pub fn tool<S: Into<String>>(message: S) -> Self {
+        Self::Tool {
+            message: message.into(),
+        }
+    }
+
     /// Create a new application error
     pub fn application<S: Into<String>>(message: S) -> Self {
         Self::Application {
@@ -194,6 +205,7 @@ impl PsocError {
             Self::Config { .. } => true,
             Self::Plugin { .. } => true,
             Self::Rendering { .. } => true,
+            Self::Tool { .. } => true,
             Self::Memory { .. } => false,
             Self::Validation { .. } => true,
             Self::Network { .. } => true,
@@ -216,6 +228,7 @@ impl PsocError {
             Self::Config { .. } => "config",
             Self::Plugin { .. } => "plugin",
             Self::Rendering { .. } => "rendering",
+            Self::Tool { .. } => "tool",
             Self::Memory { .. } => "memory",
             Self::Validation { .. } => "validation",
             Self::Network { .. } => "network",

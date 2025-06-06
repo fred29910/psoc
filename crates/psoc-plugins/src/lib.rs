@@ -10,5 +10,7 @@ pub mod lua;
 pub mod wasm;
 
 // Re-export commonly used types
+#[allow(unused_imports)]
 pub use api::*;
+#[allow(unused_imports)]
 pub use manager::*;

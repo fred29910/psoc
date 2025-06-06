@@ -1,11 +1,12 @@
 //! Integration tests for UI components
 
-use psoc::ui::{AppState, LayerMessage, Message, PsocTheme, Tool};
+use psoc::ui::{AppState, LayerMessage, Message, PsocTheme};
+use psoc::ToolType;
 
 #[test]
 fn test_app_state_creation() {
     let state = AppState::default();
-    assert_eq!(state.current_tool, Tool::Select);
+    assert_eq!(state.current_tool, ToolType::Select);
     assert_eq!(state.zoom_level, 1.0);
     assert_eq!(state.pan_offset, (0.0, 0.0));
     assert!(!state.document_open);
@@ -16,14 +17,14 @@ fn test_app_state_creation() {
 fn test_app_state_tool_changes() {
     let mut state = AppState::default();
 
-    state.current_tool = Tool::Brush;
-    assert_eq!(state.current_tool, Tool::Brush);
+    state.current_tool = ToolType::Brush;
+    assert_eq!(state.current_tool, ToolType::Brush);
 
-    state.current_tool = Tool::Eraser;
-    assert_eq!(state.current_tool, Tool::Eraser);
+    state.current_tool = ToolType::Eraser;
+    assert_eq!(state.current_tool, ToolType::Eraser);
 
-    state.current_tool = Tool::Move;
-    assert_eq!(state.current_tool, Tool::Move);
+    state.current_tool = ToolType::Move;
+    assert_eq!(state.current_tool, ToolType::Move);
 }
 
 #[test]
@@ -92,10 +93,10 @@ fn test_app_state_document_operations() {
 
 #[test]
 fn test_tool_display() {
-    assert_eq!(Tool::Select.to_string(), "Select");
-    assert_eq!(Tool::Brush.to_string(), "Brush");
-    assert_eq!(Tool::Eraser.to_string(), "Eraser");
-    assert_eq!(Tool::Move.to_string(), "Move");
+    assert_eq!(ToolType::Select.to_string(), "Select");
+    assert_eq!(ToolType::Brush.to_string(), "Brush");
+    assert_eq!(ToolType::Eraser.to_string(), "Eraser");
+    assert_eq!(ToolType::Move.to_string(), "Move");
 }
 
 #[test]
@@ -116,7 +117,7 @@ fn test_message_variants() {
     let _new_doc = Message::NewDocument;
     let _open_doc = Message::OpenDocument;
     let _save_doc = Message::SaveDocument;
-    let _tool_change = Message::ToolChanged(Tool::Brush);
+    let _tool_change = Message::ToolChanged(ToolType::Brush);
     let _zoom_in = Message::ZoomIn;
     let _zoom_out = Message::ZoomOut;
     let _error = Message::Error("Test error".to_string());

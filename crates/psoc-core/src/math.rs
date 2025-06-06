@@ -26,10 +26,10 @@ pub mod constants {
     pub const RAD_TO_DEG: f32 = 180.0 / PI;
 
     /// Golden ratio
-    pub const GOLDEN_RATIO: f32 = 1.618033988749;
+    pub const GOLDEN_RATIO: f32 = 1.618_034;
 
     /// Square root of 2
-    pub const SQRT_2: f32 = 1.4142135623731;
+    pub const SQRT_2: f32 = std::f32::consts::SQRT_2;
 }
 
 /// Clamp a value between min and max
@@ -232,12 +232,12 @@ pub fn gaussian_kernel_2d(size: usize, sigma: f32) -> Vec<Vec<f32>> {
     let mut kernel = vec![vec![0.0; size]; size];
     let mut sum = 0.0;
 
-    for y in 0..size {
-        for x in 0..size {
+    for (y, row) in kernel.iter_mut().enumerate().take(size) {
+        for (x, cell) in row.iter_mut().enumerate().take(size) {
             let dx = x as f32 - center;
             let dy = y as f32 - center;
             let weight = gaussian_2d(dx, dy, sigma, sigma);
-            kernel[y][x] = weight;
+            *cell = weight;
             sum += weight;
         }
     }

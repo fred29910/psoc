@@ -1,3 +1,17 @@
-//! Tools module
+//! Tools module - Core editing tools and tool management system
+//!
+//! This module provides the foundation for all editing tools in PSOC, including:
+//! - Tool trait definition for consistent tool behavior
+//! - Tool manager for switching between tools
+//! - Concrete tool implementations (Select, Brush, Eraser, Move)
+//! - Tool event handling and state management
 
-// Editing tools will be implemented here
+pub mod tool_trait;
+pub mod tool_manager;
+#[allow(clippy::module_inception)]
+pub mod tools;
+
+// Re-export commonly used types
+pub use tool_trait::{Tool, ToolEvent, ToolResult, ToolState};
+pub use tool_manager::{ToolManager, ToolManagerError};
+pub use tools::{BrushTool, EraserTool, MoveTool, SelectTool, ToolType};

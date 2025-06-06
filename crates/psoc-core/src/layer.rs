@@ -321,9 +321,9 @@ impl BlendMode {
 
     /// Difference blending implementation
     fn blend_difference(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
-        let blended_r = (base.r as i16 - overlay.r as i16).abs() as u8;
-        let blended_g = (base.g as i16 - overlay.g as i16).abs() as u8;
-        let blended_b = (base.b as i16 - overlay.b as i16).abs() as u8;
+        let blended_r = (base.r as i16 - overlay.r as i16).unsigned_abs() as u8;
+        let blended_g = (base.g as i16 - overlay.g as i16).unsigned_abs() as u8;
+        let blended_b = (base.b as i16 - overlay.b as i16).unsigned_abs() as u8;
         let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
 
         BlendMode::Normal.blend_normal(base, blended, opacity)

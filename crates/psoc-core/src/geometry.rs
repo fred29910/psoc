@@ -35,7 +35,7 @@ impl Point {
     }
 
     /// Convert to Vec2
-    pub fn to_vec2(&self) -> Vec2 {
+    pub fn to_vec2(self) -> Vec2 {
         Vec2::new(self.x, self.y)
     }
 
@@ -327,7 +327,7 @@ impl Transform {
     }
 
     /// Get the transformation matrix as a 2x3 array
-    pub fn to_array(&self) -> [[f32; 2]; 3] {
+    pub fn to_array(self) -> [[f32; 2]; 3] {
         self.matrix.to_cols_array_2d()
     }
 

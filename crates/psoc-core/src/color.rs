@@ -55,7 +55,7 @@ impl HslColor {
     }
 
     /// Convert to RGBA pixel
-    pub fn to_rgba(&self) -> RgbaPixel {
+    pub fn to_rgba(self) -> RgbaPixel {
         let (r, g, b) = hsl_to_rgb(self.h, self.s, self.l);
         RgbaPixel::new(
             (r * CHANNEL_MAX as f32) as Channel,
@@ -107,7 +107,7 @@ impl HsvColor {
     }
 
     /// Convert to RGBA pixel
-    pub fn to_rgba(&self) -> RgbaPixel {
+    pub fn to_rgba(self) -> RgbaPixel {
         let (r, g, b) = hsv_to_rgb(self.h, self.s, self.v);
         RgbaPixel::new(
             (r * CHANNEL_MAX as f32) as Channel,

@@ -63,7 +63,7 @@ impl RgbaPixel {
     }
 
     /// Convert to array [r, g, b, a]
-    pub fn to_array(&self) -> [Channel; 4] {
+    pub fn to_array(self) -> [Channel; 4] {
         [self.r, self.g, self.b, self.a]
     }
 

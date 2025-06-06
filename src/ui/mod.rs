@@ -15,7 +15,7 @@ pub mod theme;
 
 // Re-export main components
 #[cfg(feature = "gui")]
-pub use application::{AppState, LayerMessage, Message, PsocApp, Tool};
+pub use application::{AppState, LayerMessage, Message, PsocApp};
 #[cfg(feature = "gui")]
 pub use canvas::{ImageCanvas, ImageData};
 #[cfg(feature = "gui")]

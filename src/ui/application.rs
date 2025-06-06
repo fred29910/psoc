@@ -14,11 +14,14 @@ use super::{
     icons::Icon,
     theme::{spacing, PsocTheme},
 };
-use crate::{PsocError, Result};
+use crate::{
+    tools::{ToolManager, ToolType},
+    PsocError, Result,
+};
 use psoc_core::{Document, Layer};
 
 /// Main GUI application
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PsocApp {
     /// Current application state
     state: AppState,
@@ -28,18 +31,11 @@ pub struct PsocApp {
     about_dialog: AboutDialog,
     /// Image canvas for rendering
     canvas: ImageCanvas,
+    /// Tool manager for handling editing tools
+    tool_manager: ToolManager,
 }
 
-impl Default for PsocApp {
-    fn default() -> Self {
-        Self {
-            state: AppState::default(),
-            error_message: None,
-            about_dialog: AboutDialog::default(),
-            canvas: ImageCanvas::new(),
-        }
-    }
-}
+
 
 /// Application state
 #[derive(Debug, Clone)]
@@ -57,7 +53,7 @@ pub struct AppState {
     /// Canvas pan offset
     pub pan_offset: (f32, f32),
     /// Current tool selection
-    pub current_tool: Tool,
+    pub current_tool: ToolType,
     /// Whether the application is in debug mode
     pub debug_mode: bool,
     /// Current theme
@@ -66,35 +62,7 @@ pub struct AppState {
     pub file_manager: crate::file_io::FileManager,
 }
 
-/// Available tools
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tool {
-    /// Selection tool
-    Select,
-    /// Brush tool
-    Brush,
-    /// Eraser tool
-    Eraser,
-    /// Move tool
-    Move,
-}
-
-impl Default for Tool {
-    fn default() -> Self {
-        Self::Select
-    }
-}
-
-impl std::fmt::Display for Tool {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Tool::Select => write!(f, "Select"),
-            Tool::Brush => write!(f, "Brush"),
-            Tool::Eraser => write!(f, "Eraser"),
-            Tool::Move => write!(f, "Move"),
-        }
-    }
-}
+// Tool types are now defined in the tools module
 
 /// Messages that can be sent to the application
 #[derive(Debug, Clone)]
@@ -118,7 +86,7 @@ pub enum Message {
     /// Exit the application
     Exit,
     /// Change the current tool
-    ToolChanged(Tool),
+    ToolChanged(ToolType),
     /// Zoom in
     ZoomIn,
     /// Zoom out
@@ -184,7 +152,7 @@ impl Default for AppState {
             current_file_path: None,
             zoom_level: 1.0,
             pan_offset: (0.0, 0.0),
-            current_tool: Tool::default(),
+            current_tool: ToolType::Select,
             debug_mode: cfg!(debug_assertions),
             theme: PsocTheme::default(),
             file_manager: crate::file_io::FileManager::new(),
@@ -221,6 +189,7 @@ impl PsocApp {
                 error_message: None,
                 about_dialog: AboutDialog::new(),
                 canvas: ImageCanvas::new(),
+                tool_manager: ToolManager::new(),
             },
             Task::none(),
         )
@@ -406,7 +375,13 @@ impl PsocApp {
             Message::ToolChanged(tool) => {
                 debug!("Tool changed to: {}", tool);
                 self.state.current_tool = tool;
-                self.error_message = None;
+
+                // Update the tool manager
+                if let Err(e) = self.tool_manager.set_active_tool(tool) {
+                    self.error_message = Some(format!("Failed to switch tool: {}", e));
+                } else {
+                    self.error_message = None;
+                }
             }
             Message::ZoomIn => {
                 let new_zoom = (self.state.zoom_level * 1.2).min(10.0);
@@ -484,18 +459,35 @@ impl PsocApp {
 impl PsocApp {
     /// Handle canvas-specific messages
     fn handle_canvas_message(&mut self, message: CanvasMessage) {
+        use crate::tools::{ToolEvent, tool_trait::{MouseButton, KeyModifiers}};
+        use psoc_core::Point;
+
         match message {
             CanvasMessage::MouseMoved { x, y } => {
                 debug!("Mouse moved on canvas: ({}, {})", x, y);
-                // TODO: Handle mouse movement for current tool
+                let event = ToolEvent::MouseMoved {
+                    position: Point::new(x, y),
+                    modifiers: KeyModifiers::default(),
+                };
+                self.handle_tool_event(event);
             }
             CanvasMessage::MousePressed { x, y } => {
                 debug!("Mouse pressed on canvas: ({}, {})", x, y);
-                // TODO: Handle mouse press for current tool
+                let event = ToolEvent::MousePressed {
+                    position: Point::new(x, y),
+                    button: MouseButton::Left,
+                    modifiers: KeyModifiers::default(),
+                };
+                self.handle_tool_event(event);
             }
             CanvasMessage::MouseReleased { x, y } => {
                 debug!("Mouse released on canvas: ({}, {})", x, y);
-                // TODO: Handle mouse release for current tool
+                let event = ToolEvent::MouseReleased {
+                    position: Point::new(x, y),
+                    button: MouseButton::Left,
+                    modifiers: KeyModifiers::default(),
+                };
+                self.handle_tool_event(event);
             }
             CanvasMessage::Scrolled { delta_x, delta_y } => {
                 debug!("Canvas scrolled: ({}, {})", delta_x, delta_y);
@@ -517,6 +509,7 @@ impl PsocApp {
     }
 
     /// Convert image::DynamicImage to canvas ImageData
+    #[allow(dead_code)]
     fn convert_image_to_canvas_data(&self, image: &image::DynamicImage) -> ImageData {
         let rgba_image = image.to_rgba8();
         let (width, height) = rgba_image.dimensions();
@@ -546,23 +539,23 @@ impl PsocApp {
         let tools = vec![
             (
                 Icon::Select,
-                Message::ToolChanged(Tool::Select),
-                self.state.current_tool == Tool::Select,
+                Message::ToolChanged(ToolType::Select),
+                self.state.current_tool == ToolType::Select,
             ),
             (
                 Icon::Brush,
-                Message::ToolChanged(Tool::Brush),
-                self.state.current_tool == Tool::Brush,
+                Message::ToolChanged(ToolType::Brush),
+                self.state.current_tool == ToolType::Brush,
             ),
             (
                 Icon::Eraser,
-                Message::ToolChanged(Tool::Eraser),
-                self.state.current_tool == Tool::Eraser,
+                Message::ToolChanged(ToolType::Eraser),
+                self.state.current_tool == ToolType::Eraser,
             ),
             (
                 Icon::Move,
-                Message::ToolChanged(Tool::Move),
-                self.state.current_tool == Tool::Move,
+                Message::ToolChanged(ToolType::Move),
+                self.state.current_tool == ToolType::Move,
             ),
         ];
 
@@ -582,23 +575,23 @@ impl PsocApp {
         let tools = vec![
             (
                 Icon::Select,
-                Message::ToolChanged(Tool::Select),
-                self.state.current_tool == Tool::Select,
+                Message::ToolChanged(ToolType::Select),
+                self.state.current_tool == ToolType::Select,
             ),
             (
                 Icon::Brush,
-                Message::ToolChanged(Tool::Brush),
-                self.state.current_tool == Tool::Brush,
+                Message::ToolChanged(ToolType::Brush),
+                self.state.current_tool == ToolType::Brush,
             ),
             (
                 Icon::Eraser,
-                Message::ToolChanged(Tool::Eraser),
-                self.state.current_tool == Tool::Eraser,
+                Message::ToolChanged(ToolType::Eraser),
+                self.state.current_tool == ToolType::Eraser,
             ),
             (
                 Icon::Move,
-                Message::ToolChanged(Tool::Move),
-                self.state.current_tool == Tool::Move,
+                Message::ToolChanged(ToolType::Move),
+                self.state.current_tool == ToolType::Move,
             ),
         ];
 
@@ -888,6 +881,15 @@ impl PsocApp {
                 } else {
                     self.error_message = Some("Layer index out of bounds".to_string());
                 }
+            }
+        }
+    }
+
+    /// Handle tool events
+    fn handle_tool_event(&mut self, event: crate::tools::ToolEvent) {
+        if let Some(ref mut document) = self.state.current_document {
+            if let Err(e) = self.tool_manager.handle_event(event, document) {
+                self.error_message = Some(format!("Tool error: {}", e));
             }
         }
     }

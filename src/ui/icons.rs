@@ -280,9 +280,7 @@ pub fn tool_button<Message: Clone + 'static>(
 ) -> iced::widget::Button<'static, Message> {
     let button = iced::widget::button(text(icon.as_str()).size(12.0)).on_press(message);
 
-    if is_active {
-        button
-    } else {
-        button
-    }
+    // TODO: Add visual styling for active state
+    let _ = is_active; // Suppress unused variable warning
+    button
 }

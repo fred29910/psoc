@@ -101,30 +101,19 @@ impl RenderEngine {
             layer.blend_mode
         );
 
+        let params = CompositionParams {
+            result_width,
+            result_height,
+            layer_width,
+            layer_height,
+            offset_x,
+            offset_y,
+        };
+
         if self.parallel_enabled && layer_width * layer_height > self.tile_size * self.tile_size {
-            self.composite_layer_parallel(
-                result,
-                layer,
-                layer_data,
-                result_width,
-                result_height,
-                layer_width,
-                layer_height,
-                offset_x,
-                offset_y,
-            )
+            self.composite_layer_parallel(result, layer, layer_data, &params)
         } else {
-            self.composite_layer_sequential(
-                result,
-                layer,
-                layer_data,
-                result_width,
-                result_height,
-                layer_width,
-                layer_height,
-                offset_x,
-                offset_y,
-            )
+            self.composite_layer_sequential(result, layer, layer_data, &params)
         }
     }
 
@@ -134,23 +123,18 @@ impl RenderEngine {
         result: &mut PixelData,
         layer: &Layer,
         layer_data: &PixelData,
-        result_width: u32,
-        result_height: u32,
-        layer_width: u32,
-        layer_height: u32,
-        offset_x: i32,
-        offset_y: i32,
+        params: &CompositionParams,
     ) -> Result<()> {
-        for y in 0..layer_height {
-            for x in 0..layer_width {
-                let doc_x = x as i32 + offset_x;
-                let doc_y = y as i32 + offset_y;
+        for y in 0..params.layer_height {
+            for x in 0..params.layer_width {
+                let doc_x = x as i32 + params.offset_x;
+                let doc_y = y as i32 + params.offset_y;
 
                 // Check bounds
                 if doc_x < 0
                     || doc_y < 0
-                    || doc_x >= result_width as i32
-                    || doc_y >= result_height as i32
+                    || doc_x >= params.result_width as i32
+                    || doc_y >= params.result_height as i32
                 {
                     continue;
                 }
@@ -177,15 +161,10 @@ impl RenderEngine {
         result: &mut PixelData,
         layer: &Layer,
         layer_data: &PixelData,
-        result_width: u32,
-        result_height: u32,
-        layer_width: u32,
-        layer_height: u32,
-        offset_x: i32,
-        offset_y: i32,
+        params: &CompositionParams,
     ) -> Result<()> {
         // Create tiles for parallel processing
-        let tiles = self.create_tiles(layer_width, layer_height);
+        let tiles = self.create_tiles(params.layer_width, params.layer_height);
 
         // Process tiles in parallel
         let blend_mode = layer.blend_mode;
@@ -199,18 +178,18 @@ impl RenderEngine {
 
                 for y in tile.y..tile.y + tile.height {
                     for x in tile.x..tile.x + tile.width {
-                        if x >= layer_width || y >= layer_height {
+                        if x >= params.layer_width || y >= params.layer_height {
                             continue;
                         }
 
-                        let doc_x = x as i32 + offset_x;
-                        let doc_y = y as i32 + offset_y;
+                        let doc_x = x as i32 + params.offset_x;
+                        let doc_y = y as i32 + params.offset_y;
 
                         // Check bounds
                         if doc_x < 0
                             || doc_y < 0
-                            || doc_x >= result_width as i32
-                            || doc_y >= result_height as i32
+                            || doc_x >= params.result_width as i32
+                            || doc_y >= params.result_height as i32
                         {
                             continue;
                         }
@@ -283,7 +262,13 @@ impl RenderEngine {
             }
 
             if let Some(layer_data) = &layer.pixel_data {
-                self.composite_layer_region(&mut result, layer, layer_data, x, y, width, height)?;
+                let region = RegionParams {
+                    region_x: x,
+                    region_y: y,
+                    region_width: width,
+                    region_height: height,
+                };
+                self.composite_layer_region(&mut result, layer, layer_data, &region)?;
             }
         }
 
@@ -296,19 +281,16 @@ impl RenderEngine {
         result: &mut PixelData,
         layer: &Layer,
         layer_data: &PixelData,
-        region_x: u32,
-        region_y: u32,
-        region_width: u32,
-        region_height: u32,
+        region: &RegionParams,
     ) -> Result<()> {
         let (layer_width, layer_height) = layer_data.dimensions();
         let offset_x = layer.offset.x as i32;
         let offset_y = layer.offset.y as i32;
 
-        for y in 0..region_height {
-            for x in 0..region_width {
-                let doc_x = region_x + x;
-                let doc_y = region_y + y;
+        for y in 0..region.region_height {
+            for x in 0..region.region_width {
+                let doc_x = region.region_x + x;
+                let doc_y = region.region_y + y;
 
                 let layer_x = doc_x as i32 - offset_x;
                 let layer_y = doc_y as i32 - offset_y;
@@ -345,6 +327,26 @@ struct Tile {
     y: u32,
     width: u32,
     height: u32,
+}
+
+/// Parameters for layer composition
+#[derive(Debug, Clone)]
+struct CompositionParams {
+    result_width: u32,
+    result_height: u32,
+    layer_width: u32,
+    layer_height: u32,
+    offset_x: i32,
+    offset_y: i32,
+}
+
+/// Parameters for region composition
+#[derive(Debug, Clone)]
+struct RegionParams {
+    region_x: u32,
+    region_y: u32,
+    region_width: u32,
+    region_height: u32,
 }
 
 #[cfg(test)]

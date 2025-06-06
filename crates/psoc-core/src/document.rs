@@ -380,6 +380,7 @@ impl Document {
     }
 
     /// Composite a layer in a specific region
+    #[allow(dead_code, clippy::too_many_arguments)]
     fn composite_layer_region(
         &self,
         result: &mut PixelData,
@@ -427,6 +428,7 @@ impl Document {
     }
 
     /// Composite a layer onto the result image
+    #[allow(dead_code)]
     fn composite_layer_onto(
         &self,
         result: &mut PixelData,

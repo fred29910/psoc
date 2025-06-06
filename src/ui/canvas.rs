@@ -503,6 +503,7 @@ impl ImageCanvas {
     }
 
     /// Draw rendered image data with proper positioning
+    #[allow(clippy::too_many_arguments)]
     fn draw_rendered_image(
         &self,
         frame: &mut Frame,
@@ -535,7 +536,7 @@ impl ImageCanvas {
         );
 
         // Sample some pixels to show the image content
-        let sample_size = 8.0 * self.state.zoom.min(1.0).max(0.1);
+        let sample_size = 8.0 * self.state.zoom.clamp(0.1, 1.0);
         if sample_size >= 2.0 {
             let samples_x = (width / sample_size) as u32;
             let samples_y = (height / sample_size) as u32;
@@ -578,6 +579,7 @@ impl ImageCanvas {
     }
 
     /// Draw document placeholder when rendering fails
+    #[allow(clippy::too_many_arguments)]
     fn draw_document_placeholder(
         &self,
         frame: &mut Frame,
