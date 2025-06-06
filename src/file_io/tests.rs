@@ -1,6 +1,7 @@
 //! Tests for file I/O functionality
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::file_io::{
         can_export, estimate_export_size, export_image_with_options, get_image_metadata,

@@ -79,7 +79,7 @@ pub fn save_png_with_options<P: AsRef<Path>>(
 mod tests {
     use super::*;
     use image::{ImageBuffer, Rgb};
-    use std::fs;
+
     use tempfile::tempdir;
 
     #[test]

@@ -38,8 +38,11 @@ mod tests {
 
     #[test]
     fn test_version_info() {
-        assert!(!VERSION.is_empty());
+        #[allow(clippy::const_is_empty)]
+        {
+            assert!(!VERSION.is_empty());
+            assert!(!DESCRIPTION.is_empty());
+        }
         assert_eq!(NAME, "psoc");
-        assert!(!DESCRIPTION.is_empty());
     }
 }

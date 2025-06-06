@@ -276,7 +276,10 @@ mod tests {
     fn test_tool_option_value_equality() {
         assert_eq!(ToolOptionValue::Bool(true), ToolOptionValue::Bool(true));
         assert_eq!(ToolOptionValue::Int(42), ToolOptionValue::Int(42));
-        assert_eq!(ToolOptionValue::Float(3.14), ToolOptionValue::Float(3.14));
+        assert_eq!(
+            ToolOptionValue::Float(std::f32::consts::PI),
+            ToolOptionValue::Float(std::f32::consts::PI)
+        );
         assert_ne!(ToolOptionValue::Bool(true), ToolOptionValue::Bool(false));
     }
 

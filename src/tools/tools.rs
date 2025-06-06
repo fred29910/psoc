@@ -813,8 +813,11 @@ impl Tool for MoveTool {
                         let delta_y = position.y - start_pos.y;
                         debug!("Moving by delta: ({}, {})", delta_x, delta_y);
 
-                        // TODO: Apply movement to active layer
-                        document.mark_dirty();
+                        // Apply movement to active layer or selection
+                        self.apply_movement(delta_x, delta_y, document)?;
+
+                        // Update start position for continuous movement
+                        self.move_start = Some(position);
                     }
                     state.last_position = Some(position);
                 }
@@ -829,6 +832,78 @@ impl Tool for MoveTool {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![]
+    }
+
+    fn set_option(&mut self, _name: &str, _value: ToolOptionValue) -> ToolResult<()> {
+        Ok(())
+    }
+
+    fn get_option(&self, _name: &str) -> Option<ToolOptionValue> {
+        None
+    }
+}
+
+impl MoveTool {
+    /// Apply movement to the active layer or selection content
+    fn apply_movement(
+        &mut self,
+        delta_x: f32,
+        delta_y: f32,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        // Check if there's an active selection
+        if let Selection::Rectangle(ref selection) = document.selection {
+            if !selection.is_empty() {
+                // Move selection content
+                self.move_selection_content(delta_x, delta_y, document)?;
+            } else {
+                // Move entire active layer
+                self.move_active_layer(delta_x, delta_y, document)?;
+            }
+        } else {
+            // Move entire active layer
+            self.move_active_layer(delta_x, delta_y, document)?;
+        }
+
+        document.mark_dirty();
+        Ok(())
+    }
+
+    /// Move the entire active layer
+    fn move_active_layer(
+        &self,
+        delta_x: f32,
+        delta_y: f32,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        if let Some(active_layer) = document.active_layer_mut() {
+            active_layer.move_by(delta_x, delta_y);
+            debug!("Moved active layer by ({}, {})", delta_x, delta_y);
+        }
+        Ok(())
+    }
+
+    /// Move content within the selection area
+    fn move_selection_content(
+        &self,
+        delta_x: f32,
+        delta_y: f32,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        // For now, we'll implement a simple approach: move the entire layer
+        // In a more advanced implementation, we would:
+        // 1. Extract pixels from the selection area
+        // 2. Clear the original selection area
+        // 3. Paste the pixels at the new location
+
+        // For P3.5, we'll move the entire layer as a starting point
+        self.move_active_layer(delta_x, delta_y, document)?;
+        debug!("Moved selection content by ({}, {})", delta_x, delta_y);
         Ok(())
     }
 }
@@ -1327,5 +1402,144 @@ mod tests {
         // Some point in between should be erased
         let mid_pixel = active_layer.get_pixel(15, 15).unwrap();
         assert!(mid_pixel.a < 255);
+    }
+
+    // Move Tool Tests
+    #[test]
+    fn test_move_tool_creation() {
+        let move_tool = MoveTool::new();
+
+        assert!(!move_tool.is_moving);
+        assert!(move_tool.move_start.is_none());
+    }
+
+    #[test]
+    fn test_move_tool_properties() {
+        let move_tool = MoveTool::new();
+
+        assert_eq!(move_tool.id(), "move");
+        assert_eq!(move_tool.name(), "Move Tool");
+        assert_eq!(move_tool.description(), "Move layers and selections");
+        assert_eq!(move_tool.cursor(), ToolCursor::Move);
+        assert_eq!(move_tool.options().len(), 0);
+    }
+
+    #[test]
+    fn test_move_tool_event_handling() {
+        use super::super::tool_trait::{KeyModifiers, MouseButton, ToolEvent, ToolState};
+
+        let mut move_tool = MoveTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Add a layer to move
+        let layer = Layer::new_pixel("Test Layer".to_string(), 100, 100);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Test mouse pressed event
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(50.0, 50.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        move_tool
+            .handle_event(press_event, &mut document, &mut state)
+            .unwrap();
+        assert!(move_tool.is_moving);
+        assert!(state.is_active);
+        assert_eq!(state.last_position, Some(Point::new(50.0, 50.0)));
+        assert_eq!(move_tool.move_start, Some(Point::new(50.0, 50.0)));
+
+        // Test mouse dragged event
+        let drag_event = ToolEvent::MouseDragged {
+            position: Point::new(60.0, 60.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        move_tool
+            .handle_event(drag_event, &mut document, &mut state)
+            .unwrap();
+        assert!(move_tool.is_moving);
+        assert_eq!(state.last_position, Some(Point::new(60.0, 60.0)));
+        assert_eq!(move_tool.move_start, Some(Point::new(60.0, 60.0))); // Updated for continuous movement
+        assert!(document.is_dirty);
+
+        // Test mouse released event
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(60.0, 60.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        move_tool
+            .handle_event(release_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!move_tool.is_moving);
+        assert!(!state.is_active);
+        assert!(move_tool.move_start.is_none());
+    }
+
+    #[test]
+    fn test_move_tool_layer_movement() {
+        let move_tool = MoveTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Add a layer to move
+        let layer = Layer::new_pixel("Test Layer".to_string(), 100, 100);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Get initial layer position
+        let initial_offset = document.active_layer().unwrap().offset;
+
+        // Apply movement
+        move_tool
+            .move_active_layer(10.0, 20.0, &mut document)
+            .unwrap();
+
+        // Check that layer was moved
+        let final_offset = document.active_layer().unwrap().offset;
+        assert_eq!(final_offset.x, initial_offset.x + 10.0);
+        assert_eq!(final_offset.y, initial_offset.y + 20.0);
+    }
+
+    #[test]
+    fn test_move_tool_with_selection() {
+        let mut move_tool = MoveTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Add a layer to move
+        let layer = Layer::new_pixel("Test Layer".to_string(), 100, 100);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Create a selection
+        let selection = Selection::rectangle(10.0, 10.0, 40.0, 40.0);
+        document.set_selection(selection);
+
+        // Get initial layer position
+        let initial_offset = document.active_layer().unwrap().offset;
+
+        // Apply movement (should move selection content, which for now moves the entire layer)
+        move_tool.apply_movement(15.0, 25.0, &mut document).unwrap();
+
+        // Check that layer was moved
+        let final_offset = document.active_layer().unwrap().offset;
+        assert_eq!(final_offset.x, initial_offset.x + 15.0);
+        assert_eq!(final_offset.y, initial_offset.y + 25.0);
+        assert!(document.is_dirty);
+    }
+
+    #[test]
+    fn test_move_tool_without_active_layer() {
+        let move_tool = MoveTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // No layers added, so no active layer
+        let result = move_tool.move_active_layer(10.0, 20.0, &mut document);
+        assert!(result.is_ok()); // Should not fail, just do nothing
     }
 }
