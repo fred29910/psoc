@@ -3,8 +3,8 @@
 //! This module provides color space definitions, conversions, and color management functionality.
 //! It supports RGB, HSL, HSV color spaces and provides utilities for color manipulation.
 
+use crate::pixel::{Channel, RgbaPixel, CHANNEL_MAX};
 use serde::{Deserialize, Serialize};
-use crate::pixel::{RgbaPixel, Channel, CHANNEL_MAX};
 
 /// Color space enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,9 +187,12 @@ impl ColorAdjustment {
         // Apply brightness
         if self.brightness != 0.0 {
             let brightness_factor = 1.0 + self.brightness;
-            result.r = ((result.r as f32 * brightness_factor).clamp(0.0, CHANNEL_MAX as f32)) as Channel;
-            result.g = ((result.g as f32 * brightness_factor).clamp(0.0, CHANNEL_MAX as f32)) as Channel;
-            result.b = ((result.b as f32 * brightness_factor).clamp(0.0, CHANNEL_MAX as f32)) as Channel;
+            result.r =
+                ((result.r as f32 * brightness_factor).clamp(0.0, CHANNEL_MAX as f32)) as Channel;
+            result.g =
+                ((result.g as f32 * brightness_factor).clamp(0.0, CHANNEL_MAX as f32)) as Channel;
+            result.b =
+                ((result.b as f32 * brightness_factor).clamp(0.0, CHANNEL_MAX as f32)) as Channel;
         }
 
         // Apply contrast
@@ -211,7 +214,10 @@ impl ColorAdjustment {
 
     /// Check if this adjustment is identity (no change)
     pub fn is_identity(&self) -> bool {
-        self.brightness == 0.0 && self.contrast == 0.0 && self.saturation == 0.0 && self.hue_shift == 0.0
+        self.brightness == 0.0
+            && self.contrast == 0.0
+            && self.saturation == 0.0
+            && self.hue_shift == 0.0
     }
 }
 
@@ -254,11 +260,21 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
     }
 
     let hue_to_rgb = |p: f32, q: f32, mut t: f32| -> f32 {
-        if t < 0.0 { t += 1.0; }
-        if t > 1.0 { t -= 1.0; }
-        if t < 1.0/6.0 { return p + (q - p) * 6.0 * t; }
-        if t < 1.0/2.0 { return q; }
-        if t < 2.0/3.0 { return p + (q - p) * (2.0/3.0 - t) * 6.0; }
+        if t < 0.0 {
+            t += 1.0;
+        }
+        if t > 1.0 {
+            t -= 1.0;
+        }
+        if t < 1.0 / 6.0 {
+            return p + (q - p) * 6.0 * t;
+        }
+        if t < 1.0 / 2.0 {
+            return q;
+        }
+        if t < 2.0 / 3.0 {
+            return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+        }
         p
     };
 
@@ -270,9 +286,9 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
     let p = 2.0 * l - q;
     let h_norm = h / 360.0;
 
-    let r = hue_to_rgb(p, q, h_norm + 1.0/3.0);
+    let r = hue_to_rgb(p, q, h_norm + 1.0 / 3.0);
     let g = hue_to_rgb(p, q, h_norm);
-    let b = hue_to_rgb(p, q, h_norm - 1.0/3.0);
+    let b = hue_to_rgb(p, q, h_norm - 1.0 / 3.0);
 
     (r, g, b)
 }

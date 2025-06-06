@@ -83,7 +83,10 @@ impl ImageCanvas {
     /// Set pan offset
     pub fn set_pan_offset(&mut self, offset: Vector) {
         self.state.pan_offset = offset;
-        debug!("Canvas pan offset set to: ({:.2}, {:.2})", offset.x, offset.y);
+        debug!(
+            "Canvas pan offset set to: ({:.2}, {:.2})",
+            offset.x, offset.y
+        );
     }
 
     /// Get the current zoom level
@@ -161,11 +164,7 @@ where
         let mut frame = Frame::new(renderer, bounds.size());
 
         // Draw background
-        frame.fill_rectangle(
-            Point::ORIGIN,
-            bounds.size(),
-            Color::from_rgb(0.2, 0.2, 0.2),
-        );
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::from_rgb(0.2, 0.2, 0.2));
 
         // Draw grid
         self.draw_grid(&mut frame, bounds);
@@ -239,7 +238,10 @@ impl ImageCanvas {
 
         // Draw image border
         frame.stroke(
-            &Path::rectangle(Point::new(image_x, image_y), Size::new(image_width, image_height)),
+            &Path::rectangle(
+                Point::new(image_x, image_y),
+                Size::new(image_width, image_height),
+            ),
             Stroke::default().with_width(2.0).with_color(Color::BLACK),
         );
 

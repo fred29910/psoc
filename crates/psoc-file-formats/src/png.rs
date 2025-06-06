@@ -2,8 +2,8 @@
 //!
 //! This module provides PNG image loading and saving functionality.
 
-use std::path::Path;
 use anyhow::{Context, Result};
+use std::path::Path;
 use tracing::{debug, instrument};
 
 /// Load a PNG image from a file path
@@ -16,7 +16,13 @@ pub fn load_png<P: AsRef<Path>>(path: P) -> Result<image::DynamicImage> {
         .with_context(|| format!("Failed to load PNG image from: {}", path.display()))?;
 
     // Verify it's actually a PNG
-    if !matches!(image.color(), image::ColorType::Rgb8 | image::ColorType::Rgba8 | image::ColorType::L8 | image::ColorType::La8) {
+    if !matches!(
+        image.color(),
+        image::ColorType::Rgb8
+            | image::ColorType::Rgba8
+            | image::ColorType::L8
+            | image::ColorType::La8
+    ) {
         debug!("Converting image color type for PNG compatibility");
     }
 

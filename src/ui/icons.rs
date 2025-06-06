@@ -15,7 +15,7 @@ pub enum Icon {
     SaveAs,
     Export,
     Import,
-    
+
     // Edit operations
     Undo,
     Redo,
@@ -23,7 +23,7 @@ pub enum Icon {
     Copy,
     Paste,
     Delete,
-    
+
     // Tools
     Select,
     Move,
@@ -33,14 +33,14 @@ pub enum Icon {
     Bucket,
     Text,
     Shape,
-    
+
     // View operations
     ZoomIn,
     ZoomOut,
     ZoomFit,
     ZoomActual,
     Fullscreen,
-    
+
     // Layers
     Layer,
     LayerAdd,
@@ -50,7 +50,7 @@ pub enum Icon {
     LayerHidden,
     LayerLock,
     LayerUnlock,
-    
+
     // Navigation
     ArrowUp,
     ArrowDown,
@@ -60,7 +60,7 @@ pub enum Icon {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
-    
+
     // UI elements
     Menu,
     Settings,
@@ -72,7 +72,7 @@ pub enum Icon {
     Warning,
     Error,
     Success,
-    
+
     // Adjustments
     Brightness,
     Contrast,
@@ -80,7 +80,7 @@ pub enum Icon {
     Hue,
     Levels,
     Curves,
-    
+
     // Filters
     Blur,
     Sharpen,
@@ -175,23 +175,17 @@ impl Icon {
 
     /// Create an icon text element
     pub fn text<Message>(self) -> Element<'static, Message> {
-        text(self.unicode())
-            .size(16.0)
-            .into()
+        text(self.unicode()).size(16.0).into()
     }
 
     /// Create an icon text element with custom size
     pub fn text_sized<Message>(self, size: f32) -> Element<'static, Message> {
-        text(self.unicode())
-            .size(size)
-            .into()
+        text(self.unicode()).size(size).into()
     }
 
     /// Create a text-based icon (more reliable than Unicode)
     pub fn text_label<Message>(self) -> Element<'static, Message> {
-        text(self.as_str())
-            .size(12.0)
-            .into()
+        text(self.as_str()).size(12.0).into()
     }
 
     /// Get the icon as a string
@@ -267,10 +261,7 @@ pub fn icon_button<Message: Clone + 'static>(
     icon: Icon,
     message: Message,
 ) -> iced::widget::Button<'static, Message> {
-    iced::widget::button(
-        text(icon.as_str()).size(14.0)
-    )
-    .on_press(message)
+    iced::widget::button(text(icon.as_str()).size(14.0)).on_press(message)
 }
 
 /// Helper function to create a simple icon button (text-based)
@@ -278,8 +269,7 @@ pub fn simple_icon_button<Message: Clone + 'static>(
     icon: Icon,
     message: Message,
 ) -> iced::widget::Button<'static, Message> {
-    iced::widget::button(text(icon.as_str()).size(12.0))
-        .on_press(message)
+    iced::widget::button(text(icon.as_str()).size(12.0)).on_press(message)
 }
 
 /// Helper function to create a tool button (text-based for better compatibility)
@@ -288,10 +278,7 @@ pub fn tool_button<Message: Clone + 'static>(
     message: Message,
     is_active: bool,
 ) -> iced::widget::Button<'static, Message> {
-    let button = iced::widget::button(
-        text(icon.as_str()).size(12.0)
-    )
-    .on_press(message);
+    let button = iced::widget::button(text(icon.as_str()).size(12.0)).on_press(message);
 
     if is_active {
         button

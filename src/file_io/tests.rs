@@ -2,11 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::file_io::{
-        FileManager, can_import, is_supported_import_extension, can_export, get_image_metadata,
-        get_recommended_export_options, estimate_export_size,
-        export_image_with_options, ExportOptions
+        can_export, estimate_export_size, export_image_with_options, get_image_metadata,
+        get_recommended_export_options, is_supported_import_extension, ExportOptions, FileManager,
     };
     use image::{ImageBuffer, Rgb};
     use tempfile::tempdir;
@@ -155,7 +153,8 @@ mod tests {
         let dynamic_img = image::DynamicImage::ImageRgb8(img);
 
         let png_size = estimate_export_size(&dynamic_img, psoc_file_formats::SupportedFormat::Png);
-        let jpeg_size = estimate_export_size(&dynamic_img, psoc_file_formats::SupportedFormat::Jpeg);
+        let jpeg_size =
+            estimate_export_size(&dynamic_img, psoc_file_formats::SupportedFormat::Jpeg);
 
         assert!(png_size > 0);
         assert!(jpeg_size > 0);

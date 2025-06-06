@@ -20,7 +20,7 @@ pub mod plugins;
 pub use app::{AppConfig, Application};
 pub use core::{Document, Layer};
 #[cfg(feature = "gui")]
-pub use ui::{PsocApp, Message, AppState, Tool, ImageCanvas, ImageData};
+pub use ui::{AppState, ImageCanvas, ImageData, Message, PsocApp, Tool};
 pub use utils::{
     error::{ContextResult, PsocError, Result},
     logging::{init_default_logging, init_env_logging, LogConfig, LogFormat, LogLevel},

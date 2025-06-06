@@ -1,13 +1,13 @@
 //! Layer data structures and operations
-//! 
+//!
 //! This module defines the layer system for the PSOC image editor, including
 //! layer types, blend modes, and layer operations.
 
+use crate::geometry::{Point, Rect, Transform};
+use crate::pixel::{PixelData, RgbaPixel};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::pixel::{PixelData, RgbaPixel};
-use crate::geometry::{Rect, Point, Transform};
-use anyhow::Result;
 
 /// Layer blend modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -118,24 +118,24 @@ impl BlendMode {
     fn blend_normal(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
         let overlay_alpha = (overlay.a as f32 / 255.0) * opacity;
         let base_alpha = base.a as f32 / 255.0;
-        
+
         if overlay_alpha <= 0.0 {
             return base;
         }
-        
+
         let result_alpha = overlay_alpha + base_alpha * (1.0 - overlay_alpha);
-        
+
         if result_alpha <= 0.0 {
             return RgbaPixel::transparent();
         }
-        
+
         let blend_factor = overlay_alpha / result_alpha;
-        
+
         let r = (overlay.r as f32 * blend_factor + base.r as f32 * (1.0 - blend_factor)) as u8;
         let g = (overlay.g as f32 * blend_factor + base.g as f32 * (1.0 - blend_factor)) as u8;
         let b = (overlay.b as f32 * blend_factor + base.b as f32 * (1.0 - blend_factor)) as u8;
         let a = (result_alpha * 255.0) as u8;
-        
+
         RgbaPixel::new(r, g, b, a)
     }
 }
@@ -207,7 +207,7 @@ impl Layer {
         let id = Uuid::new_v4();
         let pixel_data = PixelData::new_rgba(width, height);
         let bounds = Rect::new(0.0, 0.0, width as f32, height as f32);
-        
+
         Self {
             id,
             name,
@@ -234,7 +234,7 @@ impl Layer {
         position: Point,
     ) -> Self {
         let id = Uuid::new_v4();
-        
+
         Self {
             id,
             name,
@@ -263,7 +263,7 @@ impl Layer {
         parameters: std::collections::HashMap<String, f32>,
     ) -> Self {
         let id = Uuid::new_v4();
-        
+
         Self {
             id,
             name,
@@ -365,7 +365,8 @@ impl Layer {
 
     /// Get layer bounds in document coordinates
     pub fn document_bounds(&self) -> Rect {
-        self.transform.transform_rect(self.bounds.translate(self.offset.x, self.offset.y))
+        self.transform
+            .transform_rect(self.bounds.translate(self.offset.x, self.offset.y))
     }
 }
 
@@ -376,13 +377,13 @@ mod tests {
     #[test]
     fn test_layer_creation() {
         let layer = Layer::new_pixel("Test Layer".to_string(), 100, 50);
-        
+
         assert_eq!(layer.name, "Test Layer");
         assert!(layer.visible);
         assert_eq!(layer.opacity, 1.0);
         assert_eq!(layer.blend_mode, BlendMode::Normal);
         assert!(layer.has_pixel_data());
-        
+
         let (width, height) = layer.dimensions().unwrap();
         assert_eq!(width, 100);
         assert_eq!(height, 50);
@@ -398,7 +399,7 @@ mod tests {
             RgbaPixel::black(),
             Point::new(10.0, 20.0),
         );
-        
+
         assert_eq!(layer.name, "Text Layer");
         assert!(matches!(layer.layer_type, LayerType::Text { .. }));
         assert!(!layer.has_pixel_data());
@@ -408,10 +409,10 @@ mod tests {
     fn test_layer_pixel_operations() {
         let mut layer = Layer::new_pixel("Test".to_string(), 10, 10);
         let test_color = RgbaPixel::new(255, 128, 64, 200);
-        
+
         layer.set_pixel(5, 5, test_color).unwrap();
         let retrieved = layer.get_pixel(5, 5).unwrap();
-        
+
         assert_eq!(retrieved, test_color);
     }
 
@@ -419,9 +420,9 @@ mod tests {
     fn test_layer_fill() {
         let mut layer = Layer::new_pixel("Test".to_string(), 5, 5);
         let fill_color = RgbaPixel::new(100, 150, 200, 255);
-        
+
         layer.fill(fill_color);
-        
+
         // Check a few pixels
         assert_eq!(layer.get_pixel(0, 0).unwrap(), fill_color);
         assert_eq!(layer.get_pixel(2, 3).unwrap(), fill_color);
@@ -432,9 +433,9 @@ mod tests {
     fn test_blend_mode_normal() {
         let base = RgbaPixel::new(100, 100, 100, 255);
         let overlay = RgbaPixel::new(200, 200, 200, 128);
-        
+
         let result = BlendMode::Normal.blend(base, overlay, 1.0);
-        
+
         // Result should be between base and overlay
         assert!(result.r > base.r && result.r < overlay.r);
         assert!(result.g > base.g && result.g < overlay.g);
@@ -445,7 +446,7 @@ mod tests {
     fn test_layer_duplication() {
         let original = Layer::new_pixel("Original".to_string(), 10, 10);
         let duplicate = original.duplicate();
-        
+
         assert_ne!(original.id, duplicate.id);
         assert_eq!(duplicate.name, "Original copy");
         assert_eq!(original.dimensions(), duplicate.dimensions());

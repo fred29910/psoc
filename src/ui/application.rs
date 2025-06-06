@@ -3,16 +3,17 @@
 #[cfg(feature = "gui")]
 use iced::{
     widget::{column, container},
-    Element, Length, Settings, Theme, Task,
+    Element, Length, Settings, Task, Theme,
 };
 use tracing::{debug, error, info};
 
-use crate::{PsocError, Result};
 use super::{
     components,
+    dialogs::{AboutDialog, AboutMessage},
     icons::Icon,
-    theme::{PsocTheme, spacing},
+    theme::{spacing, PsocTheme},
 };
+use crate::{PsocError, Result};
 
 /// Main GUI application
 #[derive(Debug, Default)]
@@ -21,6 +22,8 @@ pub struct PsocApp {
     state: AppState,
     /// Error message to display
     error_message: Option<String>,
+    /// About dialog
+    about_dialog: AboutDialog,
 }
 
 /// Application state
@@ -107,6 +110,10 @@ pub enum Message {
     ZoomReset,
     /// Canvas interaction messages
     Canvas(CanvasMessage),
+    /// About dialog messages
+    About(AboutMessage),
+    /// Show about dialog
+    ShowAbout,
     /// Error occurred
     Error(String),
 }
@@ -141,8 +148,6 @@ impl Default for AppState {
 }
 
 impl PsocApp {
-
-
     /// Get the current application state
     pub fn state(&self) -> &AppState {
         &self.state
@@ -154,21 +159,22 @@ impl PsocApp {
 
         let _settings = Settings::default();
 
-        iced::run(PsocApp::title, PsocApp::update, PsocApp::view)
-            .map_err(|e| {
-                error!("Failed to run GUI application: {}", e);
-                PsocError::gui(format!("GUI application error: {}", e))
-            })
+        iced::run(PsocApp::title, PsocApp::update, PsocApp::view).map_err(|e| {
+            error!("Failed to run GUI application: {}", e);
+            PsocError::gui(format!("GUI application error: {}", e))
+        })
     }
 }
 
 impl PsocApp {
+    #[allow(dead_code)]
     fn new() -> (Self, Task<Message>) {
         debug!("Initializing PSOC application");
         (
             Self {
                 state: AppState::default(),
                 error_message: None,
+                about_dialog: AboutDialog::new(),
             },
             Task::none(),
         )
@@ -178,7 +184,8 @@ impl PsocApp {
         let base_title = "PSOC Image Editor";
         if self.state.document_open {
             if let Some(ref path) = self.state.current_file_path {
-                let filename = path.file_name()
+                let filename = path
+                    .file_name()
                     .and_then(|name| name.to_str())
                     .unwrap_or("Untitled");
                 format!("{} - {}", base_title, filename)
@@ -230,9 +237,7 @@ impl PsocApp {
                 info!("File selected: {}", path.display());
                 let file_manager = self.state.file_manager.clone();
                 return Task::perform(
-                    async move {
-                        file_manager.import_image(&path).await
-                    },
+                    async move { file_manager.import_image(&path).await },
                     |result| match result {
                         Ok(image) => Message::ImageLoaded(image),
                         Err(e) => Message::Error(format!("Failed to load image: {}", e)),
@@ -260,9 +265,7 @@ impl PsocApp {
                         let image_clone = image.clone();
                         let path_clone = path.clone();
                         return Task::perform(
-                            async move {
-                                file_manager.export_image(&image_clone, &path_clone).await
-                            },
+                            async move { file_manager.export_image(&image_clone, &path_clone).await },
                             |result| match result {
                                 Ok(()) => Message::ImageSaved,
                                 Err(e) => Message::Error(format!("Failed to save image: {}", e)),
@@ -314,9 +317,7 @@ impl PsocApp {
                     let path_clone = path.clone();
                     self.state.current_file_path = Some(path);
                     return Task::perform(
-                        async move {
-                            file_manager.export_image(&image_clone, &path_clone).await
-                        },
+                        async move { file_manager.export_image(&image_clone, &path_clone).await },
                         |result| match result {
                             Ok(()) => Message::ImageSaved,
                             Err(e) => Message::Error(format!("Failed to save image: {}", e)),
@@ -357,6 +358,14 @@ impl PsocApp {
                 debug!("Canvas message: {:?}", canvas_msg);
                 self.handle_canvas_message(canvas_msg);
             }
+            Message::About(about_msg) => {
+                debug!("About dialog message: {:?}", about_msg);
+                self.about_dialog.update(about_msg);
+            }
+            Message::ShowAbout => {
+                info!("Showing about dialog");
+                self.about_dialog.show();
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
@@ -367,7 +376,7 @@ impl PsocApp {
     }
 
     fn view(&self) -> Element<Message> {
-        let content = column![
+        let main_content = column![
             self.menu_bar(),
             self.toolbar(),
             self.main_content(),
@@ -375,12 +384,23 @@ impl PsocApp {
         ]
         .spacing(0);
 
-        container(content)
+        let content = container(main_content)
             .width(Length::Fill)
-            .height(Length::Fill)
+            .height(Length::Fill);
+
+        // Layer the about dialog on top if visible
+        if self.about_dialog.visible {
+            iced::widget::stack![
+                content,
+                self.about_dialog.view(Message::About(AboutMessage::Hide))
+            ]
             .into()
+        } else {
+            content.into()
+        }
     }
 
+    #[allow(dead_code)]
     fn theme(&self) -> Theme {
         self.state.theme.to_iced_theme()
     }
@@ -418,6 +438,7 @@ impl PsocApp {
             Message::OpenDocument,
             Message::SaveDocument,
             Message::SaveAsDocument,
+            Message::ShowAbout,
             Message::Exit,
         )
     }
@@ -425,39 +446,62 @@ impl PsocApp {
     /// Create the toolbar
     fn toolbar(&self) -> Element<Message> {
         let tools = vec![
-            (Icon::Select, Message::ToolChanged(Tool::Select), self.state.current_tool == Tool::Select),
-            (Icon::Brush, Message::ToolChanged(Tool::Brush), self.state.current_tool == Tool::Brush),
-            (Icon::Eraser, Message::ToolChanged(Tool::Eraser), self.state.current_tool == Tool::Eraser),
-            (Icon::Move, Message::ToolChanged(Tool::Move), self.state.current_tool == Tool::Move),
+            (
+                Icon::Select,
+                Message::ToolChanged(Tool::Select),
+                self.state.current_tool == Tool::Select,
+            ),
+            (
+                Icon::Brush,
+                Message::ToolChanged(Tool::Brush),
+                self.state.current_tool == Tool::Brush,
+            ),
+            (
+                Icon::Eraser,
+                Message::ToolChanged(Tool::Eraser),
+                self.state.current_tool == Tool::Eraser,
+            ),
+            (
+                Icon::Move,
+                Message::ToolChanged(Tool::Move),
+                self.state.current_tool == Tool::Move,
+            ),
         ];
 
-        components::toolbar(
-            tools,
-            Message::ZoomIn,
-            Message::ZoomOut,
-            Message::ZoomReset,
-        )
+        components::toolbar(tools, Message::ZoomIn, Message::ZoomOut, Message::ZoomReset)
     }
 
     /// Create the main content area
     fn main_content(&self) -> Element<Message> {
-        iced::widget::row![
-            self.left_panel(),
-            self.canvas_area(),
-            self.right_panel(),
-        ]
-        .spacing(spacing::SM)
-        .height(Length::Fill)
-        .into()
+        iced::widget::row![self.left_panel(), self.canvas_area(), self.right_panel(),]
+            .spacing(spacing::SM)
+            .height(Length::Fill)
+            .into()
     }
 
     /// Create the left panel (tools and layers)
     fn left_panel(&self) -> Element<Message> {
         let tools = vec![
-            (Icon::Select, Message::ToolChanged(Tool::Select), self.state.current_tool == Tool::Select),
-            (Icon::Brush, Message::ToolChanged(Tool::Brush), self.state.current_tool == Tool::Brush),
-            (Icon::Eraser, Message::ToolChanged(Tool::Eraser), self.state.current_tool == Tool::Eraser),
-            (Icon::Move, Message::ToolChanged(Tool::Move), self.state.current_tool == Tool::Move),
+            (
+                Icon::Select,
+                Message::ToolChanged(Tool::Select),
+                self.state.current_tool == Tool::Select,
+            ),
+            (
+                Icon::Brush,
+                Message::ToolChanged(Tool::Brush),
+                self.state.current_tool == Tool::Brush,
+            ),
+            (
+                Icon::Eraser,
+                Message::ToolChanged(Tool::Eraser),
+                self.state.current_tool == Tool::Eraser,
+            ),
+            (
+                Icon::Move,
+                Message::ToolChanged(Tool::Move),
+                self.state.current_tool == Tool::Move,
+            ),
         ];
 
         let layers_content = vec![
@@ -483,11 +527,7 @@ impl PsocApp {
                 vec![components::tool_palette(tools)],
                 250.0
             ),
-            components::side_panel(
-                "Layers".to_string(),
-                layers_content,
-                250.0
-            ),
+            components::side_panel("Layers".to_string(), layers_content, 250.0),
         ]
         .spacing(spacing::SM)
         .into()
@@ -506,13 +546,17 @@ impl PsocApp {
                 column![
                     iced::widget::text("No Document Open")
                         .size(24.0)
-                        .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7)) }),
+                        .style(|_theme| iced::widget::text::Style {
+                            color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7))
+                        }),
                     iced::widget::text("Click 'New' to create a document")
                         .size(16.0)
-                        .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)) }),
+                        .style(|_theme| iced::widget::text::Style {
+                            color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                        }),
                 ]
                 .align_x(iced::alignment::Horizontal::Center)
-                .spacing(spacing::LG)
+                .spacing(spacing::LG),
             )
             .width(Length::Fill)
             .height(Length::Fill)
@@ -526,23 +570,34 @@ impl PsocApp {
     fn right_panel(&self) -> Element<Message> {
         let properties_content = vec![
             components::section_header("Tool Properties".to_string()),
-            components::property_row("Current Tool".to_string(), self.state.current_tool.to_string()),
-            components::property_row("Zoom".to_string(), format!("{:.0}%", self.state.zoom_level * 100.0)),
-
+            components::property_row(
+                "Current Tool".to_string(),
+                self.state.current_tool.to_string(),
+            ),
+            components::property_row(
+                "Zoom".to_string(),
+                format!("{:.0}%", self.state.zoom_level * 100.0),
+            ),
             components::section_header("Document".to_string()),
-            components::property_row("Status".to_string(), if self.state.document_open { "Open".to_string() } else { "None".to_string() }),
-            components::property_row("Theme".to_string(), match self.state.theme {
-                PsocTheme::Dark => "Dark".to_string(),
-                PsocTheme::Light => "Light".to_string(),
-                PsocTheme::HighContrast => "High Contrast".to_string(),
-            }),
+            components::property_row(
+                "Status".to_string(),
+                if self.state.document_open {
+                    "Open".to_string()
+                } else {
+                    "None".to_string()
+                },
+            ),
+            components::property_row(
+                "Theme".to_string(),
+                match self.state.theme {
+                    PsocTheme::Dark => "Dark".to_string(),
+                    PsocTheme::Light => "Light".to_string(),
+                    PsocTheme::HighContrast => "High Contrast".to_string(),
+                },
+            ),
         ];
 
-        components::side_panel(
-            "Properties".to_string(),
-            properties_content,
-            250.0
-        )
+        components::side_panel("Properties".to_string(), properties_content, 250.0)
     }
 
     /// Create the status bar

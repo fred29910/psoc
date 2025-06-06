@@ -3,20 +3,20 @@
 //! This module provides high-level file I/O operations for the PSOC application,
 //! including image import/export and project file management.
 
-use std::path::Path;
 use anyhow::Result;
 use psoc_file_formats::DynamicImage;
+use std::path::Path;
 use tracing::{debug, info, instrument};
 
-pub mod import;
 pub mod export;
+pub mod import;
 
 #[cfg(test)]
 mod tests;
 
 // Re-export commonly used types
-pub use import::*;
 pub use export::*;
+pub use import::*;
 
 /// File I/O manager for the application
 #[derive(Debug, Clone)]
@@ -69,7 +69,8 @@ impl FileManager {
 
     /// Get file filter for import dialogs
     pub fn import_file_filter() -> String {
-        "Image Files|*.png;*.jpg;*.jpeg|PNG Files|*.png|JPEG Files|*.jpg;*.jpeg|All Files|*.*".to_string()
+        "Image Files|*.png;*.jpg;*.jpeg|PNG Files|*.png|JPEG Files|*.jpg;*.jpeg|All Files|*.*"
+            .to_string()
     }
 
     /// Get file filter for export dialogs

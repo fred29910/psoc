@@ -51,43 +51,43 @@ impl PsocTheme {
     pub fn palette(self) -> ColorPalette {
         match self {
             PsocTheme::Dark => ColorPalette {
-                background: Color::from_rgb(0.12, 0.12, 0.12),      // #1e1e1e
-                surface: Color::from_rgb(0.16, 0.16, 0.16),         // #282828
-                text: Color::from_rgb(0.9, 0.9, 0.9),               // #e6e6e6
-                text_secondary: Color::from_rgb(0.7, 0.7, 0.7),     // #b3b3b3
-                primary: Color::from_rgb(0.0, 0.48, 1.0),           // #007acc
-                secondary: Color::from_rgb(0.4, 0.4, 0.4),          // #666666
-                success: Color::from_rgb(0.0, 0.8, 0.4),            // #00cc66
-                warning: Color::from_rgb(1.0, 0.6, 0.0),            // #ff9900
-                error: Color::from_rgb(0.9, 0.2, 0.2),              // #e63333
-                border: Color::from_rgb(0.3, 0.3, 0.3),             // #4d4d4d
-                shadow: Color::from_rgba(0.0, 0.0, 0.0, 0.3),       // rgba(0,0,0,0.3)
+                background: Color::from_rgb(0.12, 0.12, 0.12), // #1e1e1e
+                surface: Color::from_rgb(0.16, 0.16, 0.16),    // #282828
+                text: Color::from_rgb(0.9, 0.9, 0.9),          // #e6e6e6
+                text_secondary: Color::from_rgb(0.7, 0.7, 0.7), // #b3b3b3
+                primary: Color::from_rgb(0.0, 0.48, 1.0),      // #007acc
+                secondary: Color::from_rgb(0.4, 0.4, 0.4),     // #666666
+                success: Color::from_rgb(0.0, 0.8, 0.4),       // #00cc66
+                warning: Color::from_rgb(1.0, 0.6, 0.0),       // #ff9900
+                error: Color::from_rgb(0.9, 0.2, 0.2),         // #e63333
+                border: Color::from_rgb(0.3, 0.3, 0.3),        // #4d4d4d
+                shadow: Color::from_rgba(0.0, 0.0, 0.0, 0.3),  // rgba(0,0,0,0.3)
             },
             PsocTheme::Light => ColorPalette {
-                background: Color::from_rgb(0.98, 0.98, 0.98),      // #fafafa
-                surface: Color::WHITE,                               // #ffffff
-                text: Color::from_rgb(0.1, 0.1, 0.1),               // #1a1a1a
-                text_secondary: Color::from_rgb(0.4, 0.4, 0.4),     // #666666
-                primary: Color::from_rgb(0.0, 0.48, 1.0),           // #007acc
-                secondary: Color::from_rgb(0.6, 0.6, 0.6),          // #999999
-                success: Color::from_rgb(0.0, 0.6, 0.3),            // #009933
-                warning: Color::from_rgb(0.9, 0.5, 0.0),            // #e68000
-                error: Color::from_rgb(0.8, 0.1, 0.1),              // #cc1a1a
-                border: Color::from_rgb(0.8, 0.8, 0.8),             // #cccccc
-                shadow: Color::from_rgba(0.0, 0.0, 0.0, 0.1),       // rgba(0,0,0,0.1)
+                background: Color::from_rgb(0.98, 0.98, 0.98), // #fafafa
+                surface: Color::WHITE,                         // #ffffff
+                text: Color::from_rgb(0.1, 0.1, 0.1),          // #1a1a1a
+                text_secondary: Color::from_rgb(0.4, 0.4, 0.4), // #666666
+                primary: Color::from_rgb(0.0, 0.48, 1.0),      // #007acc
+                secondary: Color::from_rgb(0.6, 0.6, 0.6),     // #999999
+                success: Color::from_rgb(0.0, 0.6, 0.3),       // #009933
+                warning: Color::from_rgb(0.9, 0.5, 0.0),       // #e68000
+                error: Color::from_rgb(0.8, 0.1, 0.1),         // #cc1a1a
+                border: Color::from_rgb(0.8, 0.8, 0.8),        // #cccccc
+                shadow: Color::from_rgba(0.0, 0.0, 0.0, 0.1),  // rgba(0,0,0,0.1)
             },
             PsocTheme::HighContrast => ColorPalette {
-                background: Color::BLACK,                            // #000000
-                surface: Color::from_rgb(0.1, 0.1, 0.1),            // #1a1a1a
-                text: Color::WHITE,                                  // #ffffff
-                text_secondary: Color::from_rgb(0.8, 0.8, 0.8),     // #cccccc
-                primary: Color::from_rgb(0.0, 0.8, 1.0),            // #00ccff
-                secondary: Color::from_rgb(0.5, 0.5, 0.5),          // #808080
-                success: Color::from_rgb(0.0, 1.0, 0.0),            // #00ff00
-                warning: Color::from_rgb(1.0, 1.0, 0.0),            // #ffff00
-                error: Color::from_rgb(1.0, 0.0, 0.0),              // #ff0000
-                border: Color::WHITE,                                // #ffffff
-                shadow: Color::from_rgba(1.0, 1.0, 1.0, 0.2),       // rgba(255,255,255,0.2)
+                background: Color::BLACK,                       // #000000
+                surface: Color::from_rgb(0.1, 0.1, 0.1),        // #1a1a1a
+                text: Color::WHITE,                             // #ffffff
+                text_secondary: Color::from_rgb(0.8, 0.8, 0.8), // #cccccc
+                primary: Color::from_rgb(0.0, 0.8, 1.0),        // #00ccff
+                secondary: Color::from_rgb(0.5, 0.5, 0.5),      // #808080
+                success: Color::from_rgb(0.0, 1.0, 0.0),        // #00ff00
+                warning: Color::from_rgb(1.0, 1.0, 0.0),        // #ffff00
+                error: Color::from_rgb(1.0, 0.0, 0.0),          // #ff0000
+                border: Color::WHITE,                           // #ffffff
+                shadow: Color::from_rgba(1.0, 1.0, 1.0, 0.2),   // rgba(255,255,255,0.2)
             },
         }
     }
