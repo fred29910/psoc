@@ -4,7 +4,7 @@
 
 use std::path::Path;
 use anyhow::{Context, Result};
-use image::DynamicImage;
+use psoc_file_formats::DynamicImage;
 use tracing::{debug, error, info, instrument, warn};
 
 /// Import an image from a file path
@@ -141,7 +141,7 @@ pub async fn get_image_metadata<P: AsRef<Path>>(path: P) -> Result<ImageMetadata
     let path_clone = path.to_path_buf();
     let metadata = tokio::task::spawn_blocking(move || {
         // Use image crate to get basic info without fully decoding
-        let reader = image::io::Reader::open(&path_clone)?;
+        let reader = image::ImageReader::open(&path_clone)?;
         let reader = reader.with_guessed_format()?;
         
         let dimensions = reader.into_dimensions()?;

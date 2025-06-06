@@ -1,6 +1,6 @@
 //! Modern theme system for PSOC Image Editor
 
-use iced::{Background, Color, Theme};
+use iced::{Color, Theme};
 
 /// PSOC custom theme
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

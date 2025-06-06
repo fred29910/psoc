@@ -4,12 +4,11 @@
 
 use std::path::Path;
 use anyhow::{Context, Result};
-use image::{DynamicImage, ImageFormat};
 use tracing::{debug, instrument, warn};
 
 /// Load a JPEG image from a file path
 #[instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub fn load_jpeg<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
+pub fn load_jpeg<P: AsRef<Path>>(path: P) -> Result<image::DynamicImage> {
     let path = path.as_ref();
     debug!("Loading JPEG image from: {}", path.display());
 
@@ -20,7 +19,7 @@ pub fn load_jpeg<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
     let image = match image.color() {
         image::ColorType::Rgba8 => {
             warn!("Converting RGBA image to RGB for JPEG compatibility");
-            DynamicImage::ImageRgb8(image.to_rgb8())
+            image::DynamicImage::ImageRgb8(image.to_rgb8())
         }
         _ => image,
     };
@@ -30,7 +29,7 @@ pub fn load_jpeg<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
 
 /// Save a JPEG image to a file path with default quality (85)
 #[instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub fn save_jpeg<P: AsRef<Path>>(image: &DynamicImage, path: P) -> Result<()> {
+pub fn save_jpeg<P: AsRef<Path>>(image: &image::DynamicImage, path: P) -> Result<()> {
     let path = path.as_ref();
     debug!("Saving JPEG image to: {}", path.display());
 
@@ -38,13 +37,13 @@ pub fn save_jpeg<P: AsRef<Path>>(image: &DynamicImage, path: P) -> Result<()> {
     let image = match image.color() {
         image::ColorType::Rgba8 => {
             warn!("Converting RGBA image to RGB for JPEG compatibility");
-            DynamicImage::ImageRgb8(image.to_rgb8())
+            image::DynamicImage::ImageRgb8(image.to_rgb8())
         }
         _ => image.clone(),
     };
 
     image
-        .save_with_format(path, ImageFormat::Jpeg)
+        .save_with_format(path, image::ImageFormat::Jpeg)
         .with_context(|| format!("Failed to save JPEG image to: {}", path.display()))?;
 
     Ok(())
@@ -100,7 +99,7 @@ impl JpegOptions {
 /// Save a JPEG image with specific options
 #[instrument(skip_all, fields(path = %path.as_ref().display(), quality = options.quality))]
 pub fn save_jpeg_with_options<P: AsRef<Path>>(
-    image: &DynamicImage,
+    image: &image::DynamicImage,
     path: P,
     options: &JpegOptions,
 ) -> Result<()> {
@@ -111,7 +110,7 @@ pub fn save_jpeg_with_options<P: AsRef<Path>>(
     let image = match image.color() {
         image::ColorType::Rgba8 => {
             warn!("Converting RGBA image to RGB for JPEG compatibility");
-            DynamicImage::ImageRgb8(image.to_rgb8())
+            image::DynamicImage::ImageRgb8(image.to_rgb8())
         }
         _ => image.clone(),
     };
@@ -119,7 +118,7 @@ pub fn save_jpeg_with_options<P: AsRef<Path>>(
     // For now, use the standard save method
     // TODO: Implement custom JPEG encoding with quality options when needed
     image
-        .save_with_format(path, ImageFormat::Jpeg)
+        .save_with_format(path, image::ImageFormat::Jpeg)
         .with_context(|| format!("Failed to save JPEG image to: {}", path.display()))?;
 
     Ok(())
@@ -138,7 +137,7 @@ mod tests {
 
         // Create a simple test image
         let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(100, 100);
-        let dynamic_img = DynamicImage::ImageRgb8(img);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
 
         // Save the image
         save_jpeg(&dynamic_img, &file_path)?;
@@ -163,7 +162,7 @@ mod tests {
 
         // Create an RGBA test image
         let img: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(50, 50);
-        let dynamic_img = DynamicImage::ImageRgba8(img);
+        let dynamic_img = image::DynamicImage::ImageRgba8(img);
 
         // Save the image (should convert to RGB)
         save_jpeg(&dynamic_img, &file_path)?;
@@ -215,7 +214,7 @@ mod tests {
 
         // Create a simple test image
         let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(50, 50);
-        let dynamic_img = DynamicImage::ImageRgb8(img);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
 
         let options = JpegOptions::high_quality();
 
