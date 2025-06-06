@@ -22,40 +22,21 @@ members = [
 ]
 
 [dependencies]
-# GUI framework
-iced = { version = "0.10", features = ["canvas", "image", "svg"] }
-iced_wgpu = "0.11"
-iced_winit = "0.10"
-
-# Image processing
-image = { version = "0.24", features = ["png", "jpeg", "tiff", "webp"] }
-imageproc = "0.23"
-ndarray = "0.15"
-
-# Color management
-palette = "0.7"
-
-# File IO
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-ron = "0.8"
-rfd = "0.11"
-
 # Error handling and logging
 anyhow = "1.0"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
-# Async runtime
-tokio = { version = "1.0", features = ["full"] }
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
-# Parallel processing
-rayon = "1.7"
+# Basic image processing (without heavy dependencies for now)
+# image = { version = "0.24", features = ["png", "jpeg"] }
 
-# Math
-nalgebra = "0.32"
-glam = "0.24"
+# Math (lightweight)
+# glam = "0.24"
 
 # Workspace crates
 psoc-core = { path = "crates/psoc-core" }
@@ -63,6 +44,10 @@ psoc-image-processing = { path = "crates/psoc-image-processing" }
 psoc-file-formats = { path = "crates/psoc-file-formats" }
 psoc-ui-toolkit = { path = "crates/psoc-ui-toolkit" }
 psoc-plugins = { path = "crates/psoc-plugins", optional = true }
+
+# Optional plugin system dependencies
+mlua = { version = "0.9", optional = true }
+wasmtime = { version = "13.0", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"
@@ -72,10 +57,6 @@ tempfile = "3.0"
 [features]
 default = []
 plugins = ["psoc-plugins", "dep:mlua", "dep:wasmtime"]
-
-# Optional plugin system dependencies
-mlua = { version = "0.9", optional = true }
-wasmtime = { version = "13.0", optional = true }
 
 [profile.dev]
 opt-level = 0

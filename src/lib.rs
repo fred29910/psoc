@@ -1,15 +1,15 @@
 //! PSOC - A Photoshop-like image editor built with Rust
-//! 
+//!
 //! This crate provides the core functionality for a modern image editing application
 //! with features similar to Adobe Photoshop, built using Rust for performance and safety.
 
 pub mod app;
 pub mod core;
-pub mod ui;
-pub mod tools;
-pub mod rendering;
-pub mod image_processing;
 pub mod file_io;
+pub mod image_processing;
+pub mod rendering;
+pub mod tools;
+pub mod ui;
 pub mod utils;
 
 #[cfg(feature = "plugins")]

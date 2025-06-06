@@ -19,10 +19,10 @@ impl Application {
     pub fn run(self) -> Result<()> {
         println!("PSOC Image Editor v{}", crate::VERSION);
         println!("Application starting...");
-        
+
         // TODO: Initialize GUI and start main loop
         println!("GUI initialization not yet implemented");
-        
+
         Ok(())
     }
 }

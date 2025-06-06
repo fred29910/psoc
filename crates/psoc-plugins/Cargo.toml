@@ -1,12 +1,21 @@
 [package]
-name = "psoc-file-formats"
+name = "psoc-plugins"
 version = "0.1.0"
 edition = "2021"
 authors = ["PSOC Development Team <dev@psoc.project>"]
-description = "File format support for PSOC"
+description = "Plugin system for PSOC"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+mlua = { version = "0.9", optional = true }
+wasmtime = { version = "13.0", optional = true }
 psoc-core = { path = "../psoc-core" }
+
+[features]
+default = []
+lua = ["mlua"]
+wasm = ["wasmtime"]
