@@ -1,10 +1,11 @@
 //! Main GUI application using iced framework
 
+#[cfg(feature = "gui")]
 use iced::{
     widget::{column, container},
-    Application, Command, Element, Length, Settings, Theme,
+    Application, Element, Length, Settings, Theme, Task,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::{PsocError, Result};
 use super::{
@@ -27,6 +28,10 @@ pub struct PsocApp {
 pub struct AppState {
     /// Whether a document is open
     pub document_open: bool,
+    /// Current image data
+    pub current_image: Option<image::DynamicImage>,
+    /// Current file path
+    pub current_file_path: Option<std::path::PathBuf>,
     /// Current zoom level (1.0 = 100%)
     pub zoom_level: f32,
     /// Canvas pan offset
@@ -37,6 +42,8 @@ pub struct AppState {
     pub debug_mode: bool,
     /// Current theme
     pub theme: PsocTheme,
+    /// File manager for I/O operations
+    pub file_manager: crate::file_io::FileManager,
 }
 
 /// Available tools
@@ -76,8 +83,18 @@ pub enum Message {
     NewDocument,
     /// Open an existing document
     OpenDocument,
+    /// File selected for opening
+    FileSelected(std::path::PathBuf),
+    /// Image loaded successfully
+    ImageLoaded(image::DynamicImage),
     /// Save the current document
     SaveDocument,
+    /// Save as (with file dialog)
+    SaveAsDocument,
+    /// File selected for saving
+    SaveFileSelected(std::path::PathBuf),
+    /// Image saved successfully
+    ImageSaved,
     /// Exit the application
     Exit,
     /// Change the current tool
@@ -111,11 +128,14 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             document_open: false,
+            current_image: None,
+            current_file_path: None,
             zoom_level: 1.0,
             pan_offset: (0.0, 0.0),
             current_tool: Tool::default(),
             debug_mode: cfg!(debug_assertions),
             theme: PsocTheme::default(),
+            file_manager: crate::file_io::FileManager::new(),
         }
     }
 }
@@ -161,28 +181,38 @@ impl PsocApp {
             exit_on_close_request: true,
         };
 
-        <PsocApp as Application>::run(settings).map_err(|e| {
-            error!("Failed to run GUI application: {}", e);
-            PsocError::gui(format!("GUI application error: {}", e))
-        })
+        iced::run(PsocApp::title, PsocApp::update, PsocApp::view)
+            .settings(settings)
+            .map_err(|e| {
+                error!("Failed to run GUI application: {}", e);
+                PsocError::gui(format!("GUI application error: {}", e))
+            })
     }
 }
 
-impl Application for PsocApp {
-    type Executor = iced::executor::Default;
-    type Message = Message;
-    type Theme = Theme;
-    type Flags = ();
-
-    fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
+impl PsocApp {
+    fn new() -> (Self, Task<Message>) {
         debug!("Initializing PSOC application");
-        (Self::new(), Command::none())
+        (
+            Self {
+                state: AppState::default(),
+                error_message: None,
+            },
+            Task::none(),
+        )
     }
 
     fn title(&self) -> String {
         let base_title = "PSOC Image Editor";
         if self.state.document_open {
-            format!("{} - Document", base_title)
+            if let Some(ref path) = self.state.current_file_path {
+                let filename = path.file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("Untitled");
+                format!("{} - {}", base_title, filename)
+            } else {
+                format!("{} - Untitled", base_title)
+            }
         } else {
             base_title.to_string()
         }
@@ -201,19 +231,132 @@ impl Application for PsocApp {
             }
             Message::OpenDocument => {
                 info!("Opening document");
-                // TODO: Implement file dialog and document loading
-                warn!("Document opening not yet implemented");
-                self.error_message = Some("Document opening not yet implemented".to_string());
+                #[cfg(feature = "gui")]
+                {
+                    return Command::perform(
+                        async {
+                            rfd::AsyncFileDialog::new()
+                                .add_filter("Image Files", &["png", "jpg", "jpeg"])
+                                .pick_file()
+                                .await
+                        },
+                        |file_handle| {
+                            if let Some(file) = file_handle {
+                                Message::FileSelected(file.path().to_path_buf())
+                            } else {
+                                Message::Error("No file selected".to_string())
+                            }
+                        },
+                    );
+                }
+                #[cfg(not(feature = "gui"))]
+                {
+                    self.error_message = Some("File dialogs require GUI feature".to_string());
+                }
+            }
+            Message::FileSelected(path) => {
+                info!("File selected: {}", path.display());
+                let file_manager = self.state.file_manager.clone();
+                return Command::perform(
+                    async move {
+                        file_manager.import_image(&path).await
+                    },
+                    |result| match result {
+                        Ok(image) => Message::ImageLoaded(image),
+                        Err(e) => Message::Error(format!("Failed to load image: {}", e)),
+                    },
+                );
+            }
+            Message::ImageLoaded(image) => {
+                info!(
+                    width = image.width(),
+                    height = image.height(),
+                    "Image loaded successfully"
+                );
+                self.state.current_image = Some(image);
+                self.state.document_open = true;
+                self.state.zoom_level = 1.0;
+                self.state.pan_offset = (0.0, 0.0);
+                self.error_message = None;
             }
             Message::SaveDocument => {
                 info!("Saving document");
-                if self.state.document_open {
-                    // TODO: Implement document saving
-                    warn!("Document saving not yet implemented");
-                    self.error_message = Some("Document saving not yet implemented".to_string());
+                if let Some(ref image) = self.state.current_image {
+                    if let Some(ref path) = self.state.current_file_path {
+                        // Save to existing path
+                        let file_manager = self.state.file_manager.clone();
+                        let image_clone = image.clone();
+                        let path_clone = path.clone();
+                        return Command::perform(
+                            async move {
+                                file_manager.export_image(&image_clone, &path_clone).await
+                            },
+                            |result| match result {
+                                Ok(()) => Message::ImageSaved,
+                                Err(e) => Message::Error(format!("Failed to save image: {}", e)),
+                            },
+                        );
+                    } else {
+                        // No existing path, trigger Save As
+                        return self.update(Message::SaveAsDocument);
+                    }
                 } else {
                     self.error_message = Some("No document to save".to_string());
                 }
+            }
+            Message::SaveAsDocument => {
+                info!("Save As document");
+                if self.state.current_image.is_some() {
+                    #[cfg(feature = "gui")]
+                    {
+                        return Command::perform(
+                            async {
+                                rfd::AsyncFileDialog::new()
+                                    .add_filter("PNG Files", &["png"])
+                                    .add_filter("JPEG Files", &["jpg", "jpeg"])
+                                    .save_file()
+                                    .await
+                            },
+                            |file_handle| {
+                                if let Some(file) = file_handle {
+                                    Message::SaveFileSelected(file.path().to_path_buf())
+                                } else {
+                                    Message::Error("No save location selected".to_string())
+                                }
+                            },
+                        );
+                    }
+                    #[cfg(not(feature = "gui"))]
+                    {
+                        self.error_message = Some("File dialogs require GUI feature".to_string());
+                    }
+                } else {
+                    self.error_message = Some("No document to save".to_string());
+                }
+            }
+            Message::SaveFileSelected(path) => {
+                info!("Save file selected: {}", path.display());
+                if let Some(ref image) = self.state.current_image {
+                    let file_manager = self.state.file_manager.clone();
+                    let image_clone = image.clone();
+                    let path_clone = path.clone();
+                    self.state.current_file_path = Some(path);
+                    return Command::perform(
+                        async move {
+                            file_manager.export_image(&image_clone, &path_clone).await
+                        },
+                        |result| match result {
+                            Ok(()) => Message::ImageSaved,
+                            Err(e) => Message::Error(format!("Failed to save image: {}", e)),
+                        },
+                    );
+                } else {
+                    self.error_message = Some("No document to save".to_string());
+                }
+            }
+            Message::ImageSaved => {
+                info!("Image saved successfully");
+                self.error_message = None;
             }
             Message::Exit => {
                 info!("Exiting application");
@@ -302,6 +445,7 @@ impl PsocApp {
             Message::NewDocument,
             Message::OpenDocument,
             Message::SaveDocument,
+            Message::SaveAsDocument,
             Message::Exit,
         )
     }

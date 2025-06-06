@@ -63,10 +63,10 @@
     *   [x] 图像数据显示：将`image::DynamicImage` 或 `ndarray` 数据渲染到画布。
     *   [x] 基础画布交互：缩放 (Zoom) 和平移 (Pan)。
     *   [x] 渲染引擎集成 (`wgpu` / `tiny-skia` / GUI框架内置渲染).
-*   **P1.3: 图像文件IO**
-    *   [ ] 使用 `image` crate 实现图像加载 (PNG, JPEG)。
-    *   [ ] 实现图像保存 (PNG, JPEG)。
-    *   [ ] 文件对话框集成 (e.g., `rfd` - Rustic File Dialog, or GUI framework's dialogs)。
+*   **P1.3: 图像文件IO** ✅ **已完成**
+    *   [x] 使用 `image` crate 实现图像加载 (PNG, JPEG)。
+    *   [x] 实现图像保存 (PNG, JPEG)。
+    *   [x] 文件对话框集成 (使用 `rfd` - Rustic File Dialog)。
 *   **P1.4: 核心数据结构设计**
     *   [ ] 定义项目文档结构 (e.g., 包含图像尺寸、分辨率、图层列表等)。
     *   [ ] 定义图像像素数据表示 (e.g., `Vec<u8>`, `ndarray::Array3<u8>`).

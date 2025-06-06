@@ -1,6 +1,6 @@
 //! Application framework module
 
-use crate::{utils::logging::LogConfig, Result};
+use crate::{utils::logging::LogConfig, Result, PsocError};
 use tracing::{debug, error, info, instrument, warn};
 
 /// Main application structure
@@ -158,11 +158,20 @@ impl Application {
     fn run_gui(&mut self) -> Result<()> {
         info!("Starting GUI application");
 
-        // Run the iced GUI application
-        crate::ui::PsocApp::run().map_err(|e| {
-            error!("GUI application failed: {}", e);
-            e
-        })?;
+        #[cfg(feature = "gui")]
+        {
+            // Run the iced GUI application
+            crate::ui::PsocApp::run().map_err(|e| {
+                error!("GUI application failed: {}", e);
+                e
+            })?;
+        }
+
+        #[cfg(not(feature = "gui"))]
+        {
+            warn!("GUI feature is disabled, cannot run GUI application");
+            return Err(PsocError::gui("GUI feature is not enabled".to_string()));
+        }
 
         // Graceful shutdown
         self.shutdown()?;

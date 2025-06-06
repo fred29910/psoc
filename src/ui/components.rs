@@ -62,6 +62,7 @@ pub fn menu_bar<Message: Clone + 'static>(
     new_doc: Message,
     open_doc: Message,
     save_doc: Message,
+    save_as_doc: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
     container(
@@ -72,6 +73,7 @@ pub fn menu_bar<Message: Clone + 'static>(
                     icon_button(Icon::New, new_doc),
                     icon_button(Icon::Open, open_doc),
                     icon_button(Icon::Save, save_doc),
+                    icon_button(Icon::SaveAs, save_as_doc),
                 ]
                 .spacing(8.0)
             )

@@ -9,6 +9,7 @@ pub mod file_io;
 pub mod image_processing;
 pub mod rendering;
 pub mod tools;
+#[cfg(feature = "gui")]
 pub mod ui;
 pub mod utils;
 
@@ -18,6 +19,7 @@ pub mod plugins;
 // Re-export commonly used types
 pub use app::{AppConfig, Application};
 pub use core::{Document, Layer};
+#[cfg(feature = "gui")]
 pub use ui::{PsocApp, Message, AppState, Tool, ImageCanvas, ImageData};
 pub use utils::{
     error::{ContextResult, PsocError, Result},
