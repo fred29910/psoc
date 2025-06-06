@@ -46,11 +46,10 @@ impl Application {
     #[instrument(skip(config))]
     pub fn with_config(config: AppConfig) -> Result<Self> {
         // Initialize logging first
-        crate::utils::logging::init_logging(config.log_config.clone())
-            .map_err(|e| {
-                eprintln!("Failed to initialize logging: {}", e);
-                e
-            })?;
+        crate::utils::logging::init_logging(config.log_config.clone()).map_err(|e| {
+            eprintln!("Failed to initialize logging: {}", e);
+            e
+        })?;
 
         info!(
             name = %config.name,
@@ -215,7 +214,9 @@ impl Application {
     /// Simulate a recoverable error
     fn simulate_recoverable_error(&self) -> Result<()> {
         // This demonstrates error creation and handling
-        Err(crate::PsocError::gui("Simulated GUI error for demonstration"))
+        Err(crate::PsocError::gui(
+            "Simulated GUI error for demonstration",
+        ))
     }
 
     /// Shutdown the application
