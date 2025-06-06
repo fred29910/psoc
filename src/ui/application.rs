@@ -8,6 +8,7 @@ use iced::{
 use tracing::{debug, error, info};
 
 use super::{
+    canvas::{ImageCanvas, ImageData},
     components,
     dialogs::{AboutDialog, AboutMessage},
     icons::Icon,
@@ -16,7 +17,7 @@ use super::{
 use crate::{PsocError, Result};
 
 /// Main GUI application
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PsocApp {
     /// Current application state
     state: AppState,
@@ -24,6 +25,19 @@ pub struct PsocApp {
     error_message: Option<String>,
     /// About dialog
     about_dialog: AboutDialog,
+    /// Image canvas for rendering
+    canvas: ImageCanvas,
+}
+
+impl Default for PsocApp {
+    fn default() -> Self {
+        Self {
+            state: AppState::default(),
+            error_message: None,
+            about_dialog: AboutDialog::default(),
+            canvas: ImageCanvas::new(),
+        }
+    }
 }
 
 /// Application state
@@ -175,6 +189,7 @@ impl PsocApp {
                 state: AppState::default(),
                 error_message: None,
                 about_dialog: AboutDialog::new(),
+                canvas: ImageCanvas::new(),
             },
             Task::none(),
         )
@@ -250,10 +265,19 @@ impl PsocApp {
                     height = image.height(),
                     "Image loaded successfully"
                 );
+
+                // Convert image to canvas format
+                let image_data = self.convert_image_to_canvas_data(&image);
+                self.canvas.set_image(image_data);
+
                 self.state.current_image = Some(image);
                 self.state.document_open = true;
                 self.state.zoom_level = 1.0;
                 self.state.pan_offset = (0.0, 0.0);
+
+                // Sync canvas state
+                self.sync_canvas_state();
+
                 self.error_message = None;
             }
             Message::SaveDocument => {
@@ -344,15 +368,18 @@ impl PsocApp {
                 let new_zoom = (self.state.zoom_level * 1.2).min(10.0);
                 debug!("Zooming in: {} -> {}", self.state.zoom_level, new_zoom);
                 self.state.zoom_level = new_zoom;
+                self.sync_canvas_state();
             }
             Message::ZoomOut => {
                 let new_zoom = (self.state.zoom_level / 1.2).max(0.1);
                 debug!("Zooming out: {} -> {}", self.state.zoom_level, new_zoom);
                 self.state.zoom_level = new_zoom;
+                self.sync_canvas_state();
             }
             Message::ZoomReset => {
                 debug!("Resetting zoom to 100%");
                 self.state.zoom_level = 1.0;
+                self.sync_canvas_state();
             }
             Message::Canvas(canvas_msg) => {
                 debug!("Canvas message: {:?}", canvas_msg);
@@ -427,7 +454,30 @@ impl PsocApp {
                 // Handle panning
                 self.state.pan_offset.0 += delta_x;
                 self.state.pan_offset.1 += delta_y;
+                self.sync_canvas_state();
             }
+        }
+    }
+
+    /// Synchronize application state with canvas state
+    fn sync_canvas_state(&mut self) {
+        self.canvas.set_zoom(self.state.zoom_level);
+        self.canvas.set_pan_offset(iced::Vector::new(
+            self.state.pan_offset.0,
+            self.state.pan_offset.1,
+        ));
+    }
+
+    /// Convert image::DynamicImage to canvas ImageData
+    fn convert_image_to_canvas_data(&self, image: &image::DynamicImage) -> ImageData {
+        let rgba_image = image.to_rgba8();
+        let (width, height) = rgba_image.dimensions();
+        let pixels = rgba_image.into_raw();
+
+        ImageData {
+            width,
+            height,
+            pixels,
         }
     }
 
@@ -536,11 +586,8 @@ impl PsocApp {
     /// Create the canvas area
     fn canvas_area(&self) -> Element<Message> {
         if self.state.document_open {
-            components::canvas_placeholder(
-                self.state.zoom_level,
-                self.state.pan_offset,
-                &self.state.current_tool.to_string(),
-            )
+            // Use the actual canvas
+            self.canvas.view()
         } else {
             container(
                 column![
@@ -549,7 +596,7 @@ impl PsocApp {
                         .style(|_theme| iced::widget::text::Style {
                             color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7))
                         }),
-                    iced::widget::text("Click 'New' to create a document")
+                    iced::widget::text("Click 'Open' to load an image")
                         .size(16.0)
                         .style(|_theme| iced::widget::text::Style {
                             color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))

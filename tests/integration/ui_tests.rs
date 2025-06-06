@@ -125,16 +125,72 @@ fn test_message_variants() {
 #[cfg(test)]
 mod canvas_tests {
     use psoc::ui::application::CanvasMessage;
+    use psoc::ImageCanvas;
 
     #[test]
     fn test_canvas_message_creation() {
-        let _mouse_moved = CanvasMessage::MouseMoved { x: 10.0, y: 20.0 };
-        let _mouse_pressed = CanvasMessage::MousePressed { x: 15.0, y: 25.0 };
-        let _mouse_released = CanvasMessage::MouseReleased { x: 20.0, y: 30.0 };
-        let _scrolled = CanvasMessage::Scrolled {
+        let mouse_moved = CanvasMessage::MouseMoved { x: 10.0, y: 20.0 };
+        let mouse_pressed = CanvasMessage::MousePressed { x: 15.0, y: 25.0 };
+        let mouse_released = CanvasMessage::MouseReleased { x: 20.0, y: 30.0 };
+        let scrolled = CanvasMessage::Scrolled {
             delta_x: 5.0,
             delta_y: -3.0,
         };
+
+        // Test that messages contain expected data
+        match mouse_moved {
+            CanvasMessage::MouseMoved { x, y } => {
+                assert_eq!(x, 10.0);
+                assert_eq!(y, 20.0);
+            }
+            _ => panic!("Expected MouseMoved message"),
+        }
+
+        match scrolled {
+            CanvasMessage::Scrolled { delta_x, delta_y } => {
+                assert_eq!(delta_x, 5.0);
+                assert_eq!(delta_y, -3.0);
+            }
+            _ => panic!("Expected Scrolled message"),
+        }
+    }
+
+    #[test]
+    fn test_canvas_creation() {
+        let canvas = ImageCanvas::new();
+
+        // Test initial state
+        assert_eq!(canvas.zoom(), 1.0);
+        assert_eq!(canvas.pan_offset().x, 0.0);
+        assert_eq!(canvas.pan_offset().y, 0.0);
+    }
+
+    #[test]
+    fn test_canvas_zoom_operations() {
+        let mut canvas = ImageCanvas::new();
+
+        // Test zoom in
+        canvas.set_zoom(2.0);
+        assert_eq!(canvas.zoom(), 2.0);
+
+        // Test zoom limits
+        canvas.set_zoom(15.0); // Should be clamped to 10.0
+        assert_eq!(canvas.zoom(), 10.0);
+
+        canvas.set_zoom(0.05); // Should be clamped to 0.1
+        assert_eq!(canvas.zoom(), 0.1);
+    }
+
+    #[test]
+    fn test_canvas_pan_operations() {
+        let mut canvas = ImageCanvas::new();
+
+        // Test pan offset
+        let offset = iced::Vector::new(50.0, -25.0);
+        canvas.set_pan_offset(offset);
+
+        assert_eq!(canvas.pan_offset().x, 50.0);
+        assert_eq!(canvas.pan_offset().y, -25.0);
     }
 }
 
