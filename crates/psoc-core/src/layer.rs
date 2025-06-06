@@ -1,0 +1,453 @@
+//! Layer data structures and operations
+//! 
+//! This module defines the layer system for the PSOC image editor, including
+//! layer types, blend modes, and layer operations.
+
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use crate::pixel::{PixelData, RgbaPixel};
+use crate::geometry::{Rect, Point, Transform};
+use anyhow::Result;
+
+/// Layer blend modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BlendMode {
+    /// Normal blending (default)
+    Normal,
+    /// Multiply blending
+    Multiply,
+    /// Screen blending
+    Screen,
+    /// Overlay blending
+    Overlay,
+    /// Soft light blending
+    SoftLight,
+    /// Hard light blending
+    HardLight,
+    /// Color dodge blending
+    ColorDodge,
+    /// Color burn blending
+    ColorBurn,
+    /// Darken blending
+    Darken,
+    /// Lighten blending
+    Lighten,
+    /// Difference blending
+    Difference,
+    /// Exclusion blending
+    Exclusion,
+    /// Hue blending
+    Hue,
+    /// Saturation blending
+    Saturation,
+    /// Color blending
+    Color,
+    /// Luminosity blending
+    Luminosity,
+}
+
+impl Default for BlendMode {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+impl BlendMode {
+    /// Get all available blend modes
+    pub fn all() -> Vec<BlendMode> {
+        vec![
+            BlendMode::Normal,
+            BlendMode::Multiply,
+            BlendMode::Screen,
+            BlendMode::Overlay,
+            BlendMode::SoftLight,
+            BlendMode::HardLight,
+            BlendMode::ColorDodge,
+            BlendMode::ColorBurn,
+            BlendMode::Darken,
+            BlendMode::Lighten,
+            BlendMode::Difference,
+            BlendMode::Exclusion,
+            BlendMode::Hue,
+            BlendMode::Saturation,
+            BlendMode::Color,
+            BlendMode::Luminosity,
+        ]
+    }
+
+    /// Get human-readable name
+    pub fn name(&self) -> &'static str {
+        match self {
+            BlendMode::Normal => "Normal",
+            BlendMode::Multiply => "Multiply",
+            BlendMode::Screen => "Screen",
+            BlendMode::Overlay => "Overlay",
+            BlendMode::SoftLight => "Soft Light",
+            BlendMode::HardLight => "Hard Light",
+            BlendMode::ColorDodge => "Color Dodge",
+            BlendMode::ColorBurn => "Color Burn",
+            BlendMode::Darken => "Darken",
+            BlendMode::Lighten => "Lighten",
+            BlendMode::Difference => "Difference",
+            BlendMode::Exclusion => "Exclusion",
+            BlendMode::Hue => "Hue",
+            BlendMode::Saturation => "Saturation",
+            BlendMode::Color => "Color",
+            BlendMode::Luminosity => "Luminosity",
+        }
+    }
+
+    /// Apply blend mode to two pixels
+    pub fn blend(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        if opacity <= 0.0 {
+            return base;
+        }
+        if opacity >= 1.0 && overlay.a == 255 {
+            return overlay;
+        }
+
+        // For now, implement only Normal blending
+        // TODO: Implement other blend modes
+        match self {
+            BlendMode::Normal => self.blend_normal(base, overlay, opacity),
+            _ => self.blend_normal(base, overlay, opacity), // Fallback to normal for now
+        }
+    }
+
+    /// Normal blending implementation
+    fn blend_normal(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let overlay_alpha = (overlay.a as f32 / 255.0) * opacity;
+        let base_alpha = base.a as f32 / 255.0;
+        
+        if overlay_alpha <= 0.0 {
+            return base;
+        }
+        
+        let result_alpha = overlay_alpha + base_alpha * (1.0 - overlay_alpha);
+        
+        if result_alpha <= 0.0 {
+            return RgbaPixel::transparent();
+        }
+        
+        let blend_factor = overlay_alpha / result_alpha;
+        
+        let r = (overlay.r as f32 * blend_factor + base.r as f32 * (1.0 - blend_factor)) as u8;
+        let g = (overlay.g as f32 * blend_factor + base.g as f32 * (1.0 - blend_factor)) as u8;
+        let b = (overlay.b as f32 * blend_factor + base.b as f32 * (1.0 - blend_factor)) as u8;
+        let a = (result_alpha * 255.0) as u8;
+        
+        RgbaPixel::new(r, g, b, a)
+    }
+}
+
+/// Layer type enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum LayerType {
+    /// Regular pixel layer
+    Pixel,
+    /// Text layer
+    Text {
+        content: String,
+        font_family: String,
+        font_size: f32,
+        color: RgbaPixel,
+    },
+    /// Shape layer
+    Shape {
+        shape_type: String,
+        fill_color: Option<RgbaPixel>,
+        stroke_color: Option<RgbaPixel>,
+        stroke_width: f32,
+    },
+    /// Adjustment layer
+    Adjustment {
+        adjustment_type: String,
+        parameters: std::collections::HashMap<String, f32>,
+    },
+}
+
+impl Default for LayerType {
+    fn default() -> Self {
+        Self::Pixel
+    }
+}
+
+/// Layer data structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Layer {
+    /// Unique identifier
+    pub id: Uuid,
+    /// Layer name
+    pub name: String,
+    /// Layer type
+    pub layer_type: LayerType,
+    /// Pixel data (for pixel layers)
+    pub pixel_data: Option<PixelData>,
+    /// Layer visibility
+    pub visible: bool,
+    /// Layer opacity (0.0 to 1.0)
+    pub opacity: f32,
+    /// Blend mode
+    pub blend_mode: BlendMode,
+    /// Layer position offset
+    pub offset: Point,
+    /// Layer transformation
+    pub transform: Transform,
+    /// Layer bounds
+    pub bounds: Rect,
+    /// Whether layer is locked
+    pub locked: bool,
+    /// Layer mask (optional)
+    pub mask: Option<PixelData>,
+}
+
+impl Layer {
+    /// Create a new empty pixel layer
+    pub fn new_pixel(name: String, width: u32, height: u32) -> Self {
+        let id = Uuid::new_v4();
+        let pixel_data = PixelData::new_rgba(width, height);
+        let bounds = Rect::new(0.0, 0.0, width as f32, height as f32);
+        
+        Self {
+            id,
+            name,
+            layer_type: LayerType::Pixel,
+            pixel_data: Some(pixel_data),
+            visible: true,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            offset: Point::origin(),
+            transform: Transform::identity(),
+            bounds,
+            locked: false,
+            mask: None,
+        }
+    }
+
+    /// Create a new text layer
+    pub fn new_text(
+        name: String,
+        content: String,
+        font_family: String,
+        font_size: f32,
+        color: RgbaPixel,
+        position: Point,
+    ) -> Self {
+        let id = Uuid::new_v4();
+        
+        Self {
+            id,
+            name,
+            layer_type: LayerType::Text {
+                content,
+                font_family,
+                font_size,
+                color,
+            },
+            pixel_data: None,
+            visible: true,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            offset: position,
+            transform: Transform::identity(),
+            bounds: Rect::new(position.x, position.y, 100.0, font_size), // Placeholder bounds
+            locked: false,
+            mask: None,
+        }
+    }
+
+    /// Create a new adjustment layer
+    pub fn new_adjustment(
+        name: String,
+        adjustment_type: String,
+        parameters: std::collections::HashMap<String, f32>,
+    ) -> Self {
+        let id = Uuid::new_v4();
+        
+        Self {
+            id,
+            name,
+            layer_type: LayerType::Adjustment {
+                adjustment_type,
+                parameters,
+            },
+            pixel_data: None,
+            visible: true,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            offset: Point::origin(),
+            transform: Transform::identity(),
+            bounds: Rect::new(0.0, 0.0, 0.0, 0.0), // Adjustment layers have no bounds
+            locked: false,
+            mask: None,
+        }
+    }
+
+    /// Get layer dimensions
+    pub fn dimensions(&self) -> Option<(u32, u32)> {
+        self.pixel_data.as_ref().map(|data| data.dimensions())
+    }
+
+    /// Check if layer has pixel data
+    pub fn has_pixel_data(&self) -> bool {
+        self.pixel_data.is_some()
+    }
+
+    /// Get pixel at coordinates (relative to layer)
+    pub fn get_pixel(&self, x: u32, y: u32) -> Option<RgbaPixel> {
+        self.pixel_data.as_ref()?.get_pixel(x, y)
+    }
+
+    /// Set pixel at coordinates (relative to layer)
+    pub fn set_pixel(&mut self, x: u32, y: u32, pixel: RgbaPixel) -> Result<()> {
+        if let Some(ref mut pixel_data) = self.pixel_data {
+            pixel_data.set_pixel(x, y, pixel)
+        } else {
+            Err(anyhow::anyhow!("Layer has no pixel data"))
+        }
+    }
+
+    /// Fill layer with color
+    pub fn fill(&mut self, color: RgbaPixel) {
+        if let Some(ref mut pixel_data) = self.pixel_data {
+            pixel_data.fill(color);
+        }
+    }
+
+    /// Clear layer (fill with transparent)
+    pub fn clear(&mut self) {
+        self.fill(RgbaPixel::transparent());
+    }
+
+    /// Duplicate layer
+    pub fn duplicate(&self) -> Self {
+        let mut duplicate = self.clone();
+        duplicate.id = Uuid::new_v4();
+        duplicate.name = format!("{} copy", self.name);
+        duplicate
+    }
+
+    /// Move layer by offset
+    pub fn move_by(&mut self, dx: f32, dy: f32) {
+        self.offset = self.offset.translate(dx, dy);
+        self.bounds = self.bounds.translate(dx, dy);
+    }
+
+    /// Set layer position
+    pub fn set_position(&mut self, position: Point) {
+        let dx = position.x - self.offset.x;
+        let dy = position.y - self.offset.y;
+        self.move_by(dx, dy);
+    }
+
+    /// Apply transformation to layer
+    pub fn apply_transform(&mut self, transform: Transform) {
+        self.transform = self.transform.then(&transform);
+        self.bounds = transform.transform_rect(self.bounds);
+    }
+
+    /// Reset transformation
+    pub fn reset_transform(&mut self) {
+        self.transform = Transform::identity();
+    }
+
+    /// Get effective opacity (considering parent groups, etc.)
+    pub fn effective_opacity(&self) -> f32 {
+        // For now, just return the layer's opacity
+        // TODO: Consider parent group opacity when layer groups are implemented
+        self.opacity
+    }
+
+    /// Check if layer is effectively visible
+    pub fn is_effectively_visible(&self) -> bool {
+        self.visible && self.effective_opacity() > 0.0
+    }
+
+    /// Get layer bounds in document coordinates
+    pub fn document_bounds(&self) -> Rect {
+        self.transform.transform_rect(self.bounds.translate(self.offset.x, self.offset.y))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_layer_creation() {
+        let layer = Layer::new_pixel("Test Layer".to_string(), 100, 50);
+        
+        assert_eq!(layer.name, "Test Layer");
+        assert!(layer.visible);
+        assert_eq!(layer.opacity, 1.0);
+        assert_eq!(layer.blend_mode, BlendMode::Normal);
+        assert!(layer.has_pixel_data());
+        
+        let (width, height) = layer.dimensions().unwrap();
+        assert_eq!(width, 100);
+        assert_eq!(height, 50);
+    }
+
+    #[test]
+    fn test_text_layer_creation() {
+        let layer = Layer::new_text(
+            "Text Layer".to_string(),
+            "Hello World".to_string(),
+            "Arial".to_string(),
+            24.0,
+            RgbaPixel::black(),
+            Point::new(10.0, 20.0),
+        );
+        
+        assert_eq!(layer.name, "Text Layer");
+        assert!(matches!(layer.layer_type, LayerType::Text { .. }));
+        assert!(!layer.has_pixel_data());
+    }
+
+    #[test]
+    fn test_layer_pixel_operations() {
+        let mut layer = Layer::new_pixel("Test".to_string(), 10, 10);
+        let test_color = RgbaPixel::new(255, 128, 64, 200);
+        
+        layer.set_pixel(5, 5, test_color).unwrap();
+        let retrieved = layer.get_pixel(5, 5).unwrap();
+        
+        assert_eq!(retrieved, test_color);
+    }
+
+    #[test]
+    fn test_layer_fill() {
+        let mut layer = Layer::new_pixel("Test".to_string(), 5, 5);
+        let fill_color = RgbaPixel::new(100, 150, 200, 255);
+        
+        layer.fill(fill_color);
+        
+        // Check a few pixels
+        assert_eq!(layer.get_pixel(0, 0).unwrap(), fill_color);
+        assert_eq!(layer.get_pixel(2, 3).unwrap(), fill_color);
+        assert_eq!(layer.get_pixel(4, 4).unwrap(), fill_color);
+    }
+
+    #[test]
+    fn test_blend_mode_normal() {
+        let base = RgbaPixel::new(100, 100, 100, 255);
+        let overlay = RgbaPixel::new(200, 200, 200, 128);
+        
+        let result = BlendMode::Normal.blend(base, overlay, 1.0);
+        
+        // Result should be between base and overlay
+        assert!(result.r > base.r && result.r < overlay.r);
+        assert!(result.g > base.g && result.g < overlay.g);
+        assert!(result.b > base.b && result.b < overlay.b);
+    }
+
+    #[test]
+    fn test_layer_duplication() {
+        let original = Layer::new_pixel("Original".to_string(), 10, 10);
+        let duplicate = original.duplicate();
+        
+        assert_ne!(original.id, duplicate.id);
+        assert_eq!(duplicate.name, "Original copy");
+        assert_eq!(original.dimensions(), duplicate.dimensions());
+    }
+}
