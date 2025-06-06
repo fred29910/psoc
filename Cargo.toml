@@ -1,0 +1,111 @@
+[package]
+name = "psoc"
+version = "0.1.0"
+edition = "2021"
+authors = ["PSOC Development Team <dev@psoc.project>"]
+description = "A Photoshop-like image editor built with Rust"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/YOUR_USERNAME/psoc"
+homepage = "https://github.com/YOUR_USERNAME/psoc"
+documentation = "https://docs.rs/psoc"
+readme = "README.md"
+keywords = ["image", "editor", "graphics", "photoshop", "gui"]
+categories = ["graphics", "multimedia::images", "gui"]
+
+[workspace]
+members = [
+    "crates/psoc-core",
+    "crates/psoc-image-processing", 
+    "crates/psoc-file-formats",
+    "crates/psoc-ui-toolkit",
+    "crates/psoc-plugins",
+]
+
+[dependencies]
+# GUI framework
+iced = { version = "0.10", features = ["canvas", "image", "svg"] }
+iced_wgpu = "0.11"
+iced_winit = "0.10"
+
+# Image processing
+image = { version = "0.24", features = ["png", "jpeg", "tiff", "webp"] }
+imageproc = "0.23"
+ndarray = "0.15"
+
+# Color management
+palette = "0.7"
+
+# File IO
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ron = "0.8"
+rfd = "0.11"
+
+# Error handling and logging
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# Parallel processing
+rayon = "1.7"
+
+# Math
+nalgebra = "0.32"
+glam = "0.24"
+
+# Workspace crates
+psoc-core = { path = "crates/psoc-core" }
+psoc-image-processing = { path = "crates/psoc-image-processing" }
+psoc-file-formats = { path = "crates/psoc-file-formats" }
+psoc-ui-toolkit = { path = "crates/psoc-ui-toolkit" }
+psoc-plugins = { path = "crates/psoc-plugins", optional = true }
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.0"
+tempfile = "3.0"
+
+[features]
+default = ["plugins"]
+plugins = ["psoc-plugins", "mlua", "wasmtime"]
+
+# Optional plugin system dependencies
+mlua = { version = "0.9", optional = true }
+wasmtime = { version = "13.0", optional = true }
+
+[profile.dev]
+opt-level = 0
+debug = true
+overflow-checks = true
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.bench]
+opt-level = 3
+debug = false
+lto = true
+
+[[bin]]
+name = "psoc"
+path = "src/main.rs"
+
+[lib]
+name = "psoc"
+path = "src/lib.rs"
+
+[[bench]]
+name = "image_processing"
+harness = false
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
