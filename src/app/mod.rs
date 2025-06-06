@@ -178,8 +178,6 @@ impl Application {
         Ok(())
     }
 
-
-
     /// Shutdown the application
     #[instrument(skip(self))]
     fn shutdown(&mut self) -> Result<()> {

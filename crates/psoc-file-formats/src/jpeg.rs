@@ -2,8 +2,8 @@
 //!
 //! This module provides JPEG image loading and saving functionality.
 
-use std::path::Path;
 use anyhow::{Context, Result};
+use std::path::Path;
 use tracing::{debug, instrument, warn};
 
 /// Load a JPEG image from a file path

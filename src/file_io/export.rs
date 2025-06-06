@@ -2,9 +2,9 @@
 //!
 //! This module handles exporting images to various file formats.
 
-use std::path::Path;
 use anyhow::{Context, Result};
 use psoc_file_formats::DynamicImage;
+use std::path::Path;
 use tracing::{debug, info, instrument, warn};
 
 /// Export an image to a file path
@@ -83,14 +83,12 @@ pub async fn export_image_with_options<P: AsRef<Path>>(
     let options_debug = format!("{:?}", options);
 
     // Use tokio to run the blocking I/O operation
-    tokio::task::spawn_blocking(move || {
-        match options {
-            ExportOptions::Png(png_options) => {
-                psoc_file_formats::save_png_with_options(&image_clone, &path_clone, &png_options)
-            }
-            ExportOptions::Jpeg(jpeg_options) => {
-                psoc_file_formats::save_jpeg_with_options(&image_clone, &path_clone, &jpeg_options)
-            }
+    tokio::task::spawn_blocking(move || match options {
+        ExportOptions::Png(png_options) => {
+            psoc_file_formats::save_png_with_options(&image_clone, &path_clone, &png_options)
+        }
+        ExportOptions::Jpeg(jpeg_options) => {
+            psoc_file_formats::save_jpeg_with_options(&image_clone, &path_clone, &jpeg_options)
         }
     })
     .await
@@ -114,9 +112,9 @@ pub fn can_export<P: AsRef<Path>>(path: P) -> bool {
     // Check if extension is supported
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let supported_extensions = ["png", "jpg", "jpeg"];
-        supported_extensions.iter().any(|&supported| {
-            ext.to_lowercase() == supported
-        })
+        supported_extensions
+            .iter()
+            .any(|&supported| ext.to_lowercase() == supported)
     } else {
         false
     }
@@ -125,15 +123,15 @@ pub fn can_export<P: AsRef<Path>>(path: P) -> bool {
 /// Get the recommended export options for a given file path
 pub fn get_recommended_export_options<P: AsRef<Path>>(path: P) -> Option<ExportOptions> {
     let path = path.as_ref();
-    
+
     if let Some(format) = psoc_file_formats::SupportedFormat::from_path(path) {
         match format {
             psoc_file_formats::SupportedFormat::Png => {
                 Some(ExportOptions::Png(psoc_file_formats::PngOptions::default()))
             }
-            psoc_file_formats::SupportedFormat::Jpeg => {
-                Some(ExportOptions::Jpeg(psoc_file_formats::JpegOptions::default()))
-            }
+            psoc_file_formats::SupportedFormat::Jpeg => Some(ExportOptions::Jpeg(
+                psoc_file_formats::JpegOptions::default(),
+            )),
         }
     } else {
         None
@@ -143,7 +141,7 @@ pub fn get_recommended_export_options<P: AsRef<Path>>(path: P) -> Option<ExportO
 /// Export multiple images to different paths
 #[instrument(skip_all)]
 pub async fn export_images<P: AsRef<Path>>(
-    images_and_paths: Vec<(&DynamicImage, P)>
+    images_and_paths: Vec<(&DynamicImage, P)>,
 ) -> Result<Vec<String>> {
     debug!("Exporting {} images", images_and_paths.len());
 
@@ -190,9 +188,12 @@ pub async fn export_images<P: AsRef<Path>>(
 }
 
 /// Estimate the file size for an export operation
-pub fn estimate_export_size(image: &DynamicImage, format: psoc_file_formats::SupportedFormat) -> u64 {
+pub fn estimate_export_size(
+    image: &DynamicImage,
+    format: psoc_file_formats::SupportedFormat,
+) -> u64 {
     let pixel_count = (image.width() * image.height()) as u64;
-    
+
     match format {
         psoc_file_formats::SupportedFormat::Png => {
             // PNG: roughly 3-4 bytes per pixel for RGB, 4-5 for RGBA (with compression)
@@ -265,7 +266,8 @@ mod tests {
         let dynamic_img = DynamicImage::ImageRgb8(img);
 
         let png_size = estimate_export_size(&dynamic_img, psoc_file_formats::SupportedFormat::Png);
-        let jpeg_size = estimate_export_size(&dynamic_img, psoc_file_formats::SupportedFormat::Jpeg);
+        let jpeg_size =
+            estimate_export_size(&dynamic_img, psoc_file_formats::SupportedFormat::Jpeg);
 
         assert!(png_size > 0);
         assert!(jpeg_size > 0);

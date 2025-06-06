@@ -2,9 +2,9 @@
 //!
 //! This module handles importing images from various file formats.
 
-use std::path::Path;
 use anyhow::{Context, Result};
 use psoc_file_formats::DynamicImage;
+use std::path::Path;
 use tracing::{debug, error, info, instrument, warn};
 
 /// Import an image from a file path
@@ -24,9 +24,7 @@ pub async fn import_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
     }
 
     // Get file size for logging
-    let file_size = std::fs::metadata(path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
     debug!(
         file_size = file_size,
@@ -93,10 +91,7 @@ pub async fn import_images<P: AsRef<Path>>(paths: Vec<P>) -> Result<Vec<(String,
         return Err(anyhow::anyhow!("No images were successfully imported"));
     }
 
-    info!(
-        imported = results.len(),
-        "Batch image import completed"
-    );
+    info!(imported = results.len(), "Batch image import completed");
 
     Ok(results)
 }
@@ -107,9 +102,9 @@ pub fn is_supported_import_extension<P: AsRef<Path>>(path: P) -> bool {
 
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let supported_extensions = ["png", "jpg", "jpeg"];
-        supported_extensions.iter().any(|&supported| {
-            ext.to_lowercase() == supported
-        })
+        supported_extensions
+            .iter()
+            .any(|&supported| ext.to_lowercase() == supported)
     } else {
         false
     }
@@ -143,7 +138,7 @@ pub async fn get_image_metadata<P: AsRef<Path>>(path: P) -> Result<ImageMetadata
         // Use image crate to get basic info without fully decoding
         let reader = image::ImageReader::open(&path_clone)?;
         let reader = reader.with_guessed_format()?;
-        
+
         let dimensions = reader.into_dimensions()?;
         let file_size = std::fs::metadata(&path_clone)?.len();
 
@@ -181,10 +176,11 @@ pub struct ImageMetadata {
 impl ImageMetadata {
     /// Get a human-readable description of the image
     pub fn description(&self) -> String {
-        let format_str = self.format
+        let format_str = self
+            .format
             .map(|f| f.extension().to_uppercase())
             .unwrap_or_else(|| "Unknown".to_string());
-        
+
         let size_str = if self.file_size < 1024 {
             format!("{} B", self.file_size)
         } else if self.file_size < 1024 * 1024 {

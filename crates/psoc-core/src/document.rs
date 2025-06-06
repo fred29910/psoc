@@ -1,17 +1,17 @@
 //! Document data structures and operations
-//! 
+//!
 //! This module defines the document structure for the PSOC image editor,
 //! including document metadata, layer management, and document operations.
 
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use std::collections::HashMap;
+use crate::color::ColorSpace;
+use crate::geometry::{Rect, Size};
 use crate::layer::Layer;
 use crate::pixel::{PixelData, RgbaPixel};
-use crate::geometry::{Size, Rect};
-use crate::color::ColorSpace;
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use image::{DynamicImage, GenericImageView};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Document color mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,7 +175,7 @@ impl Document {
         let metadata = DocumentMetadata::new(title);
         let size = Size::new(width as f32, height as f32);
         let canvas_bounds = Rect::new(0.0, 0.0, width as f32, height as f32);
-        
+
         Self {
             id,
             metadata,
@@ -196,17 +196,17 @@ impl Document {
     pub fn from_image(title: String, image: &DynamicImage) -> Result<Self> {
         let (width, height) = image.dimensions();
         let mut document = Self::new(title, width, height);
-        
+
         // Create a layer from the image
-        let pixel_data = PixelData::from_image(image)
-            .context("Failed to create pixel data from image")?;
-        
+        let pixel_data =
+            PixelData::from_image(image).context("Failed to create pixel data from image")?;
+
         let mut layer = Layer::new_pixel("Background".to_string(), width, height);
         layer.pixel_data = Some(pixel_data);
-        
+
         document.add_layer(layer);
         document.set_active_layer(0)?;
-        
+
         Ok(document)
     }
 
@@ -226,16 +226,16 @@ impl Document {
         if index > self.layers.len() {
             return Err(anyhow::anyhow!("Layer index out of bounds"));
         }
-        
+
         self.layers.insert(index, layer);
-        
+
         // Adjust active layer index if necessary
         if let Some(active_index) = self.active_layer_index {
             if index <= active_index {
                 self.active_layer_index = Some(active_index + 1);
             }
         }
-        
+
         self.mark_dirty();
         Ok(())
     }
@@ -245,9 +245,9 @@ impl Document {
         if index >= self.layers.len() {
             return Err(anyhow::anyhow!("Layer index out of bounds"));
         }
-        
+
         let removed_layer = self.layers.remove(index);
-        
+
         // Adjust active layer index
         match self.active_layer_index {
             Some(active_index) if active_index == index => {
@@ -268,7 +268,7 @@ impl Document {
                 // No change needed
             }
         }
-        
+
         self.mark_dirty();
         Ok(removed_layer)
     }
@@ -278,14 +278,14 @@ impl Document {
         if from_index >= self.layers.len() || to_index >= self.layers.len() {
             return Err(anyhow::anyhow!("Layer index out of bounds"));
         }
-        
+
         if from_index == to_index {
             return Ok(());
         }
-        
+
         let layer = self.layers.remove(from_index);
         self.layers.insert(to_index, layer);
-        
+
         // Update active layer index
         if let Some(active_index) = self.active_layer_index {
             self.active_layer_index = Some(match active_index {
@@ -295,7 +295,7 @@ impl Document {
                 i => i,
             });
         }
-        
+
         self.mark_dirty();
         Ok(())
     }
@@ -315,7 +315,8 @@ impl Document {
 
     /// Get active layer
     pub fn active_layer(&self) -> Option<&Layer> {
-        self.active_layer_index.and_then(|index| self.get_layer(index))
+        self.active_layer_index
+            .and_then(|index| self.get_layer(index))
     }
 
     /// Get mutable active layer
@@ -332,7 +333,7 @@ impl Document {
         if index >= self.layers.len() {
             return Err(anyhow::anyhow!("Layer index out of bounds"));
         }
-        
+
         self.active_layer_index = Some(index);
         Ok(())
     }
@@ -362,19 +363,14 @@ impl Document {
     pub fn flatten(&self) -> Result<DynamicImage> {
         if self.layers.is_empty() {
             // Create empty image with background color
-            let mut pixel_data = PixelData::new_rgba(
-                self.size.width as u32,
-                self.size.height as u32,
-            );
+            let mut pixel_data =
+                PixelData::new_rgba(self.size.width as u32, self.size.height as u32);
             pixel_data.fill(self.background_color);
             return pixel_data.to_image();
         }
 
         // Start with background
-        let mut result = PixelData::new_rgba(
-            self.size.width as u32,
-            self.size.height as u32,
-        );
+        let mut result = PixelData::new_rgba(self.size.width as u32, self.size.height as u32);
         result.fill(self.background_color);
 
         // Composite layers from bottom to top
@@ -400,20 +396,21 @@ impl Document {
     ) -> Result<()> {
         let (layer_width, layer_height) = layer_data.dimensions();
         let (doc_width, doc_height) = self.dimensions();
-        
+
         let offset_x = layer.offset.x as i32;
         let offset_y = layer.offset.y as i32;
-        
+
         for y in 0..layer_height {
             for x in 0..layer_width {
                 let doc_x = x as i32 + offset_x;
                 let doc_y = y as i32 + offset_y;
-                
+
                 // Check bounds
-                if doc_x < 0 || doc_y < 0 || doc_x >= doc_width as i32 || doc_y >= doc_height as i32 {
+                if doc_x < 0 || doc_y < 0 || doc_x >= doc_width as i32 || doc_y >= doc_height as i32
+                {
                     continue;
                 }
-                
+
                 if let Some(layer_pixel) = layer_data.get_pixel(x, y) {
                     if let Some(base_pixel) = result.get_pixel(doc_x as u32, doc_y as u32) {
                         let blended = layer.blend_mode.blend(
@@ -426,7 +423,7 @@ impl Document {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -434,19 +431,20 @@ impl Document {
     pub fn resize(&mut self, new_width: u32, new_height: u32) -> Result<()> {
         self.size = Size::new(new_width as f32, new_height as f32);
         self.canvas_bounds = Rect::new(0.0, 0.0, new_width as f32, new_height as f32);
-        
+
         // TODO: Implement layer resizing/cropping logic
-        
+
         self.mark_dirty();
         Ok(())
     }
 
     /// Duplicate layer
     pub fn duplicate_layer(&mut self, index: usize) -> Result<()> {
-        let layer = self.get_layer(index)
+        let layer = self
+            .get_layer(index)
             .ok_or_else(|| anyhow::anyhow!("Layer index out of bounds"))?
             .duplicate();
-        
+
         self.insert_layer(index + 1, layer)?;
         Ok(())
     }
@@ -459,7 +457,7 @@ mod tests {
     #[test]
     fn test_document_creation() {
         let doc = Document::new("Test Document".to_string(), 800, 600);
-        
+
         assert_eq!(doc.metadata.title, "Test Document");
         assert_eq!(doc.dimensions(), (800, 600));
         assert!(doc.is_empty());
@@ -471,14 +469,14 @@ mod tests {
         let mut doc = Document::new("Test".to_string(), 100, 100);
         let layer1 = Layer::new_pixel("Layer 1".to_string(), 100, 100);
         let layer2 = Layer::new_pixel("Layer 2".to_string(), 100, 100);
-        
+
         doc.add_layer(layer1);
         doc.add_layer(layer2);
-        
+
         assert_eq!(doc.layer_count(), 2);
         assert!(!doc.is_empty());
         assert!(doc.is_dirty);
-        
+
         doc.set_active_layer(1).unwrap();
         assert_eq!(doc.active_layer().unwrap().name, "Layer 2");
     }
@@ -488,11 +486,11 @@ mod tests {
         let mut doc = Document::new("Test".to_string(), 100, 100);
         let layer1 = Layer::new_pixel("Layer 1".to_string(), 100, 100);
         let layer2 = Layer::new_pixel("Layer 2".to_string(), 100, 100);
-        
+
         doc.add_layer(layer1);
         doc.add_layer(layer2);
         doc.set_active_layer(1).unwrap();
-        
+
         let removed = doc.remove_layer(0).unwrap();
         assert_eq!(removed.name, "Layer 1");
         assert_eq!(doc.layer_count(), 1);

@@ -3,8 +3,8 @@
 //! This module provides geometric primitives, transformations, and calculations
 //! for image editing operations.
 
+use glam::{Affine2, Vec2};
 use serde::{Deserialize, Serialize};
-use glam::{Vec2, Affine2};
 
 /// 2D point representation
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -118,7 +118,12 @@ pub struct Rect {
 impl Rect {
     /// Create a new rectangle
     pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// Create rectangle from position and size
@@ -172,16 +177,18 @@ impl Rect {
 
     /// Check if point is inside rectangle
     pub fn contains_point(&self, point: Point) -> bool {
-        point.x >= self.x && point.x <= self.x + self.width &&
-        point.y >= self.y && point.y <= self.y + self.height
+        point.x >= self.x
+            && point.x <= self.x + self.width
+            && point.y >= self.y
+            && point.y <= self.y + self.height
     }
 
     /// Check if rectangle intersects with another rectangle
     pub fn intersects(&self, other: &Rect) -> bool {
-        !(self.x + self.width < other.x ||
-          other.x + other.width < self.x ||
-          self.y + self.height < other.y ||
-          other.y + other.height < self.y)
+        !(self.x + self.width < other.x
+            || other.x + other.width < self.x
+            || self.y + self.height < other.y
+            || other.y + other.height < self.y)
     }
 
     /// Get intersection with another rectangle
@@ -285,10 +292,22 @@ impl Transform {
             .map(|&corner| self.transform_point(corner))
             .collect();
 
-        let min_x = transformed_corners.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
-        let max_x = transformed_corners.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
-        let min_y = transformed_corners.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
-        let max_y = transformed_corners.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
+        let min_x = transformed_corners
+            .iter()
+            .map(|p| p.x)
+            .fold(f32::INFINITY, f32::min);
+        let max_x = transformed_corners
+            .iter()
+            .map(|p| p.x)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let min_y = transformed_corners
+            .iter()
+            .map(|p| p.y)
+            .fold(f32::INFINITY, f32::min);
+        let max_y = transformed_corners
+            .iter()
+            .map(|p| p.y)
+            .fold(f32::NEG_INFINITY, f32::max);
 
         Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
     }

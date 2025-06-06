@@ -5,9 +5,8 @@
 
 // Re-export core types for convenience
 pub use psoc_core::{
-    Document, DocumentMetadata, Layer, LayerType, BlendMode,
-    PixelData, RgbaPixel, ColorSpace, ColorMode, Resolution,
-    Point, Size, Rect, Transform, HslColor, HsvColor, ColorAdjustment,
+    BlendMode, ColorAdjustment, ColorMode, ColorSpace, Document, DocumentMetadata, HslColor,
+    HsvColor, Layer, LayerType, PixelData, Point, Rect, Resolution, RgbaPixel, Size, Transform,
 };
 
 /// Create a new document with default settings
@@ -16,7 +15,10 @@ pub fn create_document(title: String, width: u32, height: u32) -> Document {
 }
 
 /// Create a document from an image
-pub fn create_document_from_image(title: String, image: &image::DynamicImage) -> anyhow::Result<Document> {
+pub fn create_document_from_image(
+    title: String,
+    image: &image::DynamicImage,
+) -> anyhow::Result<Document> {
     Document::from_image(title, image)
 }
 

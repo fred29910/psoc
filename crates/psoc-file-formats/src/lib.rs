@@ -3,16 +3,16 @@
 //! This crate provides comprehensive file format support for PSOC,
 //! including loading and saving various image formats.
 
-use std::path::Path;
 use anyhow::Result;
+use std::path::Path;
 use tracing::{debug, info, instrument};
 
-pub mod png;
 pub mod jpeg;
+pub mod png;
 
 // Re-export commonly used types
-pub use png::*;
 pub use jpeg::*;
+pub use png::*;
 
 // Re-export image types for convenience
 pub use image::{DynamicImage, ImageFormat};

@@ -1,12 +1,12 @@
 //! Pixel data representation and manipulation
-//! 
+//!
 //! This module provides efficient pixel data structures and operations for image editing.
 //! It supports multiple color formats and provides conversion between different representations.
 
-use serde::{Deserialize, Serialize};
-use ndarray::Array3;
+use anyhow::{Context, Result};
 use image::{DynamicImage, ImageBuffer, Rgba, RgbaImage};
-use anyhow::{Result, Context};
+use ndarray::Array3;
+use serde::{Deserialize, Serialize};
 
 /// Color channel type - 8-bit unsigned integer
 pub type Channel = u8;
@@ -146,9 +146,9 @@ impl PixelData {
     pub fn from_image(image: &DynamicImage) -> Result<Self> {
         let rgba_image = image.to_rgba8();
         let (width, height) = rgba_image.dimensions();
-        
+
         let mut array = Array3::zeros((height as usize, width as usize, 4));
-        
+
         for (x, y, pixel) in rgba_image.enumerate_pixels() {
             let rgba = RgbaPixel::from(*pixel);
             array[[y as usize, x as usize, 0]] = rgba.r;
@@ -156,7 +156,7 @@ impl PixelData {
             array[[y as usize, x as usize, 2]] = rgba.b;
             array[[y as usize, x as usize, 3]] = rgba.a;
         }
-        
+
         Ok(Self::Rgba(array))
     }
 
@@ -166,11 +166,14 @@ impl PixelData {
             Self::Rgba(array) => {
                 let (height, width, channels) = array.dim();
                 if channels != 4 {
-                    return Err(anyhow::anyhow!("Expected 4 channels for RGBA data, got {}", channels));
+                    return Err(anyhow::anyhow!(
+                        "Expected 4 channels for RGBA data, got {}",
+                        channels
+                    ));
                 }
 
                 let mut img_buffer = RgbaImage::new(width as u32, height as u32);
-                
+
                 for y in 0..height {
                     for x in 0..width {
                         let pixel = RgbaPixel::new(
@@ -182,17 +185,24 @@ impl PixelData {
                         img_buffer.put_pixel(x as u32, y as u32, pixel.into());
                     }
                 }
-                
+
                 Ok(DynamicImage::ImageRgba8(img_buffer))
             }
-            Self::Raw { data, width, height, channels } => {
+            Self::Raw {
+                data,
+                width,
+                height,
+                channels,
+            } => {
                 if *channels != 4 {
-                    return Err(anyhow::anyhow!("Only RGBA format supported for raw data conversion"));
+                    return Err(anyhow::anyhow!(
+                        "Only RGBA format supported for raw data conversion"
+                    ));
                 }
-                
+
                 let img_buffer = ImageBuffer::from_raw(*width, *height, data.clone())
                     .context("Failed to create image buffer from raw data")?;
-                
+
                 Ok(DynamicImage::ImageRgba8(img_buffer))
             }
         }
@@ -217,7 +227,7 @@ impl PixelData {
                 if x >= width as u32 || y >= height as u32 {
                     return None;
                 }
-                
+
                 Some(RgbaPixel::new(
                     array[[y as usize, x as usize, 0]],
                     array[[y as usize, x as usize, 1]],
@@ -225,16 +235,21 @@ impl PixelData {
                     array[[y as usize, x as usize, 3]],
                 ))
             }
-            Self::Raw { data, width, height, channels } => {
+            Self::Raw {
+                data,
+                width,
+                height,
+                channels,
+            } => {
                 if x >= *width || y >= *height || *channels != 4 {
                     return None;
                 }
-                
+
                 let index = ((y * width + x) * *channels as u32) as usize;
                 if index + 3 >= data.len() {
                     return None;
                 }
-                
+
                 Some(RgbaPixel::new(
                     data[index],
                     data[index + 1],
@@ -253,29 +268,34 @@ impl PixelData {
                 if x >= width as u32 || y >= height as u32 {
                     return Err(anyhow::anyhow!("Pixel coordinates out of bounds"));
                 }
-                
+
                 array[[y as usize, x as usize, 0]] = pixel.r;
                 array[[y as usize, x as usize, 1]] = pixel.g;
                 array[[y as usize, x as usize, 2]] = pixel.b;
                 array[[y as usize, x as usize, 3]] = pixel.a;
-                
+
                 Ok(())
             }
-            Self::Raw { data, width, height, channels } => {
+            Self::Raw {
+                data,
+                width,
+                height,
+                channels,
+            } => {
                 if x >= *width || y >= *height || *channels != 4 {
                     return Err(anyhow::anyhow!("Invalid pixel coordinates or format"));
                 }
-                
+
                 let index = ((y * *width + x) * *channels as u32) as usize;
                 if index + 3 >= data.len() {
                     return Err(anyhow::anyhow!("Pixel index out of bounds"));
                 }
-                
+
                 data[index] = pixel.r;
                 data[index + 1] = pixel.g;
                 data[index + 2] = pixel.b;
                 data[index + 3] = pixel.a;
-                
+
                 Ok(())
             }
         }
@@ -348,10 +368,10 @@ mod tests {
     fn test_pixel_data_get_set() {
         let mut pixel_data = PixelData::new_rgba(10, 10);
         let test_pixel = RgbaPixel::new(255, 128, 64, 200);
-        
+
         pixel_data.set_pixel(5, 5, test_pixel).unwrap();
         let retrieved = pixel_data.get_pixel(5, 5).unwrap();
-        
+
         assert_eq!(retrieved, test_pixel);
     }
 
@@ -359,9 +379,9 @@ mod tests {
     fn test_pixel_data_fill() {
         let mut pixel_data = PixelData::new_rgba(5, 5);
         let fill_color = RgbaPixel::new(100, 150, 200, 255);
-        
+
         pixel_data.fill(fill_color);
-        
+
         // Check a few pixels
         assert_eq!(pixel_data.get_pixel(0, 0).unwrap(), fill_color);
         assert_eq!(pixel_data.get_pixel(2, 3).unwrap(), fill_color);
@@ -372,7 +392,7 @@ mod tests {
     fn test_premultiply_alpha() {
         let pixel = RgbaPixel::new(200, 100, 50, 128);
         let premultiplied = pixel.premultiply_alpha();
-        
+
         // With alpha = 128 (50%), colors should be roughly halved
         assert!(premultiplied.r <= pixel.r);
         assert!(premultiplied.g <= pixel.g);
