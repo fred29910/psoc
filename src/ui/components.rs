@@ -58,6 +58,7 @@ pub fn menu_bar<Message: Clone + 'static>(
     save_as_doc: Message,
     undo: Message,
     redo: Message,
+    brightness_contrast: Message,
     show_about: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
@@ -77,6 +78,20 @@ pub fn menu_bar<Message: Clone + 'static>(
             // Edit menu section
             container(
                 row![icon_button(Icon::Undo, undo), icon_button(Icon::Redo, redo),].spacing(8.0)
+            )
+            .padding(8.0),
+            // Image menu section
+            container(
+                row![
+                    button(text("Brightness/Contrast").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(brightness_contrast)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
             )
             .padding(8.0),
             // Spacer

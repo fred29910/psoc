@@ -18,7 +18,7 @@ use crate::{
     tools::{ToolManager, ToolType},
     PsocError, Result,
 };
-use psoc_core::{Document, Layer};
+use psoc_core::{Command, Document, Layer};
 
 /// Main GUI application
 #[derive(Debug, Default)]
@@ -103,6 +103,8 @@ pub enum Message {
     Undo,
     /// Redo the last undone operation
     Redo,
+    /// Adjustment-related messages
+    Adjustment(AdjustmentMessage),
     /// Error occurred
     Error(String),
 }
@@ -143,6 +145,17 @@ pub enum CanvasMessage {
     MouseReleased { x: f32, y: f32 },
     /// Canvas scrolled (for zoom/pan)
     Scrolled { delta_x: f32, delta_y: f32 },
+}
+
+/// Adjustment-specific messages
+#[derive(Debug, Clone)]
+pub enum AdjustmentMessage {
+    /// Apply brightness adjustment
+    ApplyBrightness(f32),
+    /// Apply contrast adjustment
+    ApplyContrast(f32),
+    /// Show brightness/contrast dialog
+    ShowBrightnessContrast,
 }
 
 impl Default for AppState {
@@ -466,6 +479,10 @@ impl PsocApp {
                     self.error_message = Some("No document open".to_string());
                 }
             }
+            Message::Adjustment(adj_msg) => {
+                debug!("Adjustment message: {:?}", adj_msg);
+                self.handle_adjustment_message(adj_msg);
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
@@ -584,6 +601,7 @@ impl PsocApp {
             Message::SaveAsDocument,
             Message::Undo,
             Message::Redo,
+            Message::Adjustment(AdjustmentMessage::ShowBrightnessContrast),
             Message::ShowAbout,
             Message::Exit,
         )
@@ -937,6 +955,90 @@ impl PsocApp {
                     self.error_message = Some("Layer index out of bounds".to_string());
                 }
             }
+        }
+    }
+
+    /// Handle adjustment messages
+    fn handle_adjustment_message(&mut self, message: AdjustmentMessage) {
+        match message {
+            AdjustmentMessage::ApplyBrightness(brightness) => {
+                info!("Applying brightness adjustment: {}", brightness);
+                self.apply_brightness_adjustment(brightness);
+            }
+            AdjustmentMessage::ApplyContrast(contrast) => {
+                info!("Applying contrast adjustment: {}", contrast);
+                self.apply_contrast_adjustment(contrast);
+            }
+            AdjustmentMessage::ShowBrightnessContrast => {
+                info!("Showing brightness/contrast dialog");
+                // TODO: Implement brightness/contrast dialog
+                self.error_message =
+                    Some("Brightness/Contrast dialog not yet implemented".to_string());
+            }
+        }
+    }
+
+    /// Apply brightness adjustment to the current document
+    fn apply_brightness_adjustment(&mut self, brightness: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({ "brightness": brightness });
+                let application = AdjustmentApplication::new(
+                    "brightness".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply brightness: {}", e));
+                } else {
+                    // Update canvas with the modified document
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply contrast adjustment to the current document
+    fn apply_contrast_adjustment(&mut self, contrast: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({ "contrast": contrast });
+                let application = AdjustmentApplication::new(
+                    "contrast".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply contrast: {}", e));
+                } else {
+                    // Update canvas with the modified document
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
         }
     }
 

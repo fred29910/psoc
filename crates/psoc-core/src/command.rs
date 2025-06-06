@@ -54,6 +54,9 @@ pub trait Command: Debug + Send + Sync {
     fn modifies_document(&self) -> bool {
         true
     }
+
+    /// Get a reference to this command as Any for downcasting
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Command history manager for undo/redo operations
@@ -287,6 +290,10 @@ mod tests {
 
         fn timestamp(&self) -> std::time::SystemTime {
             self.metadata.timestamp
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
         }
     }
 

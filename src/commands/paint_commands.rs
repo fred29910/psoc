@@ -231,6 +231,10 @@ impl Command for BrushStrokeCommand {
         // Simplified implementation - no merging for now
         Err(anyhow::anyhow!("Brush stroke merging not yet implemented"))
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to apply an eraser stroke to a layer
@@ -338,6 +342,10 @@ impl Command for EraserStrokeCommand {
 
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

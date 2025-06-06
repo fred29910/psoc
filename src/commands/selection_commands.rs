@@ -51,6 +51,10 @@ impl Command for SetSelectionCommand {
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to clear the current selection
@@ -91,6 +95,10 @@ impl Command for ClearSelectionCommand {
 
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -174,6 +182,10 @@ impl Command for MoveSelectionCommand {
             "Selection move merging not yet implemented"
         ))
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to invert the current selection
@@ -237,6 +249,10 @@ impl Command for InvertSelectionCommand {
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to select all content in the document
@@ -289,6 +305,10 @@ impl Command for SelectAllCommand {
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to transform a selection (resize, rotate, etc.)
@@ -333,6 +353,10 @@ impl Command for TransformSelectionCommand {
 
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

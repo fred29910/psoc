@@ -4,11 +4,13 @@
 //! operations in PSOC. Each command encapsulates a specific operation that can
 //! be executed and undone.
 
+pub mod adjustment_commands;
 pub mod layer_commands;
 pub mod paint_commands;
 pub mod selection_commands;
 
 // Re-export commonly used command types
+pub use adjustment_commands::*;
 pub use layer_commands::*;
 pub use paint_commands::*;
 pub use selection_commands::*;
@@ -80,6 +82,10 @@ impl Command for CompositeCommand {
     fn modifies_document(&self) -> bool {
         self.commands.iter().any(|cmd| cmd.modifies_document())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// A no-op command that does nothing
@@ -124,6 +130,10 @@ impl Command for NoOpCommand {
 
     fn modifies_document(&self) -> bool {
         false
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

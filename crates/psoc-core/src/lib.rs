@@ -4,6 +4,8 @@
 //! It includes document management, layer handling, pixel data representation, color management,
 //! geometric calculations, and command system for undo/redo functionality.
 
+pub mod adjustment;
+pub mod adjustments;
 pub mod color;
 pub mod command;
 pub mod document;
@@ -15,6 +17,8 @@ pub mod rendering;
 pub mod selection;
 
 // Re-export commonly used types
+pub use adjustment::*;
+pub use adjustments::*;
 pub use color::*;
 pub use command::*;
 pub use document::*;

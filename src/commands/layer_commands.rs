@@ -52,6 +52,10 @@ impl Command for AddLayerCommand {
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to remove a layer from the document
@@ -108,6 +112,10 @@ impl Command for RemoveLayerCommand {
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to move a layer to a different position
@@ -154,6 +162,10 @@ impl Command for MoveLayerCommand {
 
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -207,6 +219,10 @@ impl Command for ToggleLayerVisibilityCommand {
 
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -273,6 +289,10 @@ impl Command for ChangeLayerOpacityCommand {
         // Simplified implementation - no merging for now
         Err(anyhow::anyhow!("Command merging not implemented"))
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Command to duplicate a layer
@@ -319,6 +339,10 @@ impl Command for DuplicateLayerCommand {
 
     fn timestamp(&self) -> std::time::SystemTime {
         self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
