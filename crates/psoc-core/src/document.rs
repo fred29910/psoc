@@ -361,30 +361,69 @@ impl Document {
 
     /// Flatten document to a single image
     pub fn flatten(&self) -> Result<DynamicImage> {
-        if self.layers.is_empty() {
-            // Create empty image with background color
-            let mut pixel_data =
-                PixelData::new_rgba(self.size.width as u32, self.size.height as u32);
-            pixel_data.fill(self.background_color);
-            return pixel_data.to_image();
+        self.flatten_with_render_engine(&crate::rendering::RenderEngine::new())
+    }
+
+    /// Flatten document using a specific render engine
+    pub fn flatten_with_render_engine(
+        &self,
+        render_engine: &crate::rendering::RenderEngine,
+    ) -> Result<DynamicImage> {
+        let pixel_data = render_engine.render_document(self)?;
+        pixel_data.to_image()
+    }
+
+    /// Render a specific region of the document
+    pub fn render_region(&self, x: u32, y: u32, width: u32, height: u32) -> Result<PixelData> {
+        let render_engine = crate::rendering::RenderEngine::new();
+        render_engine.render_region(self, x, y, width, height)
+    }
+
+    /// Composite a layer in a specific region
+    fn composite_layer_region(
+        &self,
+        result: &mut PixelData,
+        layer: &Layer,
+        layer_data: &PixelData,
+        region_x: u32,
+        region_y: u32,
+        region_width: u32,
+        region_height: u32,
+    ) -> Result<()> {
+        let (layer_width, layer_height) = layer_data.dimensions();
+        let offset_x = layer.offset.x as i32;
+        let offset_y = layer.offset.y as i32;
+
+        for y in 0..region_height {
+            for x in 0..region_width {
+                let doc_x = region_x + x;
+                let doc_y = region_y + y;
+
+                let layer_x = doc_x as i32 - offset_x;
+                let layer_y = doc_y as i32 - offset_y;
+
+                if layer_x < 0
+                    || layer_y < 0
+                    || layer_x >= layer_width as i32
+                    || layer_y >= layer_height as i32
+                {
+                    continue;
+                }
+
+                if let Some(layer_pixel) = layer_data.get_pixel(layer_x as u32, layer_y as u32) {
+                    if let Some(base_pixel) = result.get_pixel(x, y) {
+                        let blended = layer.blend_mode.blend(
+                            base_pixel,
+                            layer_pixel,
+                            layer.effective_opacity(),
+                        );
+                        result.set_pixel(x, y, blended)?;
+                    }
+                }
+            }
         }
 
-        // Start with background
-        let mut result = PixelData::new_rgba(self.size.width as u32, self.size.height as u32);
-        result.fill(self.background_color);
-
-        // Composite layers from bottom to top
-        for layer in &self.layers {
-            if !layer.is_effectively_visible() {
-                continue;
-            }
-
-            if let Some(layer_data) = &layer.pixel_data {
-                self.composite_layer_onto(&mut result, layer, layer_data)?;
-            }
-        }
-
-        result.to_image()
+        Ok(())
     }
 
     /// Composite a layer onto the result image

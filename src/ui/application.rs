@@ -304,9 +304,8 @@ impl PsocApp {
                 // Create document from image
                 match Document::from_image("Loaded Image".to_string(), &image) {
                     Ok(document) => {
-                        // Convert image to canvas format
-                        let image_data = self.convert_image_to_canvas_data(&image);
-                        self.canvas.set_image(image_data);
+                        // Set document in canvas for proper layer rendering
+                        self.canvas.set_document(document.clone());
 
                         self.state.current_document = Some(document);
                         self.state.current_image = Some(image);
@@ -320,7 +319,8 @@ impl PsocApp {
                         self.error_message = None;
                     }
                     Err(e) => {
-                        self.error_message = Some(format!("Failed to create document from image: {}", e));
+                        self.error_message =
+                            Some(format!("Failed to create document from image: {}", e));
                     }
                 }
             }
@@ -722,8 +722,20 @@ impl PsocApp {
                 Message::Layer(LayerMessage::AddEmptyLayer),
                 active_index.map(|i| Message::Layer(LayerMessage::DeleteLayer(i))),
                 active_index.map(|i| Message::Layer(LayerMessage::DuplicateLayer(i))),
-                active_index.and_then(|i| if i > 0 { Some(Message::Layer(LayerMessage::MoveLayerUp(i))) } else { None }),
-                active_index.and_then(|i| if i < layer_count - 1 { Some(Message::Layer(LayerMessage::MoveLayerDown(i))) } else { None }),
+                active_index.and_then(|i| {
+                    if i > 0 {
+                        Some(Message::Layer(LayerMessage::MoveLayerUp(i)))
+                    } else {
+                        None
+                    }
+                }),
+                active_index.and_then(|i| {
+                    if i < layer_count - 1 {
+                        Some(Message::Layer(LayerMessage::MoveLayerDown(i)))
+                    } else {
+                        None
+                    }
+                }),
             )]
         } else {
             // No document open - return empty layer panel
@@ -737,8 +749,6 @@ impl PsocApp {
             )]
         }
     }
-
-
 
     /// Handle layer-specific messages
     fn handle_layer_message(&mut self, message: LayerMessage) {
@@ -762,6 +772,9 @@ impl PsocApp {
                 if let Err(e) = document.set_active_layer(document.layer_count() - 1) {
                     self.error_message = Some(format!("Failed to set active layer: {}", e));
                 }
+
+                // Update canvas with new document state
+                self.canvas.set_document(document.clone());
             }
             LayerMessage::AddLayerFromFile => {
                 info!("Adding layer from file");
@@ -779,6 +792,9 @@ impl PsocApp {
                             document.add_layer(layer);
                             let _ = document.set_active_layer(0);
                         }
+
+                        // Update canvas with new document state
+                        self.canvas.set_document(document.clone());
                     }
                     Err(e) => {
                         self.error_message = Some(format!("Failed to delete layer: {}", e));
@@ -791,6 +807,9 @@ impl PsocApp {
                     let duplicated_layer = layer.duplicate();
                     if let Err(e) = document.insert_layer(index + 1, duplicated_layer) {
                         self.error_message = Some(format!("Failed to duplicate layer: {}", e));
+                    } else {
+                        // Update canvas with new document state
+                        self.canvas.set_document(document.clone());
                     }
                 } else {
                     self.error_message = Some("Layer index out of bounds".to_string());
@@ -812,7 +831,10 @@ impl PsocApp {
                 }
             }
             LayerMessage::ChangeLayerOpacity(index, opacity) => {
-                debug!("Changing opacity for layer at index: {} to {}", index, opacity);
+                debug!(
+                    "Changing opacity for layer at index: {} to {}",
+                    index, opacity
+                );
                 if let Some(layer) = document.layers.get_mut(index) {
                     layer.opacity = opacity.clamp(0.0, 1.0);
                     document.mark_dirty();

@@ -242,9 +242,7 @@ pub fn layer_item<Message: Clone + 'static>(
             .width(Length::Fill)
             .style(container::bordered_box)
     } else {
-        container(layer_content)
-            .padding(8.0)
-            .width(Length::Fill)
+        container(layer_content).padding(8.0).width(Length::Fill)
     };
 
     layer_container.into()
@@ -292,16 +290,22 @@ pub fn layer_panel<Message: Clone + 'static>(
                 text("No layers")
                     .size(12.0)
                     .style(|_theme| iced::widget::text::Style {
-                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
-                    })
+                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                    }),
             )
             .padding(16.0)
             .center_x(Length::Fill)
-            .into()
+            .into(),
         );
     } else {
         for (name, is_visible, is_selected, toggle_visibility, select_layer) in layers {
-            content.push(layer_item(name, is_visible, is_selected, toggle_visibility, select_layer));
+            content.push(layer_item(
+                name,
+                is_visible,
+                is_selected,
+                toggle_visibility,
+                select_layer,
+            ));
         }
     }
 

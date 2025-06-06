@@ -67,6 +67,10 @@ pub enum PsocError {
     /// Unknown or unexpected errors
     #[error("Unknown error: {message}")]
     Unknown { message: String },
+
+    /// Anyhow error wrapper for external library errors
+    #[error("External error: {0}")]
+    External(#[from] anyhow::Error),
 }
 
 /// Result type alias for PSOC operations
@@ -198,6 +202,7 @@ impl PsocError {
             Self::Timeout { .. } => true,
             Self::Application { .. } => true,
             Self::Unknown { .. } => false,
+            Self::External(_) => true,
         }
     }
 
@@ -219,6 +224,7 @@ impl PsocError {
             Self::Timeout { .. } => "timeout",
             Self::Application { .. } => "application",
             Self::Unknown { .. } => "unknown",
+            Self::External(_) => "external",
         }
     }
 }

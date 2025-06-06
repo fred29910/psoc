@@ -106,11 +106,24 @@ impl BlendMode {
             return overlay;
         }
 
-        // For now, implement only Normal blending
-        // TODO: Implement other blend modes
+        // Apply the specific blend mode
         match self {
             BlendMode::Normal => self.blend_normal(base, overlay, opacity),
-            _ => self.blend_normal(base, overlay, opacity), // Fallback to normal for now
+            BlendMode::Multiply => self.blend_multiply(base, overlay, opacity),
+            BlendMode::Screen => self.blend_screen(base, overlay, opacity),
+            BlendMode::Overlay => self.blend_overlay(base, overlay, opacity),
+            BlendMode::SoftLight => self.blend_soft_light(base, overlay, opacity),
+            BlendMode::HardLight => self.blend_hard_light(base, overlay, opacity),
+            BlendMode::ColorDodge => self.blend_color_dodge(base, overlay, opacity),
+            BlendMode::ColorBurn => self.blend_color_burn(base, overlay, opacity),
+            BlendMode::Darken => self.blend_darken(base, overlay, opacity),
+            BlendMode::Lighten => self.blend_lighten(base, overlay, opacity),
+            BlendMode::Difference => self.blend_difference(base, overlay, opacity),
+            BlendMode::Exclusion => self.blend_exclusion(base, overlay, opacity),
+            BlendMode::Hue => self.blend_hue(base, overlay, opacity),
+            BlendMode::Saturation => self.blend_saturation(base, overlay, opacity),
+            BlendMode::Color => self.blend_color(base, overlay, opacity),
+            BlendMode::Luminosity => self.blend_luminosity(base, overlay, opacity),
         }
     }
 
@@ -137,6 +150,265 @@ impl BlendMode {
         let a = (result_alpha * 255.0) as u8;
 
         RgbaPixel::new(r, g, b, a)
+    }
+
+    /// Multiply blending implementation
+    fn blend_multiply(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blended_r = (base.r as f32 * overlay.r as f32 / 255.0) as u8;
+        let blended_g = (base.g as f32 * overlay.g as f32 / 255.0) as u8;
+        let blended_b = (base.b as f32 * overlay.b as f32 / 255.0) as u8;
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Screen blending implementation
+    fn blend_screen(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blended_r =
+            (255.0 - (255.0 - base.r as f32) * (255.0 - overlay.r as f32) / 255.0) as u8;
+        let blended_g =
+            (255.0 - (255.0 - base.g as f32) * (255.0 - overlay.g as f32) / 255.0) as u8;
+        let blended_b =
+            (255.0 - (255.0 - base.b as f32) * (255.0 - overlay.b as f32) / 255.0) as u8;
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Overlay blending implementation
+    fn blend_overlay(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blend_channel = |base: u8, overlay: u8| -> u8 {
+            let base_f = base as f32 / 255.0;
+            let overlay_f = overlay as f32 / 255.0;
+
+            let result = if base_f < 0.5 {
+                2.0 * base_f * overlay_f
+            } else {
+                1.0 - 2.0 * (1.0 - base_f) * (1.0 - overlay_f)
+            };
+
+            (result * 255.0).clamp(0.0, 255.0) as u8
+        };
+
+        let blended_r = blend_channel(base.r, overlay.r);
+        let blended_g = blend_channel(base.g, overlay.g);
+        let blended_b = blend_channel(base.b, overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        self.blend_normal(base, blended, opacity)
+    }
+
+    /// Soft light blending implementation
+    fn blend_soft_light(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blend_channel = |base: u8, overlay: u8| -> u8 {
+            let base_f = base as f32 / 255.0;
+            let overlay_f = overlay as f32 / 255.0;
+
+            let result = if overlay_f < 0.5 {
+                2.0 * base_f * overlay_f + base_f * base_f * (1.0 - 2.0 * overlay_f)
+            } else {
+                2.0 * base_f * (1.0 - overlay_f) + base_f.sqrt() * (2.0 * overlay_f - 1.0)
+            };
+
+            (result * 255.0).clamp(0.0, 255.0) as u8
+        };
+
+        let blended_r = blend_channel(base.r, overlay.r);
+        let blended_g = blend_channel(base.g, overlay.g);
+        let blended_b = blend_channel(base.b, overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        self.blend_normal(base, blended, opacity)
+    }
+
+    /// Hard light blending implementation
+    fn blend_hard_light(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blend_channel = |base: u8, overlay: u8| -> u8 {
+            let base_f = base as f32 / 255.0;
+            let overlay_f = overlay as f32 / 255.0;
+
+            let result = if overlay_f < 0.5 {
+                2.0 * base_f * overlay_f
+            } else {
+                1.0 - 2.0 * (1.0 - base_f) * (1.0 - overlay_f)
+            };
+
+            (result * 255.0).clamp(0.0, 255.0) as u8
+        };
+
+        let blended_r = blend_channel(base.r, overlay.r);
+        let blended_g = blend_channel(base.g, overlay.g);
+        let blended_b = blend_channel(base.b, overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        self.blend_normal(base, blended, opacity)
+    }
+
+    /// Color dodge blending implementation
+    fn blend_color_dodge(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blend_channel = |base: u8, overlay: u8| -> u8 {
+            let base_f = base as f32 / 255.0;
+            let overlay_f = overlay as f32 / 255.0;
+
+            let result = if overlay_f >= 1.0 {
+                1.0
+            } else {
+                (base_f / (1.0 - overlay_f)).min(1.0)
+            };
+
+            (result * 255.0) as u8
+        };
+
+        let blended_r = blend_channel(base.r, overlay.r);
+        let blended_g = blend_channel(base.g, overlay.g);
+        let blended_b = blend_channel(base.b, overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        self.blend_normal(base, blended, opacity)
+    }
+
+    /// Color burn blending implementation
+    fn blend_color_burn(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blend_channel = |base: u8, overlay: u8| -> u8 {
+            let base_f = base as f32 / 255.0;
+            let overlay_f = overlay as f32 / 255.0;
+
+            let result = if overlay_f <= 0.0 {
+                0.0
+            } else {
+                1.0 - ((1.0 - base_f) / overlay_f).min(1.0)
+            };
+
+            (result * 255.0) as u8
+        };
+
+        let blended_r = blend_channel(base.r, overlay.r);
+        let blended_g = blend_channel(base.g, overlay.g);
+        let blended_b = blend_channel(base.b, overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        self.blend_normal(base, blended, opacity)
+    }
+
+    /// Darken blending implementation
+    fn blend_darken(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blended_r = base.r.min(overlay.r);
+        let blended_g = base.g.min(overlay.g);
+        let blended_b = base.b.min(overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        // For darken/lighten modes, we need to apply normal blending with the result
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Lighten blending implementation
+    fn blend_lighten(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blended_r = base.r.max(overlay.r);
+        let blended_g = base.g.max(overlay.g);
+        let blended_b = base.b.max(overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        // For darken/lighten modes, we need to apply normal blending with the result
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Difference blending implementation
+    fn blend_difference(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blended_r = (base.r as i16 - overlay.r as i16).abs() as u8;
+        let blended_g = (base.g as i16 - overlay.g as i16).abs() as u8;
+        let blended_b = (base.b as i16 - overlay.b as i16).abs() as u8;
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Exclusion blending implementation
+    fn blend_exclusion(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        let blend_channel = |base: u8, overlay: u8| -> u8 {
+            let base_f = base as f32 / 255.0;
+            let overlay_f = overlay as f32 / 255.0;
+            let result = base_f + overlay_f - 2.0 * base_f * overlay_f;
+            (result * 255.0).clamp(0.0, 255.0) as u8
+        };
+
+        let blended_r = blend_channel(base.r, overlay.r);
+        let blended_g = blend_channel(base.g, overlay.g);
+        let blended_b = blend_channel(base.b, overlay.b);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+
+        self.blend_normal(base, blended, opacity)
+    }
+
+    /// Hue blending implementation
+    fn blend_hue(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        use crate::color::HslColor;
+
+        // If base and overlay are the same, return base to avoid conversion artifacts
+        if base == overlay {
+            return BlendMode::Normal.blend_normal(base, overlay, opacity);
+        }
+
+        let base_hsl = HslColor::from_rgba(base);
+        let overlay_hsl = HslColor::from_rgba(overlay);
+
+        let blended_hsl = HslColor::new(overlay_hsl.h, base_hsl.s, base_hsl.l, overlay_hsl.a);
+
+        let blended = blended_hsl.to_rgba();
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Saturation blending implementation
+    fn blend_saturation(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        use crate::color::HslColor;
+
+        // If base and overlay are the same, return base to avoid conversion artifacts
+        if base == overlay {
+            return BlendMode::Normal.blend_normal(base, overlay, opacity);
+        }
+
+        let base_hsl = HslColor::from_rgba(base);
+        let overlay_hsl = HslColor::from_rgba(overlay);
+
+        let blended_hsl = HslColor::new(base_hsl.h, overlay_hsl.s, base_hsl.l, overlay_hsl.a);
+
+        let blended = blended_hsl.to_rgba();
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Color blending implementation
+    fn blend_color(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        use crate::color::HslColor;
+
+        // If base and overlay are the same, return base to avoid conversion artifacts
+        if base == overlay {
+            return BlendMode::Normal.blend_normal(base, overlay, opacity);
+        }
+
+        let base_hsl = HslColor::from_rgba(base);
+        let overlay_hsl = HslColor::from_rgba(overlay);
+
+        let blended_hsl = HslColor::new(overlay_hsl.h, overlay_hsl.s, base_hsl.l, overlay_hsl.a);
+
+        let blended = blended_hsl.to_rgba();
+        BlendMode::Normal.blend_normal(base, blended, opacity)
+    }
+
+    /// Luminosity blending implementation
+    fn blend_luminosity(&self, base: RgbaPixel, overlay: RgbaPixel, opacity: f32) -> RgbaPixel {
+        use crate::color::HslColor;
+
+        // If base and overlay are the same, return base to avoid conversion artifacts
+        if base == overlay {
+            return BlendMode::Normal.blend_normal(base, overlay, opacity);
+        }
+
+        let base_hsl = HslColor::from_rgba(base);
+        let overlay_hsl = HslColor::from_rgba(overlay);
+
+        let blended_hsl = HslColor::new(base_hsl.h, base_hsl.s, overlay_hsl.l, overlay_hsl.a);
+
+        let blended = blended_hsl.to_rgba();
+        BlendMode::Normal.blend_normal(base, blended, opacity)
     }
 }
 
@@ -524,5 +796,130 @@ mod tests {
         assert!(all_modes.contains(&BlendMode::Normal));
         assert!(all_modes.contains(&BlendMode::Multiply));
         assert!(all_modes.contains(&BlendMode::Screen));
+    }
+
+    #[test]
+    fn test_blend_mode_multiply() {
+        let base = RgbaPixel::new(200, 200, 200, 255);
+        let overlay = RgbaPixel::new(128, 128, 128, 255);
+
+        let result = BlendMode::Multiply.blend(base, overlay, 1.0);
+
+        // Multiply should darken the image
+        // 200 * 128 / 255 = ~100, which is darker than 200
+        assert!(result.r < base.r);
+        assert!(result.g < base.g);
+        assert!(result.b < base.b);
+    }
+
+    #[test]
+    fn test_blend_mode_screen() {
+        let base = RgbaPixel::new(128, 128, 128, 255);
+        let overlay = RgbaPixel::new(128, 128, 128, 255);
+
+        let result = BlendMode::Screen.blend(base, overlay, 1.0);
+
+        // Screen should lighten the image
+        assert!(result.r >= base.r);
+        assert!(result.g >= base.g);
+        assert!(result.b >= base.b);
+    }
+
+    #[test]
+    fn test_blend_mode_darken() {
+        let base = RgbaPixel::new(200, 100, 150, 255);
+        let overlay = RgbaPixel::new(100, 200, 100, 255);
+
+        let result = BlendMode::Darken.blend(base, overlay, 1.0);
+
+        // Darken should pick the darker color for each channel (after normal blending)
+        // The result should be closer to the darker values
+        assert!(result.r < base.r); // Should be darker than base.r (200)
+        assert!(result.g > base.g); // Should be lighter than base.g (100) but not as light as overlay.g (200)
+        assert!(result.b < base.b); // Should be darker than base.b (150)
+    }
+
+    #[test]
+    fn test_blend_mode_lighten() {
+        let base = RgbaPixel::new(200, 100, 150, 255);
+        let overlay = RgbaPixel::new(100, 200, 100, 255);
+
+        let result = BlendMode::Lighten.blend(base, overlay, 1.0);
+
+        // Lighten should pick the lighter color for each channel (after normal blending)
+        // The result should be closer to the lighter values
+        assert!(result.r >= base.r || result.r >= overlay.r); // Should be at least as light as one of them
+        assert!(result.g > base.g); // Should be lighter than base.g (100)
+        assert!(result.b >= base.b || result.b >= overlay.b); // Should be at least as light as one of them
+    }
+
+    #[test]
+    fn test_blend_mode_difference() {
+        let base = RgbaPixel::new(200, 100, 150, 255);
+        let overlay = RgbaPixel::new(50, 200, 100, 128); // Use semi-transparent overlay
+
+        let result = BlendMode::Difference.blend(base, overlay, 1.0);
+
+        // Difference should compute absolute difference (after normal blending)
+        // The result should be different from both base and overlay
+        assert_ne!(result, base);
+        assert_ne!(result, overlay);
+        // The result should reflect the difference operation
+        assert!(result.r != base.r);
+    }
+
+    #[test]
+    fn test_blend_mode_opacity() {
+        let base = RgbaPixel::new(100, 100, 100, 255);
+        let overlay = RgbaPixel::new(200, 200, 200, 255);
+
+        // Test with 50% opacity
+        let result = BlendMode::Normal.blend(base, overlay, 0.5);
+
+        // Result should be between base and overlay
+        assert!(result.r > base.r && result.r < overlay.r);
+        assert!(result.g > base.g && result.g < overlay.g);
+        assert!(result.b > base.b && result.b < overlay.b);
+
+        // Test with 0% opacity (should return base)
+        let result_zero = BlendMode::Normal.blend(base, overlay, 0.0);
+        assert_eq!(result_zero, base);
+    }
+
+    #[test]
+    fn test_blend_mode_hsl_modes() {
+        let base = RgbaPixel::new(255, 128, 64, 255); // Orange
+        let overlay = RgbaPixel::new(64, 128, 255, 128); // Semi-transparent Blue
+
+        // Test hue blending (should take hue from overlay, saturation/lightness from base)
+        let hue_result = BlendMode::Hue.blend(base, overlay, 1.0);
+
+        // Test saturation blending (should take saturation from overlay, hue/lightness from base)
+        let sat_result = BlendMode::Saturation.blend(base, overlay, 1.0);
+
+        // Test color blending (should take hue/saturation from overlay, lightness from base)
+        let color_result = BlendMode::Color.blend(base, overlay, 1.0);
+
+        // Test luminosity blending (should take lightness from overlay, hue/saturation from base)
+        let lum_result = BlendMode::Luminosity.blend(base, overlay, 1.0);
+
+        // Results should be different from base (since we're blending with semi-transparent overlay)
+        assert_ne!(hue_result, base);
+        assert_ne!(sat_result, base);
+        assert_ne!(color_result, base);
+        assert_ne!(lum_result, base);
+
+        // At least some results should be different from each other (different blend modes)
+        // Note: Some HSL blend modes might produce similar results with certain color combinations
+        let results_different = hue_result != sat_result
+            || hue_result != color_result
+            || hue_result != lum_result
+            || sat_result != color_result
+            || sat_result != lum_result
+            || color_result != lum_result;
+        assert!(
+            results_different,
+            "HSL blend modes should produce at least some different results"
+        );
     }
 }

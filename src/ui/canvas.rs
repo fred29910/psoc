@@ -7,6 +7,8 @@ use iced::{
 };
 use tracing::{debug, trace};
 
+use crate::core::Document;
+use crate::rendering::AppRenderer;
 use crate::ui::application::{CanvasMessage, Message};
 
 /// Interactive canvas for image editing
@@ -14,8 +16,12 @@ use crate::ui::application::{CanvasMessage, Message};
 pub struct ImageCanvas {
     /// Canvas state
     state: CanvasState,
-    /// Current image data
+    /// Current image data (legacy)
     image_data: Option<ImageData>,
+    /// Current document for rendering
+    document: Option<Document>,
+    /// Renderer for document composition
+    renderer: AppRenderer,
 }
 
 /// Canvas state
@@ -72,10 +78,12 @@ impl ImageCanvas {
                 bounds: Rectangle::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             },
             image_data: None,
+            document: None,
+            renderer: AppRenderer::new(),
         }
     }
 
-    /// Set the image data to display
+    /// Set the image data to display (legacy method)
     pub fn set_image(&mut self, image_data: ImageData) {
         debug!(
             "Setting canvas image: {}x{}",
@@ -84,10 +92,24 @@ impl ImageCanvas {
         self.image_data = Some(image_data);
     }
 
+    /// Set the document to display
+    pub fn set_document(&mut self, document: Document) {
+        debug!(
+            "Setting canvas document: {}x{} with {} layers",
+            document.size.width,
+            document.size.height,
+            document.layers.len()
+        );
+        self.document = Some(document);
+        // Clear legacy image data when using document
+        self.image_data = None;
+    }
+
     /// Clear the canvas
     pub fn clear(&mut self) {
         debug!("Clearing canvas");
         self.image_data = None;
+        self.document = None;
     }
 
     /// Set zoom level
@@ -263,8 +285,10 @@ impl canvas::Program<Message> for ImageCanvas {
         // Draw grid
         self.draw_grid(&mut frame, bounds);
 
-        // Draw image if available
-        if let Some(ref image_data) = self.image_data {
+        // Draw document or image if available
+        if let Some(ref document) = self.document {
+            self.draw_document(&mut frame, bounds, document);
+        } else if let Some(ref image_data) = self.image_data {
             self.draw_image(&mut frame, bounds, image_data);
         } else {
             // Draw placeholder
@@ -316,7 +340,64 @@ impl ImageCanvas {
         }
     }
 
-    /// Draw the image data
+    /// Draw the document with proper layer composition
+    fn draw_document(&self, frame: &mut Frame, bounds: Rectangle, document: &Document) {
+        // Calculate document position and size
+        let doc_width = document.size.width * self.state.zoom;
+        let doc_height = document.size.height * self.state.zoom;
+
+        let doc_x = (bounds.width - doc_width) / 2.0 + self.state.pan_offset.x;
+        let doc_y = (bounds.height - doc_height) / 2.0 + self.state.pan_offset.y;
+
+        // Render the document to pixel data
+        match self.renderer.render_for_display(document) {
+            Ok(pixel_data) => {
+                // Convert pixel data to image data for rendering
+                let (width, height) = pixel_data.dimensions();
+                let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+
+                for y in 0..height {
+                    for x in 0..width {
+                        if let Some(pixel) = pixel_data.get_pixel(x, y) {
+                            pixels.push(pixel.r);
+                            pixels.push(pixel.g);
+                            pixels.push(pixel.b);
+                            pixels.push(pixel.a);
+                        } else {
+                            // Transparent pixel
+                            pixels.extend_from_slice(&[0, 0, 0, 0]);
+                        }
+                    }
+                }
+
+                let image_data = ImageData {
+                    width,
+                    height,
+                    pixels,
+                };
+
+                // Draw the rendered image
+                self.draw_rendered_image(
+                    frame,
+                    bounds,
+                    &image_data,
+                    doc_x,
+                    doc_y,
+                    doc_width,
+                    doc_height,
+                );
+            }
+            Err(e) => {
+                debug!("Failed to render document: {}", e);
+                // Fall back to placeholder
+                self.draw_document_placeholder(
+                    frame, bounds, document, doc_x, doc_y, doc_width, doc_height,
+                );
+            }
+        }
+    }
+
+    /// Draw the image data (legacy method)
     fn draw_image(&self, frame: &mut Frame, bounds: Rectangle, image_data: &ImageData) {
         // Calculate image position and size
         let image_width = image_data.width as f32 * self.state.zoom;
@@ -418,6 +499,134 @@ impl ImageCanvas {
             Stroke::default()
                 .with_width(1.0)
                 .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.3)),
+        );
+    }
+
+    /// Draw rendered image data with proper positioning
+    fn draw_rendered_image(
+        &self,
+        frame: &mut Frame,
+        _bounds: Rectangle,
+        image_data: &ImageData,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    ) {
+        // For now, we'll use a simplified approach since iced canvas doesn't directly support image rendering
+        // In a production implementation, we would need to:
+        // 1. Convert the pixel data to a texture
+        // 2. Use a custom renderer or image widget
+        // 3. Or render pixel by pixel (very slow)
+
+        // Draw image background
+        frame.fill_rectangle(
+            Point::new(x, y),
+            Size::new(width, height),
+            Color::from_rgb(0.95, 0.95, 0.95),
+        );
+
+        // Draw image border
+        frame.stroke(
+            &Path::rectangle(Point::new(x, y), Size::new(width, height)),
+            Stroke::default()
+                .with_width(2.0)
+                .with_color(Color::from_rgb(0.2, 0.2, 0.2)),
+        );
+
+        // Sample some pixels to show the image content
+        let sample_size = 8.0 * self.state.zoom.min(1.0).max(0.1);
+        if sample_size >= 2.0 {
+            let samples_x = (width / sample_size) as u32;
+            let samples_y = (height / sample_size) as u32;
+
+            for sy in 0..samples_y {
+                for sx in 0..samples_x {
+                    let pixel_x =
+                        (sx * image_data.width / samples_x.max(1)).min(image_data.width - 1);
+                    let pixel_y =
+                        (sy * image_data.height / samples_y.max(1)).min(image_data.height - 1);
+
+                    let pixel_index = ((pixel_y * image_data.width + pixel_x) * 4) as usize;
+                    if pixel_index + 3 < image_data.pixels.len() {
+                        let r = image_data.pixels[pixel_index] as f32 / 255.0;
+                        let g = image_data.pixels[pixel_index + 1] as f32 / 255.0;
+                        let b = image_data.pixels[pixel_index + 2] as f32 / 255.0;
+                        let a = image_data.pixels[pixel_index + 3] as f32 / 255.0;
+
+                        let sample_x = x + sx as f32 * sample_size;
+                        let sample_y = y + sy as f32 * sample_size;
+
+                        frame.fill_rectangle(
+                            Point::new(sample_x, sample_y),
+                            Size::new(sample_size, sample_size),
+                            Color::from_rgba(r, g, b, a),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Draw center indicator
+        let center_x = x + width / 2.0;
+        let center_y = y + height / 2.0;
+        frame.fill_rectangle(
+            Point::new(center_x - 2.0, center_y - 2.0),
+            Size::new(4.0, 4.0),
+            Color::from_rgb(1.0, 0.0, 0.0),
+        );
+    }
+
+    /// Draw document placeholder when rendering fails
+    fn draw_document_placeholder(
+        &self,
+        frame: &mut Frame,
+        _bounds: Rectangle,
+        document: &Document,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    ) {
+        // Draw document background
+        frame.fill_rectangle(
+            Point::new(x, y),
+            Size::new(width, height),
+            Color::from_rgb(0.8, 0.8, 0.9),
+        );
+
+        // Draw document border
+        frame.stroke(
+            &Path::rectangle(Point::new(x, y), Size::new(width, height)),
+            Stroke::default()
+                .with_width(2.0)
+                .with_color(Color::from_rgb(0.3, 0.3, 0.5)),
+        );
+
+        // Draw layer indicators
+        let layer_height = (height / document.layers.len().max(1) as f32).min(20.0);
+        for (i, layer) in document.layers.iter().enumerate() {
+            let layer_y = y + i as f32 * layer_height;
+            let layer_color = if layer.visible {
+                Color::from_rgba(0.6, 0.8, 0.6, 0.7)
+            } else {
+                Color::from_rgba(0.8, 0.6, 0.6, 0.7)
+            };
+
+            frame.fill_rectangle(
+                Point::new(x + 5.0, layer_y),
+                Size::new(width - 10.0, layer_height - 2.0),
+                layer_color,
+            );
+        }
+
+        // Draw center indicator
+        let center_x = x + width / 2.0;
+        let center_y = y + height / 2.0;
+        frame.fill_rectangle(
+            Point::new(center_x - 3.0, center_y - 3.0),
+            Size::new(6.0, 6.0),
+            Color::from_rgb(0.0, 0.5, 1.0),
         );
     }
 }
