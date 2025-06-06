@@ -7,7 +7,7 @@ use iced::{
 };
 use tracing::{debug, trace};
 
-use crate::ui::application::Message;
+use crate::ui::application::{Message, CanvasMessage};
 
 /// Interactive canvas for image editing
 #[derive(Debug)]
@@ -42,6 +42,22 @@ pub struct ImageData {
     pub height: u32,
     /// Image pixels (RGBA format)
     pub pixels: Vec<u8>,
+}
+
+impl ImageData {
+    /// Create a new ImageData from raw RGBA pixels
+    pub fn new(width: u32, height: u32, pixels: Vec<u8>) -> Self {
+        Self {
+            width,
+            height,
+            pixels,
+        }
+    }
+
+    /// Get the image as an iced::widget::image::Handle
+    pub fn to_image_handle(&self) -> iced::widget::image::Handle {
+        iced::widget::image::Handle::from_rgba(self.width, self.height, self.pixels.clone())
+    }
 }
 
 impl ImageCanvas {
@@ -99,6 +115,16 @@ impl ImageCanvas {
         self.state.pan_offset
     }
 
+    /// Update canvas bounds
+    pub fn set_bounds(&mut self, bounds: Rectangle) {
+        self.state.bounds = bounds;
+    }
+
+    /// Get canvas bounds
+    pub fn bounds(&self) -> Rectangle {
+        self.state.bounds
+    }
+
     /// Convert screen coordinates to canvas coordinates
     pub fn screen_to_canvas(&self, screen_point: Point) -> Point {
         let canvas_center = Point::new(
@@ -134,22 +160,90 @@ impl ImageCanvas {
     }
 }
 
-impl<Message> canvas::Program<Message> for ImageCanvas
-where
-    Message: Clone + std::fmt::Debug,
-{
+impl canvas::Program<Message> for ImageCanvas {
     type State = ();
 
     fn update(
         &self,
         _state: &mut Self::State,
         event: Event,
-        _bounds: Rectangle,
-        _cursor: Cursor,
+        bounds: Rectangle,
+        cursor: Cursor,
     ) -> (canvas::event::Status, Option<Message>) {
-        // This is a simplified implementation
-        // In a real application, you would handle events and return appropriate messages
-        trace!("Canvas event: {:?}", event);
+        use iced::mouse;
+
+        match event {
+            Event::Mouse(mouse_event) => {
+                match mouse_event {
+                    mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                        if let Some(position) = cursor.position_in(bounds) {
+                            trace!("Mouse pressed at: {:?}", position);
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::Canvas(CanvasMessage::MousePressed {
+                                    x: position.x,
+                                    y: position.y,
+                                })),
+                            );
+                        }
+                    }
+                    mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                        if let Some(position) = cursor.position_in(bounds) {
+                            trace!("Mouse released at: {:?}", position);
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::Canvas(CanvasMessage::MouseReleased {
+                                    x: position.x,
+                                    y: position.y,
+                                })),
+                            );
+                        }
+                    }
+                    mouse::Event::CursorMoved { .. } => {
+                        if let Some(position) = cursor.position_in(bounds) {
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::Canvas(CanvasMessage::MouseMoved {
+                                    x: position.x,
+                                    y: position.y,
+                                })),
+                            );
+                        }
+                    }
+                    mouse::Event::WheelScrolled { delta } => {
+                        match delta {
+                            mouse::ScrollDelta::Lines { x, y } => {
+                                trace!("Wheel scrolled: lines ({}, {})", x, y);
+                                return (
+                                    canvas::event::Status::Captured,
+                                    Some(Message::Canvas(CanvasMessage::Scrolled {
+                                        delta_x: x * 20.0, // Scale for panning
+                                        delta_y: y * 20.0,
+                                    })),
+                                );
+                            }
+                            mouse::ScrollDelta::Pixels { x, y } => {
+                                trace!("Wheel scrolled: pixels ({}, {})", x, y);
+                                return (
+                                    canvas::event::Status::Captured,
+                                    Some(Message::Canvas(CanvasMessage::Scrolled {
+                                        delta_x: x,
+                                        delta_y: y,
+                                    })),
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Event::Keyboard(keyboard_event) => {
+                trace!("Keyboard event: {:?}", keyboard_event);
+                // Handle keyboard events for shortcuts
+            }
+            _ => {}
+        }
+
         (canvas::event::Status::Ignored, None)
     }
 
@@ -180,7 +274,7 @@ where
         // Draw canvas border
         frame.stroke(
             &Path::rectangle(Point::ORIGIN, bounds.size()),
-            Stroke::default().with_width(1.0).with_color(Color::WHITE),
+            Stroke::default().with_width(1.0).with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.3)),
         );
 
         vec![frame.into_geometry()]
@@ -229,11 +323,14 @@ impl ImageCanvas {
         let image_x = (bounds.width - image_width) / 2.0 + self.state.pan_offset.x;
         let image_y = (bounds.height - image_height) / 2.0 + self.state.pan_offset.y;
 
-        // Draw image placeholder (actual image rendering would require more complex implementation)
+        // For now, draw a placeholder with image info since iced canvas doesn't directly support image rendering
+        // In a real implementation, we would need to use a different approach or render pixel by pixel
+
+        // Draw image background
         frame.fill_rectangle(
             Point::new(image_x, image_y),
             Size::new(image_width, image_height),
-            Color::from_rgb(0.8, 0.8, 0.8),
+            Color::from_rgb(0.9, 0.9, 0.9),
         );
 
         // Draw image border
@@ -242,13 +339,39 @@ impl ImageCanvas {
                 Point::new(image_x, image_y),
                 Size::new(image_width, image_height),
             ),
-            Stroke::default().with_width(2.0).with_color(Color::BLACK),
+            Stroke::default().with_width(2.0).with_color(Color::from_rgb(0.3, 0.3, 0.3)),
         );
 
-        // Draw image info
-        let _info_text = format!("{}x{}", image_data.width, image_data.height);
-        // Note: Text rendering in canvas requires more complex implementation
-        // This is a placeholder for where text would be rendered
+        // Draw a pattern to indicate this is an image
+        let pattern_size = 10.0 * self.state.zoom.min(1.0);
+        let pattern_color = Color::from_rgba(0.7, 0.7, 0.7, 0.5);
+
+        let mut x = image_x;
+        while x < image_x + image_width {
+            let mut y = image_y;
+            while y < image_y + image_height {
+                if ((x - image_x) / pattern_size) as i32 % 2 == ((y - image_y) / pattern_size) as i32 % 2 {
+                    frame.fill_rectangle(
+                        Point::new(x, y),
+                        Size::new(pattern_size.min(image_x + image_width - x), pattern_size.min(image_y + image_height - y)),
+                        pattern_color,
+                    );
+                }
+                y += pattern_size;
+            }
+            x += pattern_size;
+        }
+
+        // Draw image dimensions text (simplified)
+        let center_x = image_x + image_width / 2.0;
+        let center_y = image_y + image_height / 2.0;
+
+        // Draw a small indicator at the center
+        frame.fill_rectangle(
+            Point::new(center_x - 2.0, center_y - 2.0),
+            Size::new(4.0, 4.0),
+            Color::from_rgb(1.0, 0.0, 0.0),
+        );
     }
 
     /// Draw placeholder when no image is loaded
