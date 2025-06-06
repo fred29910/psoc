@@ -146,78 +146,30 @@ impl Application {
         self.running = true;
         info!("Application is now running");
 
-        // Main application loop (placeholder)
-        self.main_loop()?;
+        // Start GUI application
+        self.run_gui()?;
 
         info!("Application shutdown completed");
         Ok(())
     }
 
-    /// Main application loop
+    /// Run the GUI application
     #[instrument(skip(self))]
-    fn main_loop(&mut self) -> Result<()> {
-        info!("Entering main application loop");
+    fn run_gui(&mut self) -> Result<()> {
+        info!("Starting GUI application");
 
-        // TODO: Implement actual GUI event loop
-        // For now, just demonstrate logging and error handling
-
-        // Simulate some application work
-        self.simulate_work()?;
+        // Run the iced GUI application
+        crate::ui::PsocApp::run().map_err(|e| {
+            error!("GUI application failed: {}", e);
+            e
+        })?;
 
         // Graceful shutdown
         self.shutdown()?;
-
         Ok(())
     }
 
-    /// Simulate application work (placeholder)
-    #[instrument(skip(self))]
-    fn simulate_work(&self) -> Result<()> {
-        debug!("Simulating application work");
 
-        // Demonstrate structured logging
-        info!(
-            operation = "simulate_work",
-            status = "starting",
-            "Beginning work simulation"
-        );
-
-        // Simulate some processing time
-        std::thread::sleep(std::time::Duration::from_millis(100));
-
-        // Demonstrate warning logging
-        warn!(
-            component = "gui",
-            message = "GUI initialization not yet implemented",
-            "Feature not available"
-        );
-
-        // Demonstrate error handling without failing
-        if let Err(e) = self.simulate_recoverable_error() {
-            error!(
-                error = %e,
-                category = e.category(),
-                recoverable = e.is_recoverable(),
-                "Recoverable error occurred during simulation"
-            );
-        }
-
-        info!(
-            operation = "simulate_work",
-            status = "completed",
-            "Work simulation completed"
-        );
-
-        Ok(())
-    }
-
-    /// Simulate a recoverable error
-    fn simulate_recoverable_error(&self) -> Result<()> {
-        // This demonstrates error creation and handling
-        Err(crate::PsocError::gui(
-            "Simulated GUI error for demonstration",
-        ))
-    }
 
     /// Shutdown the application
     #[instrument(skip(self))]

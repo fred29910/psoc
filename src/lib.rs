@@ -18,6 +18,7 @@ pub mod plugins;
 // Re-export commonly used types
 pub use app::{AppConfig, Application};
 pub use core::{Document, Layer};
+pub use ui::{PsocApp, Message, AppState, Tool, ImageCanvas, ImageData};
 pub use utils::{
     error::{ContextResult, PsocError, Result},
     logging::{init_default_logging, init_env_logging, LogConfig, LogFormat, LogLevel},

@@ -32,11 +32,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Basic image processing (without heavy dependencies for now)
-# image = { version = "0.24", features = ["png", "jpeg"] }
+# GUI framework
+iced = { version = "0.10", features = ["canvas", "image", "svg", "tokio"] }
 
-# Math (lightweight)
-# glam = "0.24"
+# Image processing
+image = { version = "0.24", features = ["png", "jpeg", "tiff", "webp"] }
+
+# Math
+glam = "0.24"
 
 # Workspace crates
 psoc-core = { path = "crates/psoc-core" }

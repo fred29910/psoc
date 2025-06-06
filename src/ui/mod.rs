@@ -1,3 +1,8 @@
 //! User interface module
 
-// UI components will be implemented here
+pub mod application;
+pub mod canvas;
+
+// Re-export main components
+pub use application::{PsocApp, Message, AppState, Tool};
+pub use canvas::{ImageCanvas, ImageData};
