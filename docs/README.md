@@ -48,8 +48,8 @@
     *   [x] 静态分析工具 (`clippy`).
     *   [x] 制定代码审查清单和流程。
 *   **P0.6: 基础错误处理和日志系统**
-    *   [ ] 选择错误处理库 (e.g., `anyhow`, `thiserror`).
-    *   [ ] 集成日志库 (e.g., `log`, `tracing` with `env_logger` or `tracing-subscriber`).
+    *   [x] 选择错误处理库 (e.g., `anyhow`, `thiserror`).
+    *   [x] 集成日志库 (e.g., `log`, `tracing` with `env_logger` or `tracing-subscriber`).
 
 ---
 
