@@ -453,6 +453,7 @@ impl Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layer::BlendMode;
 
     #[test]
     fn test_document_creation() {
@@ -495,5 +496,78 @@ mod tests {
         assert_eq!(removed.name, "Layer 1");
         assert_eq!(doc.layer_count(), 1);
         assert_eq!(doc.active_layer_index, Some(0));
+    }
+
+    #[test]
+    fn test_document_layer_vector_integration() {
+        let mut doc = Document::new("Test".to_string(), 100, 100);
+
+        // Test empty document
+        assert!(doc.layers.is_empty());
+        assert_eq!(doc.layers.len(), 0);
+        assert!(doc.is_empty());
+
+        // Add layers to Vec<Layer>
+        let layer1 = Layer::new_pixel("Background".to_string(), 100, 100);
+        let layer2 = Layer::new_pixel("Foreground".to_string(), 100, 100);
+
+        doc.add_layer(layer1);
+        doc.add_layer(layer2);
+
+        // Test Vec<Layer> properties
+        assert_eq!(doc.layers.len(), 2);
+        assert!(!doc.is_empty());
+        assert_eq!(doc.layer_count(), 2);
+
+        // Test layer access through Vec
+        assert_eq!(doc.layers[0].name, "Background");
+        assert_eq!(doc.layers[1].name, "Foreground");
+
+        // Test layer ordering (bottom to top)
+        assert_eq!(doc.get_layer(0).unwrap().name, "Background");
+        assert_eq!(doc.get_layer(1).unwrap().name, "Foreground");
+    }
+
+    #[test]
+    fn test_layer_properties_in_document() {
+        let mut doc = Document::new("Test".to_string(), 100, 100);
+
+        // Create layer with specific properties
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 100, 100);
+        layer.visible = true;
+        layer.opacity = 0.8;
+        layer.blend_mode = BlendMode::Normal;
+
+        doc.add_layer(layer);
+        doc.set_active_layer(0).unwrap();
+
+        let active_layer = doc.active_layer().unwrap();
+
+        // Verify P2.1 requirements are met
+        assert!(active_layer.pixel_data.is_some()); // Has pixel data
+        assert!(active_layer.visible); // Has visibility
+        assert_eq!(active_layer.opacity, 0.8); // Has opacity
+        assert_eq!(active_layer.blend_mode, BlendMode::Normal); // Has blend mode (Normal)
+    }
+
+    #[test]
+    fn test_layer_blend_mode_normal_only() {
+        let mut doc = Document::new("Test".to_string(), 100, 100);
+
+        // Create layers with Normal blend mode (P2.1 requirement: initially only Normal)
+        let layer1 = Layer::new_pixel("Layer 1".to_string(), 100, 100);
+        let layer2 = Layer::new_pixel("Layer 2".to_string(), 100, 100);
+
+        // Verify default blend mode is Normal
+        assert_eq!(layer1.blend_mode, BlendMode::Normal);
+        assert_eq!(layer2.blend_mode, BlendMode::Normal);
+
+        doc.add_layer(layer1);
+        doc.add_layer(layer2);
+
+        // Verify all layers in document use Normal blend mode
+        for layer in &doc.layers {
+            assert_eq!(layer.blend_mode, BlendMode::Normal);
+        }
     }
 }

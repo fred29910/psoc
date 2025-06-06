@@ -451,4 +451,78 @@ mod tests {
         assert_eq!(duplicate.name, "Original copy");
         assert_eq!(original.dimensions(), duplicate.dimensions());
     }
+
+    #[test]
+    fn test_layer_visibility_and_opacity() {
+        let mut layer = Layer::new_pixel("Test".to_string(), 10, 10);
+
+        // Test default visibility and opacity
+        assert!(layer.visible);
+        assert_eq!(layer.opacity, 1.0);
+        assert!(layer.is_effectively_visible());
+
+        // Test visibility toggle
+        layer.visible = false;
+        assert!(!layer.is_effectively_visible());
+
+        layer.visible = true;
+        layer.opacity = 0.0;
+        assert!(!layer.is_effectively_visible());
+
+        layer.opacity = 0.5;
+        assert!(layer.is_effectively_visible());
+        assert_eq!(layer.effective_opacity(), 0.5);
+    }
+
+    #[test]
+    fn test_blend_mode_assignment() {
+        let mut layer = Layer::new_pixel("Test".to_string(), 10, 10);
+
+        // Test default blend mode
+        assert_eq!(layer.blend_mode, BlendMode::Normal);
+
+        // Test blend mode assignment
+        layer.blend_mode = BlendMode::Multiply;
+        assert_eq!(layer.blend_mode, BlendMode::Multiply);
+
+        layer.blend_mode = BlendMode::Screen;
+        assert_eq!(layer.blend_mode, BlendMode::Screen);
+    }
+
+    #[test]
+    fn test_layer_pixel_data_requirement() {
+        // Pixel layer should have pixel data
+        let pixel_layer = Layer::new_pixel("Pixel".to_string(), 10, 10);
+        assert!(pixel_layer.has_pixel_data());
+        assert!(pixel_layer.pixel_data.is_some());
+
+        // Text layer should not have pixel data initially
+        let text_layer = Layer::new_text(
+            "Text".to_string(),
+            "Hello".to_string(),
+            "Arial".to_string(),
+            12.0,
+            RgbaPixel::black(),
+            Point::origin(),
+        );
+        assert!(!text_layer.has_pixel_data());
+        assert!(text_layer.pixel_data.is_none());
+    }
+
+    #[test]
+    fn test_blend_mode_names() {
+        assert_eq!(BlendMode::Normal.name(), "Normal");
+        assert_eq!(BlendMode::Multiply.name(), "Multiply");
+        assert_eq!(BlendMode::Screen.name(), "Screen");
+        assert_eq!(BlendMode::Overlay.name(), "Overlay");
+    }
+
+    #[test]
+    fn test_blend_mode_all() {
+        let all_modes = BlendMode::all();
+        assert!(!all_modes.is_empty());
+        assert!(all_modes.contains(&BlendMode::Normal));
+        assert!(all_modes.contains(&BlendMode::Multiply));
+        assert!(all_modes.contains(&BlendMode::Screen));
+    }
 }
