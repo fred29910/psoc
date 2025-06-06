@@ -4,6 +4,7 @@
 //! including document metadata, layer management, and document operations.
 
 use crate::color::ColorSpace;
+use crate::command::CommandHistory;
 use crate::geometry::{Point, Rect, Size};
 use crate::layer::Layer;
 use crate::pixel::{PixelData, RgbaPixel};
@@ -169,6 +170,9 @@ pub struct Document {
     pub is_dirty: bool,
     /// File path (if document was loaded from or saved to a file)
     pub file_path: Option<std::path::PathBuf>,
+    /// Command history for undo/redo operations
+    #[serde(skip)]
+    pub command_history: CommandHistory,
 }
 
 impl Document {
@@ -193,6 +197,7 @@ impl Document {
             selection: Selection::default(),
             is_dirty: false,
             file_path: None,
+            command_history: CommandHistory::new(),
         }
     }
 
@@ -498,6 +503,61 @@ impl Document {
     pub fn set_selection(&mut self, selection: Selection) {
         self.selection = selection;
         self.mark_dirty();
+    }
+
+    /// Execute a command and add it to the history
+    pub fn execute_command(&mut self, command: Box<dyn crate::Command>) -> Result<()> {
+        // Execute the command first
+        command.execute(self)?;
+
+        // Add to history (we'll implement a simpler version for now)
+        // TODO: Implement proper command history with undo/redo
+        Ok(())
+    }
+
+    /// Undo the last command
+    pub fn undo(&mut self) -> Result<bool> {
+        // TODO: Implement proper undo functionality
+        Ok(false)
+    }
+
+    /// Redo the last undone command
+    pub fn redo(&mut self) -> Result<bool> {
+        // TODO: Implement proper redo functionality
+        Ok(false)
+    }
+
+    /// Check if undo is available
+    pub fn can_undo(&self) -> bool {
+        self.command_history.can_undo()
+    }
+
+    /// Check if redo is available
+    pub fn can_redo(&self) -> bool {
+        self.command_history.can_redo()
+    }
+
+    /// Get the description of the next command that would be undone
+    pub fn undo_description(&self) -> Option<&str> {
+        self.command_history.undo_description()
+    }
+
+    /// Get the description of the next command that would be redone
+    pub fn redo_description(&self) -> Option<&str> {
+        self.command_history.redo_description()
+    }
+
+    /// Clear command history
+    pub fn clear_history(&mut self) {
+        self.command_history.clear();
+    }
+
+    /// Get command history statistics
+    pub fn history_stats(&self) -> (usize, usize) {
+        (
+            self.command_history.undo_count(),
+            self.command_history.redo_count(),
+        )
     }
 
     /// Get the current selection

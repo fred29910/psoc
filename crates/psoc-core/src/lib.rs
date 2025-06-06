@@ -2,9 +2,10 @@
 //!
 //! This crate provides the fundamental data structures and algorithms for the PSOC image editor.
 //! It includes document management, layer handling, pixel data representation, color management,
-//! and geometric calculations.
+//! geometric calculations, and command system for undo/redo functionality.
 
 pub mod color;
+pub mod command;
 pub mod document;
 pub mod geometry;
 pub mod layer;
@@ -15,6 +16,7 @@ pub mod selection;
 
 // Re-export commonly used types
 pub use color::*;
+pub use command::*;
 pub use document::*;
 pub use geometry::*;
 pub use layer::*;

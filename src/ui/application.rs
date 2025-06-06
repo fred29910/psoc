@@ -99,6 +99,10 @@ pub enum Message {
     ShowAbout,
     /// Layer-related messages
     Layer(LayerMessage),
+    /// Undo the last operation
+    Undo,
+    /// Redo the last undone operation
+    Redo,
     /// Error occurred
     Error(String),
 }
@@ -414,6 +418,54 @@ impl PsocApp {
                 debug!("Layer message: {:?}", layer_msg);
                 self.handle_layer_message(layer_msg);
             }
+            Message::Undo => {
+                debug!("Undo requested");
+                if let Some(ref mut document) = self.state.current_document {
+                    match document.undo() {
+                        Ok(true) => {
+                            info!("Undo operation successful");
+                            // Update canvas with the modified document
+                            self.canvas.set_document(document.clone());
+                            self.sync_canvas_state();
+                            self.error_message = None;
+                        }
+                        Ok(false) => {
+                            debug!("No operations to undo");
+                            self.error_message = Some("Nothing to undo".to_string());
+                        }
+                        Err(e) => {
+                            error!("Undo operation failed: {}", e);
+                            self.error_message = Some(format!("Undo failed: {}", e));
+                        }
+                    }
+                } else {
+                    self.error_message = Some("No document open".to_string());
+                }
+            }
+            Message::Redo => {
+                debug!("Redo requested");
+                if let Some(ref mut document) = self.state.current_document {
+                    match document.redo() {
+                        Ok(true) => {
+                            info!("Redo operation successful");
+                            // Update canvas with the modified document
+                            self.canvas.set_document(document.clone());
+                            self.sync_canvas_state();
+                            self.error_message = None;
+                        }
+                        Ok(false) => {
+                            debug!("No operations to redo");
+                            self.error_message = Some("Nothing to redo".to_string());
+                        }
+                        Err(e) => {
+                            error!("Redo operation failed: {}", e);
+                            self.error_message = Some(format!("Redo failed: {}", e));
+                        }
+                    }
+                } else {
+                    self.error_message = Some("No document open".to_string());
+                }
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
@@ -530,6 +582,8 @@ impl PsocApp {
             Message::OpenDocument,
             Message::SaveDocument,
             Message::SaveAsDocument,
+            Message::Undo,
+            Message::Redo,
             Message::ShowAbout,
             Message::Exit,
         )

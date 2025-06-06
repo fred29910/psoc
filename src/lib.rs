@@ -4,6 +4,7 @@
 //! with features similar to Adobe Photoshop, built using Rust for performance and safety.
 
 pub mod app;
+pub mod commands;
 pub mod core;
 pub mod file_io;
 pub mod image_processing;

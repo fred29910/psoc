@@ -56,6 +56,8 @@ pub fn menu_bar<Message: Clone + 'static>(
     open_doc: Message,
     save_doc: Message,
     save_as_doc: Message,
+    undo: Message,
+    redo: Message,
     show_about: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
@@ -70,6 +72,11 @@ pub fn menu_bar<Message: Clone + 'static>(
                     icon_button(Icon::SaveAs, save_as_doc),
                 ]
                 .spacing(8.0)
+            )
+            .padding(8.0),
+            // Edit menu section
+            container(
+                row![icon_button(Icon::Undo, undo), icon_button(Icon::Redo, redo),].spacing(8.0)
             )
             .padding(8.0),
             // Spacer
