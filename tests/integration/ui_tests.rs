@@ -1,6 +1,6 @@
 //! Integration tests for UI components
 
-use psoc::ui::{AppState, Message, PsocTheme, Tool};
+use psoc::ui::{AppState, LayerMessage, Message, PsocTheme, Tool};
 
 #[test]
 fn test_app_state_creation() {
@@ -120,6 +120,13 @@ fn test_message_variants() {
     let _zoom_in = Message::ZoomIn;
     let _zoom_out = Message::ZoomOut;
     let _error = Message::Error("Test error".to_string());
+
+    // Test layer messages
+    let _add_layer = Message::Layer(LayerMessage::AddEmptyLayer);
+    let _delete_layer = Message::Layer(LayerMessage::DeleteLayer(0));
+    let _select_layer = Message::Layer(LayerMessage::SelectLayer(1));
+    let _toggle_visibility = Message::Layer(LayerMessage::ToggleLayerVisibility(0));
+    let _change_opacity = Message::Layer(LayerMessage::ChangeLayerOpacity(0, 0.5));
 }
 
 #[cfg(test)]
@@ -214,5 +221,123 @@ mod icon_tests {
         assert_eq!(Icon::Save.as_str(), "Save");
         assert_eq!(Icon::Close.as_str(), "Close");
         assert_eq!(Icon::Info.as_str(), "Information");
+    }
+}
+
+#[cfg(test)]
+mod layer_panel_tests {
+    use psoc::ui::{AppState, LayerMessage};
+    use psoc_core::{Document, Layer};
+
+    #[test]
+    fn test_layer_message_creation() {
+        // Test that layer messages can be created with different parameters
+        let add_empty = LayerMessage::AddEmptyLayer;
+        let delete_layer = LayerMessage::DeleteLayer(0);
+        let duplicate_layer = LayerMessage::DuplicateLayer(1);
+        let select_layer = LayerMessage::SelectLayer(2);
+        let toggle_visibility = LayerMessage::ToggleLayerVisibility(0);
+        let change_opacity = LayerMessage::ChangeLayerOpacity(1, 0.75);
+        let move_up = LayerMessage::MoveLayerUp(1);
+        let move_down = LayerMessage::MoveLayerDown(0);
+        let rename = LayerMessage::RenameLayer(0, "New Name".to_string());
+
+        // Test that messages contain expected data
+        match delete_layer {
+            LayerMessage::DeleteLayer(index) => assert_eq!(index, 0),
+            _ => panic!("Expected DeleteLayer message"),
+        }
+
+        match change_opacity {
+            LayerMessage::ChangeLayerOpacity(index, opacity) => {
+                assert_eq!(index, 1);
+                assert!((opacity - 0.75).abs() < f32::EPSILON);
+            }
+            _ => panic!("Expected ChangeLayerOpacity message"),
+        }
+
+        match rename {
+            LayerMessage::RenameLayer(index, name) => {
+                assert_eq!(index, 0);
+                assert_eq!(name, "New Name");
+            }
+            _ => panic!("Expected RenameLayer message"),
+        }
+    }
+
+    #[test]
+    fn test_app_state_with_document() {
+        let mut state = AppState::default();
+
+        // Initially no document
+        assert!(state.current_document.is_none());
+        assert!(!state.document_open);
+
+        // Create a document
+        let document = Document::new("Test Document".to_string(), 800, 600);
+        state.current_document = Some(document);
+        state.document_open = true;
+
+        // Verify document is set
+        assert!(state.current_document.is_some());
+        assert!(state.document_open);
+
+        let doc = state.current_document.as_ref().unwrap();
+        assert_eq!(doc.metadata.title, "Test Document");
+        assert_eq!(doc.dimensions(), (800, 600));
+    }
+
+    #[test]
+    fn test_document_layer_operations() {
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Add some layers
+        let layer1 = Layer::new_pixel("Layer 1".to_string(), 100, 100);
+        let layer2 = Layer::new_pixel("Layer 2".to_string(), 100, 100);
+
+        document.add_layer(layer1);
+        document.add_layer(layer2);
+
+        assert_eq!(document.layer_count(), 2);
+
+        // Test layer selection
+        document.set_active_layer(1).unwrap();
+        assert_eq!(document.active_layer_index, Some(1));
+
+        // Test layer visibility
+        document.layers[0].visible = false;
+        assert!(!document.layers[0].visible);
+        assert!(document.layers[1].visible);
+
+        // Test layer opacity
+        document.layers[1].opacity = 0.5;
+        assert!((document.layers[1].opacity - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_layer_ordering_operations() {
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Add layers with different names
+        let layer1 = Layer::new_pixel("Bottom".to_string(), 100, 100);
+        let layer2 = Layer::new_pixel("Middle".to_string(), 100, 100);
+        let layer3 = Layer::new_pixel("Top".to_string(), 100, 100);
+
+        document.add_layer(layer1);
+        document.add_layer(layer2);
+        document.add_layer(layer3);
+
+        // Initial order: Bottom(0), Middle(1), Top(2)
+        assert_eq!(document.layers[0].name, "Bottom");
+        assert_eq!(document.layers[1].name, "Middle");
+        assert_eq!(document.layers[2].name, "Top");
+
+        // Swap middle and top (simulate move up)
+        document.layers.swap(1, 2);
+
+        // New order: Bottom(0), Top(1), Middle(2)
+        assert_eq!(document.layers[0].name, "Bottom");
+        assert_eq!(document.layers[1].name, "Top");
+        assert_eq!(document.layers[2].name, "Middle");
     }
 }

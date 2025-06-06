@@ -205,7 +205,7 @@ pub fn tool_palette<Message: Clone + 'static>(
 pub fn layer_item<Message: Clone + 'static>(
     name: String,
     is_visible: bool,
-    _is_selected: bool,
+    is_selected: bool,
     toggle_visibility: Message,
     select_layer: Message,
 ) -> Element<'static, Message> {
@@ -215,23 +215,97 @@ pub fn layer_item<Message: Clone + 'static>(
         Icon::LayerHidden
     };
 
-    // Note: Simplified without custom styling for now
+    // Create layer item with selection highlighting
+    let layer_button = if is_selected {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+            .style(button::primary)
+    } else {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+    };
 
-    container(
-        row![
-            // Visibility toggle
-            simple_icon_button(visibility_icon, toggle_visibility),
-            // Layer name (clickable)
-            button(text(name).size(12.0))
-                .on_press(select_layer)
-                .width(Length::Fill),
-        ]
-        .spacing(8.0)
-        .align_y(iced::alignment::Vertical::Center),
-    )
-    .padding(8.0)
-    .width(Length::Fill)
-    .into()
+    let layer_content = row![
+        // Visibility toggle
+        simple_icon_button(visibility_icon, toggle_visibility),
+        // Layer name (clickable)
+        layer_button,
+    ]
+    .spacing(8.0)
+    .align_y(iced::alignment::Vertical::Center);
+
+    let layer_container = if is_selected {
+        container(layer_content)
+            .padding(8.0)
+            .width(Length::Fill)
+            .style(container::bordered_box)
+    } else {
+        container(layer_content)
+            .padding(8.0)
+            .width(Length::Fill)
+    };
+
+    layer_container.into()
+}
+
+/// Create an advanced layer panel with controls
+pub fn layer_panel<Message: Clone + 'static>(
+    layers: Vec<(String, bool, bool, Message, Message)>, // (name, visible, selected, toggle_vis, select)
+    add_layer: Message,
+    delete_layer: Option<Message>,
+    duplicate_layer: Option<Message>,
+    move_up: Option<Message>,
+    move_down: Option<Message>,
+) -> Element<'static, Message> {
+    let mut content = Vec::new();
+
+    // Layer controls
+    let controls = row![
+        button(text("Add").size(10.0))
+            .on_press(add_layer)
+            .padding([4.0, 8.0]),
+        button(text("Del").size(10.0))
+            .on_press_maybe(delete_layer)
+            .padding([4.0, 8.0]),
+        button(text("Dup").size(10.0))
+            .on_press_maybe(duplicate_layer)
+            .padding([4.0, 8.0]),
+        Space::new(Length::Fill, Length::Shrink),
+        button(text("↑").size(10.0))
+            .on_press_maybe(move_up)
+            .padding([4.0, 6.0]),
+        button(text("↓").size(10.0))
+            .on_press_maybe(move_down)
+            .padding([4.0, 6.0]),
+    ]
+    .spacing(4.0)
+    .align_y(iced::alignment::Vertical::Center);
+
+    content.push(container(controls).padding(8.0).into());
+
+    // Layer list
+    if layers.is_empty() {
+        content.push(
+            container(
+                text("No layers")
+                    .size(12.0)
+                    .style(|_theme| iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                    })
+            )
+            .padding(16.0)
+            .center_x(Length::Fill)
+            .into()
+        );
+    } else {
+        for (name, is_visible, is_selected, toggle_visibility, select_layer) in layers {
+            content.push(layer_item(name, is_visible, is_selected, toggle_visibility, select_layer));
+        }
+    }
+
+    side_panel("Layers".to_string(), content, 250.0)
 }
 
 /// Create a modern canvas area placeholder

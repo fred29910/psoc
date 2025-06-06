@@ -15,6 +15,7 @@ use super::{
     theme::{spacing, PsocTheme},
 };
 use crate::{PsocError, Result};
+use psoc_core::{Document, Layer};
 
 /// Main GUI application
 #[derive(Debug)]
@@ -45,6 +46,8 @@ impl Default for PsocApp {
 pub struct AppState {
     /// Whether a document is open
     pub document_open: bool,
+    /// Current document
+    pub current_document: Option<Document>,
     /// Current image data
     pub current_image: Option<image::DynamicImage>,
     /// Current file path
@@ -128,8 +131,35 @@ pub enum Message {
     About(AboutMessage),
     /// Show about dialog
     ShowAbout,
+    /// Layer-related messages
+    Layer(LayerMessage),
     /// Error occurred
     Error(String),
+}
+
+/// Layer-specific messages
+#[derive(Debug, Clone)]
+pub enum LayerMessage {
+    /// Add a new empty layer
+    AddEmptyLayer,
+    /// Add a layer from file
+    AddLayerFromFile,
+    /// Delete layer at index
+    DeleteLayer(usize),
+    /// Duplicate layer at index
+    DuplicateLayer(usize),
+    /// Select layer at index
+    SelectLayer(usize),
+    /// Toggle layer visibility
+    ToggleLayerVisibility(usize),
+    /// Change layer opacity
+    ChangeLayerOpacity(usize, f32),
+    /// Move layer up
+    MoveLayerUp(usize),
+    /// Move layer down
+    MoveLayerDown(usize),
+    /// Rename layer
+    RenameLayer(usize, String),
 }
 
 /// Canvas-specific messages
@@ -149,6 +179,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             document_open: false,
+            current_document: None,
             current_image: None,
             current_file_path: None,
             zoom_level: 1.0,
@@ -218,6 +249,10 @@ impl PsocApp {
         match message {
             Message::NewDocument => {
                 info!("Creating new document");
+
+                // Create a new document with default dimensions
+                let document = Document::new("Untitled".to_string(), 800, 600);
+                self.state.current_document = Some(document);
                 self.state.document_open = true;
                 self.state.zoom_level = 1.0;
                 self.state.pan_offset = (0.0, 0.0);
@@ -266,19 +301,28 @@ impl PsocApp {
                     "Image loaded successfully"
                 );
 
-                // Convert image to canvas format
-                let image_data = self.convert_image_to_canvas_data(&image);
-                self.canvas.set_image(image_data);
+                // Create document from image
+                match Document::from_image("Loaded Image".to_string(), &image) {
+                    Ok(document) => {
+                        // Convert image to canvas format
+                        let image_data = self.convert_image_to_canvas_data(&image);
+                        self.canvas.set_image(image_data);
 
-                self.state.current_image = Some(image);
-                self.state.document_open = true;
-                self.state.zoom_level = 1.0;
-                self.state.pan_offset = (0.0, 0.0);
+                        self.state.current_document = Some(document);
+                        self.state.current_image = Some(image);
+                        self.state.document_open = true;
+                        self.state.zoom_level = 1.0;
+                        self.state.pan_offset = (0.0, 0.0);
 
-                // Sync canvas state
-                self.sync_canvas_state();
+                        // Sync canvas state
+                        self.sync_canvas_state();
 
-                self.error_message = None;
+                        self.error_message = None;
+                    }
+                    Err(e) => {
+                        self.error_message = Some(format!("Failed to create document from image: {}", e));
+                    }
+                }
             }
             Message::SaveDocument => {
                 info!("Saving document");
@@ -392,6 +436,10 @@ impl PsocApp {
             Message::ShowAbout => {
                 info!("Showing about dialog");
                 self.about_dialog.show();
+            }
+            Message::Layer(layer_msg) => {
+                debug!("Layer message: {:?}", layer_msg);
+                self.handle_layer_message(layer_msg);
             }
             Message::Error(error) => {
                 error!("Application error: {}", error);
@@ -554,22 +602,7 @@ impl PsocApp {
             ),
         ];
 
-        let layers_content = vec![
-            components::layer_item(
-                "Layer 1".to_string(),
-                true,
-                true,
-                Message::Error("Layer visibility toggle not implemented".to_string()),
-                Message::Error("Layer selection not implemented".to_string()),
-            ),
-            components::layer_item(
-                "Background".to_string(),
-                true,
-                false,
-                Message::Error("Layer visibility toggle not implemented".to_string()),
-                Message::Error("Layer selection not implemented".to_string()),
-            ),
-        ];
+        let layers_content = self.create_layers_content();
 
         column![
             components::side_panel(
@@ -577,7 +610,7 @@ impl PsocApp {
                 vec![components::tool_palette(tools)],
                 250.0
             ),
-            components::side_panel("Layers".to_string(), layers_content, 250.0),
+            column(layers_content).spacing(0),
         ]
         .spacing(spacing::SM)
         .into()
@@ -658,5 +691,182 @@ impl PsocApp {
         };
 
         components::status_bar(status_text, self.state.zoom_level)
+    }
+
+    /// Create the layers panel content
+    fn create_layers_content(&self) -> Vec<Element<'static, Message>> {
+        if let Some(ref document) = self.state.current_document {
+            // Create layer data for the panel
+            let layers: Vec<(String, bool, bool, Message, Message)> = document
+                .layers
+                .iter()
+                .enumerate()
+                .rev() // Display in reverse order (top to bottom in UI)
+                .map(|(index, layer)| {
+                    let is_selected = document.active_layer_index == Some(index);
+                    (
+                        layer.name.clone(),
+                        layer.visible,
+                        is_selected,
+                        Message::Layer(LayerMessage::ToggleLayerVisibility(index)),
+                        Message::Layer(LayerMessage::SelectLayer(index)),
+                    )
+                })
+                .collect();
+
+            let active_index = document.active_layer_index;
+            let layer_count = document.layers.len();
+
+            vec![components::layer_panel(
+                layers,
+                Message::Layer(LayerMessage::AddEmptyLayer),
+                active_index.map(|i| Message::Layer(LayerMessage::DeleteLayer(i))),
+                active_index.map(|i| Message::Layer(LayerMessage::DuplicateLayer(i))),
+                active_index.and_then(|i| if i > 0 { Some(Message::Layer(LayerMessage::MoveLayerUp(i))) } else { None }),
+                active_index.and_then(|i| if i < layer_count - 1 { Some(Message::Layer(LayerMessage::MoveLayerDown(i))) } else { None }),
+            )]
+        } else {
+            // No document open - return empty layer panel
+            vec![components::layer_panel(
+                vec![],
+                Message::Error("No document open".to_string()),
+                None,
+                None,
+                None,
+                None,
+            )]
+        }
+    }
+
+
+
+    /// Handle layer-specific messages
+    fn handle_layer_message(&mut self, message: LayerMessage) {
+        // Ensure we have a document to work with
+        if self.state.current_document.is_none() {
+            self.error_message = Some("No document open".to_string());
+            return;
+        }
+
+        let document = self.state.current_document.as_mut().unwrap();
+
+        match message {
+            LayerMessage::AddEmptyLayer => {
+                info!("Adding new empty layer");
+                let (width, height) = document.dimensions();
+                let layer_name = format!("Layer {}", document.layer_count() + 1);
+                let layer = Layer::new_pixel(layer_name, width, height);
+                document.add_layer(layer);
+
+                // Set the new layer as active
+                if let Err(e) = document.set_active_layer(document.layer_count() - 1) {
+                    self.error_message = Some(format!("Failed to set active layer: {}", e));
+                }
+            }
+            LayerMessage::AddLayerFromFile => {
+                info!("Adding layer from file");
+                // TODO: Implement file dialog for layer import
+                self.error_message = Some("Layer import from file not yet implemented".to_string());
+            }
+            LayerMessage::DeleteLayer(index) => {
+                info!("Deleting layer at index: {}", index);
+                match document.remove_layer(index) {
+                    Ok(_) => {
+                        // If we deleted the last layer, create a new one
+                        if document.is_empty() {
+                            let (width, height) = document.dimensions();
+                            let layer = Layer::new_pixel("Background".to_string(), width, height);
+                            document.add_layer(layer);
+                            let _ = document.set_active_layer(0);
+                        }
+                    }
+                    Err(e) => {
+                        self.error_message = Some(format!("Failed to delete layer: {}", e));
+                    }
+                }
+            }
+            LayerMessage::DuplicateLayer(index) => {
+                info!("Duplicating layer at index: {}", index);
+                if let Some(layer) = document.layers.get(index) {
+                    let duplicated_layer = layer.duplicate();
+                    if let Err(e) = document.insert_layer(index + 1, duplicated_layer) {
+                        self.error_message = Some(format!("Failed to duplicate layer: {}", e));
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::SelectLayer(index) => {
+                debug!("Selecting layer at index: {}", index);
+                if let Err(e) = document.set_active_layer(index) {
+                    self.error_message = Some(format!("Failed to select layer: {}", e));
+                }
+            }
+            LayerMessage::ToggleLayerVisibility(index) => {
+                debug!("Toggling visibility for layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    layer.visible = !layer.visible;
+                    document.mark_dirty();
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::ChangeLayerOpacity(index, opacity) => {
+                debug!("Changing opacity for layer at index: {} to {}", index, opacity);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    layer.opacity = opacity.clamp(0.0, 1.0);
+                    document.mark_dirty();
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::MoveLayerUp(index) => {
+                debug!("Moving layer up from index: {}", index);
+                if index > 0 && index < document.layers.len() {
+                    document.layers.swap(index, index - 1);
+
+                    // Update active layer index if necessary
+                    if let Some(active_index) = document.active_layer_index {
+                        if active_index == index {
+                            document.active_layer_index = Some(index - 1);
+                        } else if active_index == index - 1 {
+                            document.active_layer_index = Some(index);
+                        }
+                    }
+
+                    document.mark_dirty();
+                } else {
+                    self.error_message = Some("Cannot move layer up".to_string());
+                }
+            }
+            LayerMessage::MoveLayerDown(index) => {
+                debug!("Moving layer down from index: {}", index);
+                if index < document.layers.len() - 1 {
+                    document.layers.swap(index, index + 1);
+
+                    // Update active layer index if necessary
+                    if let Some(active_index) = document.active_layer_index {
+                        if active_index == index {
+                            document.active_layer_index = Some(index + 1);
+                        } else if active_index == index + 1 {
+                            document.active_layer_index = Some(index);
+                        }
+                    }
+
+                    document.mark_dirty();
+                } else {
+                    self.error_message = Some("Cannot move layer down".to_string());
+                }
+            }
+            LayerMessage::RenameLayer(index, new_name) => {
+                debug!("Renaming layer at index: {} to '{}'", index, new_name);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    layer.name = new_name;
+                    document.mark_dirty();
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+        }
     }
 }
