@@ -38,8 +38,8 @@
 *   **P0.3: 开发环境与工具链搭建**
     *   [ x ] 安装最新稳定版Rust工具链 (rustc, cargo)。
     *   [ x ] 配置IDE (VS Code with rust-analyzer, IntelliJ Rust, etc.)。
-    *   [ ] 初始化Git仓库，制定分支策略 (e.g., Gitflow)。
-    *   [ ] 搭建基础CI/CD流程 (e.g., GitHub Actions for automated builds and tests)。
+    *   [ x ] 初始化Git仓库，制定分支策略 (e.g., Gitflow)。
+    *   [ x ] 搭建基础CI/CD流程 (e.g., GitHub Actions for automated builds and tests)。
 *   **P0.4: 项目结构设计**
     *   [ ] `Cargo.toml` 初始化，添加基础依赖。
     *   [ ] 定义初步的模块结构 (e.g., `core_logic`, `ui`, `rendering`, `file_io`, `image_processing`).

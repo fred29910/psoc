@@ -1,0 +1,14 @@
+[package]
+name = "psoc-image-processing"
+version = "0.1.0"
+edition = "2021"
+authors = ["PSOC Development Team <dev@psoc.project>"]
+description = "Image processing algorithms for PSOC"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+image = "0.24"
+imageproc = "0.23"
+ndarray = "0.15"
+rayon = "1.7"
+psoc-core = { path = "../psoc-core" }

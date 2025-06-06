@@ -1,0 +1,13 @@
+[package]
+name = "psoc-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["PSOC Development Team <dev@psoc.project>"]
+description = "Core data structures and algorithms for PSOC"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+nalgebra = "0.32"
+palette = "0.7"

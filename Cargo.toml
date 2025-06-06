@@ -70,8 +70,8 @@ proptest = "1.0"
 tempfile = "3.0"
 
 [features]
-default = ["plugins"]
-plugins = ["psoc-plugins", "mlua", "wasmtime"]
+default = []
+plugins = ["psoc-plugins", "dep:mlua", "dep:wasmtime"]
 
 # Optional plugin system dependencies
 mlua = { version = "0.9", optional = true }
