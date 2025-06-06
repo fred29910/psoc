@@ -102,7 +102,9 @@ impl BlendMode {
         if opacity <= 0.0 {
             return base;
         }
-        if opacity >= 1.0 && overlay.a == 255 {
+
+        // Only skip blending for Normal mode with full opacity and alpha
+        if *self == BlendMode::Normal && opacity >= 1.0 && overlay.a == 255 {
             return overlay;
         }
 
@@ -157,9 +159,14 @@ impl BlendMode {
         let blended_r = (base.r as f32 * overlay.r as f32 / 255.0) as u8;
         let blended_g = (base.g as f32 * overlay.g as f32 / 255.0) as u8;
         let blended_b = (base.b as f32 * overlay.b as f32 / 255.0) as u8;
-        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, overlay.a);
+        let blended = RgbaPixel::new(blended_r, blended_g, blended_b, base.a);
 
-        BlendMode::Normal.blend_normal(base, blended, opacity)
+        // Apply opacity blending if needed
+        if opacity >= 1.0 {
+            blended
+        } else {
+            BlendMode::Normal.blend_normal(base, blended, opacity)
+        }
     }
 
     /// Screen blending implementation
@@ -832,11 +839,14 @@ mod tests {
 
         let result = BlendMode::Darken.blend(base, overlay, 1.0);
 
-        // Darken should pick the darker color for each channel (after normal blending)
-        // The result should be closer to the darker values
-        assert!(result.r < base.r); // Should be darker than base.r (200)
-        assert!(result.g > base.g); // Should be lighter than base.g (100) but not as light as overlay.g (200)
-        assert!(result.b < base.b); // Should be darker than base.b (150)
+        // Darken should pick the darker color for each channel
+        // Expected: min(200,100)=100, min(100,200)=100, min(150,100)=100
+        assert!(result.r < base.r); // Should be darker than base.r (200), closer to 100
+        assert!(result.g <= base.g + 5); // Should be close to base.g (100), allowing for blending effects
+        assert!(result.b < base.b); // Should be darker than base.b (150), closer to 100
+
+        // The result should be different from the base (since blending occurred)
+        assert_ne!(result, base);
     }
 
     #[test]

@@ -350,7 +350,7 @@ struct Tile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Layer, Point};
+    use crate::{Layer, Point, RgbaPixel};
 
     #[test]
     fn test_render_engine_creation() {

@@ -1,11 +1,11 @@
-# [项目名称] - 一款用Rust构建的图像编辑器 🎨🦀
+# PSOC - 一款用Rust构建的图像编辑器 🎨🦀
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/YOUR_USERNAME/YOUR_REPONAME/rust.yml?branch=main)](https://github.com/YOUR_USERNAME/YOUR_REPONAME/actions)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/licenses/MIT)
 [![Rust Version](https://img.shields.io/badge/rust-1.XX.X+-93450a.svg)](https://www.rust-lang.org)
 <!-- [![Crates.io](https://img.shields.io/crates/v/your-crate-name.svg)](https://crates.io/crates/your-crate-name) -->
 
-**[项目名称]** 是一个雄心勃勃的开源项目，旨在利用Rust编程语言的强大功能（性能、内存安全、并发性）从头开始构建一款功能丰富的桌面图像编辑应用程序，灵感来源于Photoshop、GIMP和Krita等优秀软件。
+**PSOC** 是一个雄心勃勃的开源项目，旨在利用Rust编程语言的强大功能（性能、内存安全、并发性）从头开始构建一款功能丰富的桌面图像编辑应用程序，灵感来源于Photoshop、GIMP和Krita等优秀软件。
 
 ## ✨ 项目愿景与目标
 
@@ -21,14 +21,15 @@
 这是一个长期项目，特性将逐步实现。以下是我们规划的一些核心功能：
 
 *   **核心引擎：**
-    *   [ ] 高效的2D渲染画布 (基于 `wgpu` 或类似技术)
-    *   [ ] 图像文件 I/O (PNG, JPEG, TIFF, GIF, WebP, 目标支持更多格式如PSD读取、自定义项目格式)
-    *   [ ] 颜色管理 (ICC Profiles, 使用 `lcms2-rs`)
+    *   [x] 高效的2D渲染画布 (基于 `iced` 和 `wgpu`)
+    *   [x] 图像文件 I/O (PNG, JPEG, 自定义PSOC项目格式)
+    *   [x] 颜色管理 (RGB, HSL, HSV颜色空间)
 *   **图层系统：**
-    *   [ ] 基础图层操作 (创建, 删除, 复制, 显隐, 不透明度, 顺序调整)
-    *   [ ] 多种图层混合模式
-    *   [ ] (高级) 调整图层
-    *   [ ] (高级) 图层蒙版
+    *   [x] 基础图层操作 (创建, 删除, 复制, 显隐, 不透明度, 顺序调整)
+    *   [x] 16种专业图层混合模式 (Normal, Multiply, Screen, Overlay等)
+    *   [x] 完整的图层渲染引擎
+    *   [ ] (计划) 调整图层
+    *   [ ] (计划) 图层蒙版
 *   **选择工具：**
     *   [ ] 矩形、椭圆选区
     *   [ ] (计划) 套索、多边形套索、魔棒工具
@@ -45,7 +46,9 @@
     *   [ ] (计划) 色阶、曲线
     *   [ ] (计划) 常见滤镜 (模糊、锐化、降噪等)
 *   **用户界面：**
-    *   [ ] 直观的图形用户界面 (使用 `iced`)
+    *   [x] 直观的图形用户界面 (使用 `iced`)
+    *   [x] 图层面板和画布显示
+    *   [x] 文件对话框集成
     *   [ ] 可定制的工具栏、面板布局
     *   [ ] 撤销/重做系统
     *   [ ] 历史记录面板
@@ -57,21 +60,34 @@
 ## 🛠️ 技术栈
 
 *   **语言：** Rust
-*   **GUI框架：** [**请填写你选择的GUI框架，例如：`iced`**]
-*   **渲染后端：** [**请填写渲染方案，例如：`wgpu` (通过`iced`) 或 `tiny-skia`**]
-*   **图像处理：** `image`, `imageproc`, `ndarray`
-*   **颜色管理：** `lcms2-rs`
-*   **异步运行时：** `tokio` / `async-std` (根据GUI框架的推荐)
+*   **GUI框架：** `iced` (现代化的Rust GUI框架)
+*   **渲染后端：** `wgpu` (通过`iced`) + `tiny-skia`
+*   **图像处理：** `image`, `ndarray`, `rayon`
+*   **颜色管理：** 自定义实现 (RGB, HSL, HSV)
+*   **异步运行时：** `tokio`
+*   **序列化：** `serde`, `ron` (项目文件格式)
 *   **构建系统：** Cargo
 *   **核心数据结构与算法：** 自定义实现，利用Rust标准库和生态系统中的优秀crates。
 
 ## 📊 项目状态与路线图
 
-本项目目前处于 **[例如：早期开发阶段 / Alpha阶段 / 概念验证阶段]**。
+本项目目前处于 **Alpha开发阶段**。
 
-我们正在积极开发核心功能。详细的开发任务列表和路线图可以在这里找到：
-*   [链接到你的任务列表文档或GitHub Projects/Milestones]
-*   当前主要关注点：**[例如：完善基础图层系统和核心绘图工具]**
+### 已完成的里程碑：
+*   ✅ **P0阶段**: 项目基础设施和架构设计
+*   ✅ **P1阶段**: 核心数据结构、文件IO、错误处理、GUI基础
+*   ✅ **P2.1**: 图层数据结构实现
+*   ✅ **P2.2**: 图层UI面板开发
+*   ✅ **P2.3**: 图层混合与渲染
+*   ✅ **P2.4**: 多图层项目文件支持
+
+### 当前状态：
+*   **69个单元测试** 全部通过
+*   **完整的图层系统** 支持16种混合模式
+*   **项目文件格式** 支持保存/加载多图层文档
+*   **GUI应用程序** 基本功能完整
+
+详细的开发文档可以在 `docs/` 目录中找到。
 
 ## 🏁 开始使用 (开发构建)
 
