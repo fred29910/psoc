@@ -566,28 +566,188 @@ impl Tool for EraserTool {
             },
         ]
     }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "size" => {
+                if let ToolOptionValue::Float(size) = value {
+                    self.eraser_size = size.clamp(1.0, 100.0);
+                }
+            }
+            "hardness" => {
+                if let ToolOptionValue::Float(hardness) = value {
+                    self.eraser_hardness = hardness.clamp(0.0, 1.0);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "size" => Some(ToolOptionValue::Float(self.eraser_size)),
+            "hardness" => Some(ToolOptionValue::Float(self.eraser_hardness)),
+            _ => None,
+        }
+    }
 }
 
 impl EraserTool {
     fn erase_at_position(&self, position: Point, document: &mut Document) -> ToolResult<()> {
-        // TODO: Implement actual erasing logic
         debug!(
-            "Erasing at position: {:?} with size: {}",
-            position, self.eraser_size
+            "Erasing at position: {:?} with size: {} and hardness: {}",
+            position, self.eraser_size, self.eraser_hardness
         );
 
-        // For now, just mark the document as dirty
+        // Get the active layer
+        let active_layer = document.active_layer_mut();
+        if active_layer.is_none() {
+            debug!("No active layer to erase on");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        // Erase a circular area at the position
+        self.erase_circular_area(position, layer)?;
         document.mark_dirty();
 
         Ok(())
     }
 
     fn erase_stroke(&self, from: Point, to: Point, document: &mut Document) -> ToolResult<()> {
-        // TODO: Implement stroke erasing logic
         debug!("Erasing stroke from {:?} to {:?}", from, to);
 
-        // For now, just mark the document as dirty
-        document.mark_dirty();
+        // Calculate the distance between points
+        let distance = from.distance_to(&to);
+
+        // If points are very close, just erase at the destination
+        if distance < 1.0 {
+            return self.erase_at_position(to, document);
+        }
+
+        // Interpolate points along the stroke for smooth erasing
+        let steps = (distance / (self.eraser_size * 0.25)).ceil() as i32;
+        let steps = steps.max(1);
+
+        for i in 0..=steps {
+            let t = i as f32 / steps as f32;
+            let interpolated_x = from.x + (to.x - from.x) * t;
+            let interpolated_y = from.y + (to.y - from.y) * t;
+            let interpolated_pos = Point::new(interpolated_x, interpolated_y);
+
+            self.erase_at_position(interpolated_pos, document)?;
+        }
+
+        Ok(())
+    }
+
+    /// Erase a circular area at the given position on the layer
+    fn erase_circular_area(&self, center: Point, layer: &mut psoc_core::Layer) -> ToolResult<()> {
+        let radius = self.eraser_size / 2.0;
+        let layer_dims = layer.dimensions();
+
+        if layer_dims.is_none() {
+            return Ok(());
+        }
+
+        let (layer_width, layer_height) = layer_dims.unwrap();
+
+        // Calculate the bounding box of the eraser
+        let min_x = ((center.x - radius).floor() as i32).max(0);
+        let max_x = ((center.x + radius).ceil() as i32).min(layer_width as i32 - 1);
+        let min_y = ((center.y - radius).floor() as i32).max(0);
+        let max_y = ((center.y + radius).ceil() as i32).min(layer_height as i32 - 1);
+
+        // Erase each pixel in the eraser area
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let pixel_x = x as f32;
+                let pixel_y = y as f32;
+
+                // Calculate distance from eraser center
+                let dx = pixel_x - center.x;
+                let dy = pixel_y - center.y;
+                let distance = (dx * dx + dy * dy).sqrt();
+
+                if distance <= radius {
+                    // Calculate eraser alpha based on distance and hardness
+                    let erase_strength = self.calculate_eraser_alpha(distance, radius);
+
+                    if erase_strength > 0.0 {
+                        // Apply erasing to the pixel
+                        self.erase_pixel_at(x as u32, y as u32, erase_strength, layer)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Calculate the erasing strength for a pixel based on distance from eraser center
+    fn calculate_eraser_alpha(&self, distance: f32, radius: f32) -> f32 {
+        if distance >= radius {
+            return 0.0;
+        }
+
+        // Calculate normalized distance (0.0 at center, 1.0 at edge)
+        let normalized_distance = distance / radius;
+
+        // Apply hardness - hardness of 1.0 means hard edge, 0.0 means very soft
+        if self.eraser_hardness >= 1.0 {
+            // Hard eraser - full strength within radius
+            1.0
+        } else if self.eraser_hardness <= 0.0 {
+            // Very soft eraser - gaussian-like falloff
+            let falloff = 1.0 - normalized_distance;
+            falloff * falloff
+        } else {
+            // Interpolate between hard and soft based on hardness
+            let hard_alpha = 1.0;
+            let soft_alpha = {
+                let falloff = 1.0 - normalized_distance;
+                falloff * falloff
+            };
+
+            // Mix hard and soft based on hardness value
+            hard_alpha * self.eraser_hardness + soft_alpha * (1.0 - self.eraser_hardness)
+        }
+    }
+
+    /// Erase (reduce alpha) of pixel at the given coordinates
+    fn erase_pixel_at(
+        &self,
+        x: u32,
+        y: u32,
+        erase_strength: f32,
+        layer: &mut psoc_core::Layer,
+    ) -> ToolResult<()> {
+        // Get the existing pixel
+        let existing_pixel = layer
+            .get_pixel(x, y)
+            .unwrap_or(psoc_core::RgbaPixel::transparent());
+
+        // Calculate new alpha after erasing
+        let current_alpha = existing_pixel.a as f32 / 255.0;
+        let new_alpha = current_alpha * (1.0 - erase_strength);
+        let new_alpha_u8 = (new_alpha * 255.0) as u8;
+
+        // Create the erased pixel (same color, reduced alpha)
+        let erased_pixel = psoc_core::RgbaPixel::new(
+            existing_pixel.r,
+            existing_pixel.g,
+            existing_pixel.b,
+            new_alpha_u8,
+        );
+
+        // Set the erased pixel
+        layer.set_pixel(x, y, erased_pixel)?;
 
         Ok(())
     }
@@ -916,5 +1076,256 @@ mod tests {
         // Some point in between should be painted
         let mid_pixel = active_layer.get_pixel(15, 15).unwrap();
         assert!(mid_pixel.g > 0);
+    }
+
+    // Eraser Tool Tests
+    #[test]
+    fn test_eraser_tool_creation() {
+        let eraser = EraserTool::new();
+
+        assert_eq!(eraser.eraser_size, 10.0);
+        assert_eq!(eraser.eraser_hardness, 1.0);
+        assert!(!eraser.is_erasing);
+    }
+
+    #[test]
+    fn test_eraser_tool_options() {
+        let eraser = EraserTool::new();
+        let options = eraser.options();
+
+        assert_eq!(options.len(), 2);
+
+        // Check size option
+        assert_eq!(options[0].name, "size");
+        assert_eq!(options[0].display_name, "Eraser Size");
+        assert_eq!(options[0].default_value, ToolOptionValue::Float(10.0));
+
+        // Check hardness option
+        assert_eq!(options[1].name, "hardness");
+        assert_eq!(options[1].display_name, "Eraser Hardness");
+        assert_eq!(options[1].default_value, ToolOptionValue::Float(1.0));
+    }
+
+    #[test]
+    fn test_eraser_tool_set_options() {
+        let mut eraser = EraserTool::new();
+
+        // Test size option
+        eraser
+            .set_option("size", ToolOptionValue::Float(25.0))
+            .unwrap();
+        assert_eq!(eraser.eraser_size, 25.0);
+
+        // Test hardness option
+        eraser
+            .set_option("hardness", ToolOptionValue::Float(0.3))
+            .unwrap();
+        assert_eq!(eraser.eraser_hardness, 0.3);
+
+        // Test clamping
+        eraser
+            .set_option("size", ToolOptionValue::Float(150.0))
+            .unwrap();
+        assert_eq!(eraser.eraser_size, 100.0); // Should be clamped to max
+
+        eraser
+            .set_option("hardness", ToolOptionValue::Float(-0.5))
+            .unwrap();
+        assert_eq!(eraser.eraser_hardness, 0.0); // Should be clamped to min
+    }
+
+    #[test]
+    fn test_eraser_tool_get_options() {
+        let mut eraser = EraserTool::new();
+        eraser.eraser_size = 30.0;
+        eraser.eraser_hardness = 0.8;
+
+        assert_eq!(
+            eraser.get_option("size"),
+            Some(ToolOptionValue::Float(30.0))
+        );
+        assert_eq!(
+            eraser.get_option("hardness"),
+            Some(ToolOptionValue::Float(0.8))
+        );
+        assert_eq!(eraser.get_option("invalid"), None);
+    }
+
+    #[test]
+    fn test_eraser_tool_event_handling() {
+        use super::super::tool_trait::{KeyModifiers, MouseButton, ToolEvent, ToolState};
+
+        let mut eraser = EraserTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Add a layer to erase on
+        let layer = Layer::new_pixel("Test Layer".to_string(), 100, 100);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Test mouse pressed event
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(50.0, 50.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        eraser
+            .handle_event(press_event, &mut document, &mut state)
+            .unwrap();
+        assert!(eraser.is_erasing);
+        assert!(state.is_active);
+        assert_eq!(state.last_position, Some(Point::new(50.0, 50.0)));
+        assert!(document.is_dirty);
+
+        // Test mouse dragged event
+        let drag_event = ToolEvent::MouseDragged {
+            position: Point::new(60.0, 60.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        eraser
+            .handle_event(drag_event, &mut document, &mut state)
+            .unwrap();
+        assert!(eraser.is_erasing);
+        assert_eq!(state.last_position, Some(Point::new(60.0, 60.0)));
+
+        // Test mouse released event
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(60.0, 60.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        eraser
+            .handle_event(release_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!eraser.is_erasing);
+        assert!(!state.is_active);
+    }
+
+    #[test]
+    fn test_eraser_alpha_calculation() {
+        let eraser = EraserTool::new();
+
+        // Test hard eraser (hardness = 1.0)
+        assert_eq!(eraser.calculate_eraser_alpha(0.0, 10.0), 1.0); // Center
+        assert_eq!(eraser.calculate_eraser_alpha(5.0, 10.0), 1.0); // Within radius
+        assert_eq!(eraser.calculate_eraser_alpha(10.0, 10.0), 0.0); // At edge
+        assert_eq!(eraser.calculate_eraser_alpha(15.0, 10.0), 0.0); // Outside
+
+        // Test soft eraser (hardness = 0.0)
+        let mut soft_eraser = EraserTool::new();
+        soft_eraser.eraser_hardness = 0.0;
+        assert_eq!(soft_eraser.calculate_eraser_alpha(0.0, 10.0), 1.0); // Center
+        assert!(soft_eraser.calculate_eraser_alpha(5.0, 10.0) > 0.0); // Within radius
+        assert!(soft_eraser.calculate_eraser_alpha(5.0, 10.0) < 1.0); // But less than full
+        assert_eq!(soft_eraser.calculate_eraser_alpha(10.0, 10.0), 0.0); // At edge
+    }
+
+    #[test]
+    fn test_eraser_pixel_erasing() {
+        let eraser = EraserTool::new();
+
+        // Create a test layer with some opaque pixels
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+
+        // Fill with red pixels
+        for y in 0..10 {
+            for x in 0..10 {
+                layer
+                    .set_pixel(x, y, RgbaPixel::new(255, 0, 0, 255))
+                    .unwrap();
+            }
+        }
+
+        // Test full erasing (strength = 1.0)
+        eraser.erase_pixel_at(5, 5, 1.0, &mut layer).unwrap();
+        let erased_pixel = layer.get_pixel(5, 5).unwrap();
+        assert_eq!(erased_pixel.a, 0); // Should be fully transparent
+        assert_eq!(erased_pixel.r, 255); // Color should remain
+
+        // Test partial erasing (strength = 0.5)
+        eraser.erase_pixel_at(6, 6, 0.5, &mut layer).unwrap();
+        let partial_pixel = layer.get_pixel(6, 6).unwrap();
+        assert!(partial_pixel.a > 0); // Should be partially transparent
+        assert!(partial_pixel.a < 255); // But not fully opaque
+        assert_eq!(partial_pixel.r, 255); // Color should remain
+    }
+
+    #[test]
+    fn test_eraser_on_layer() {
+        let mut eraser = EraserTool::new();
+        eraser.eraser_size = 4.0; // Small eraser for testing
+
+        let mut document = Document::new("Test".to_string(), 20, 20);
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 20, 20);
+
+        // Fill layer with blue pixels
+        for y in 0..20 {
+            for x in 0..20 {
+                layer
+                    .set_pixel(x, y, RgbaPixel::new(0, 0, 255, 255))
+                    .unwrap();
+            }
+        }
+
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Erase at center
+        let center = Point::new(10.0, 10.0);
+        eraser.erase_at_position(center, &mut document).unwrap();
+
+        // Check that pixels were erased
+        let active_layer = document.active_layer().unwrap();
+        let center_pixel = active_layer.get_pixel(10, 10).unwrap();
+
+        // Center pixel should have reduced alpha
+        assert!(center_pixel.a < 255);
+        assert_eq!(center_pixel.b, 255); // Color should remain blue
+    }
+
+    #[test]
+    fn test_eraser_stroke() {
+        let mut eraser = EraserTool::new();
+        eraser.eraser_size = 2.0;
+
+        let mut document = Document::new("Test".to_string(), 50, 50);
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
+
+        // Fill layer with green pixels
+        for y in 0..50 {
+            for x in 0..50 {
+                layer
+                    .set_pixel(x, y, RgbaPixel::new(0, 255, 0, 255))
+                    .unwrap();
+            }
+        }
+
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Erase a stroke from (10, 10) to (20, 20)
+        let from = Point::new(10.0, 10.0);
+        let to = Point::new(20.0, 20.0);
+        eraser.erase_stroke(from, to, &mut document).unwrap();
+
+        // Check that pixels along the stroke were erased
+        let active_layer = document.active_layer().unwrap();
+
+        // Start point should be erased
+        let start_pixel = active_layer.get_pixel(10, 10).unwrap();
+        assert!(start_pixel.a < 255);
+
+        // End point should be erased
+        let end_pixel = active_layer.get_pixel(20, 20).unwrap();
+        assert!(end_pixel.a < 255);
+
+        // Some point in between should be erased
+        let mid_pixel = active_layer.get_pixel(15, 15).unwrap();
+        assert!(mid_pixel.a < 255);
     }
 }
