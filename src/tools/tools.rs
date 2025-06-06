@@ -122,7 +122,6 @@ impl Tool for SelectTool {
 #[derive(Debug)]
 pub struct BrushTool {
     brush_size: f32,
-    #[allow(dead_code)]
     brush_color: RgbaPixel,
     brush_hardness: f32,
     is_painting: bool,
@@ -222,6 +221,18 @@ impl Tool for BrushTool {
                 option_type: ToolOptionType::Float { min: 0.0, max: 1.0 },
                 default_value: ToolOptionValue::Float(self.brush_hardness),
             },
+            ToolOption {
+                name: "color".to_string(),
+                display_name: "Brush Color".to_string(),
+                description: "Color of the brush".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.brush_color.r,
+                    self.brush_color.g,
+                    self.brush_color.b,
+                    self.brush_color.a,
+                ]),
+            },
         ]
     }
 
@@ -237,6 +248,11 @@ impl Tool for BrushTool {
                     self.brush_hardness = hardness.clamp(0.0, 1.0);
                 }
             }
+            "color" => {
+                if let ToolOptionValue::Color(rgba) = value {
+                    self.brush_color = RgbaPixel::new(rgba[0], rgba[1], rgba[2], rgba[3]);
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -246,6 +262,12 @@ impl Tool for BrushTool {
         match name {
             "size" => Some(ToolOptionValue::Float(self.brush_size)),
             "hardness" => Some(ToolOptionValue::Float(self.brush_hardness)),
+            "color" => Some(ToolOptionValue::Color([
+                self.brush_color.r,
+                self.brush_color.g,
+                self.brush_color.b,
+                self.brush_color.a,
+            ])),
             _ => None,
         }
     }
@@ -253,26 +275,192 @@ impl Tool for BrushTool {
 
 impl BrushTool {
     fn paint_at_position(&self, position: Point, document: &mut Document) -> ToolResult<()> {
-        // TODO: Implement actual painting logic
         debug!(
-            "Painting at position: {:?} with size: {}",
-            position, self.brush_size
+            "Painting at position: {:?} with size: {} and color: {:?}",
+            position, self.brush_size, self.brush_color
         );
 
-        // For now, just mark the document as dirty
+        // Get the active layer
+        let active_layer = document.active_layer_mut();
+        if active_layer.is_none() {
+            debug!("No active layer to paint on");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        // Paint a circular brush at the position
+        self.paint_circular_brush(position, layer)?;
         document.mark_dirty();
 
         Ok(())
     }
 
     fn paint_stroke(&self, from: Point, to: Point, document: &mut Document) -> ToolResult<()> {
-        // TODO: Implement stroke painting logic
         debug!("Painting stroke from {:?} to {:?}", from, to);
 
-        // For now, just mark the document as dirty
-        document.mark_dirty();
+        // Calculate the distance between points
+        let distance = from.distance_to(&to);
+
+        // If points are very close, just paint at the destination
+        if distance < 1.0 {
+            return self.paint_at_position(to, document);
+        }
+
+        // Interpolate points along the stroke for smooth painting
+        let steps = (distance / (self.brush_size * 0.25)).ceil() as i32;
+        let steps = steps.max(1);
+
+        for i in 0..=steps {
+            let t = i as f32 / steps as f32;
+            let interpolated_x = from.x + (to.x - from.x) * t;
+            let interpolated_y = from.y + (to.y - from.y) * t;
+            let interpolated_pos = Point::new(interpolated_x, interpolated_y);
+
+            self.paint_at_position(interpolated_pos, document)?;
+        }
 
         Ok(())
+    }
+
+    /// Paint a circular brush at the given position on the layer
+    fn paint_circular_brush(&self, center: Point, layer: &mut psoc_core::Layer) -> ToolResult<()> {
+        let radius = self.brush_size / 2.0;
+        let layer_dims = layer.dimensions();
+
+        if layer_dims.is_none() {
+            return Ok(());
+        }
+
+        let (layer_width, layer_height) = layer_dims.unwrap();
+
+        // Calculate the bounding box of the brush
+        let min_x = ((center.x - radius).floor() as i32).max(0);
+        let max_x = ((center.x + radius).ceil() as i32).min(layer_width as i32 - 1);
+        let min_y = ((center.y - radius).floor() as i32).max(0);
+        let max_y = ((center.y + radius).ceil() as i32).min(layer_height as i32 - 1);
+
+        // Paint each pixel in the brush area
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let pixel_x = x as f32;
+                let pixel_y = y as f32;
+
+                // Calculate distance from brush center
+                let dx = pixel_x - center.x;
+                let dy = pixel_y - center.y;
+                let distance = (dx * dx + dy * dy).sqrt();
+
+                if distance <= radius {
+                    // Calculate brush alpha based on distance and hardness
+                    let alpha = self.calculate_brush_alpha(distance, radius);
+
+                    if alpha > 0.0 {
+                        // Blend the brush color with the existing pixel
+                        self.blend_pixel_at(x as u32, y as u32, alpha, layer)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Calculate the alpha value for a pixel based on distance from brush center
+    fn calculate_brush_alpha(&self, distance: f32, radius: f32) -> f32 {
+        if distance >= radius {
+            return 0.0;
+        }
+
+        // Calculate normalized distance (0.0 at center, 1.0 at edge)
+        let normalized_distance = distance / radius;
+
+        // Apply hardness - hardness of 1.0 means hard edge, 0.0 means very soft
+        if self.brush_hardness >= 1.0 {
+            // Hard brush - full opacity within radius
+            1.0
+        } else if self.brush_hardness <= 0.0 {
+            // Very soft brush - gaussian-like falloff
+            let falloff = 1.0 - normalized_distance;
+            falloff * falloff
+        } else {
+            // Interpolate between hard and soft based on hardness
+            let hard_alpha = 1.0;
+            let soft_alpha = {
+                let falloff = 1.0 - normalized_distance;
+                falloff * falloff
+            };
+
+            // Mix hard and soft based on hardness value
+            hard_alpha * self.brush_hardness + soft_alpha * (1.0 - self.brush_hardness)
+        }
+    }
+
+    /// Blend brush color with existing pixel at the given coordinates
+    fn blend_pixel_at(
+        &self,
+        x: u32,
+        y: u32,
+        alpha: f32,
+        layer: &mut psoc_core::Layer,
+    ) -> ToolResult<()> {
+        // Get the existing pixel
+        let existing_pixel = layer
+            .get_pixel(x, y)
+            .unwrap_or(psoc_core::RgbaPixel::transparent());
+
+        // Create brush pixel with calculated alpha
+        let brush_alpha = (alpha * self.brush_color.a as f32 / 255.0 * 255.0) as u8;
+        let brush_pixel = psoc_core::RgbaPixel::new(
+            self.brush_color.r,
+            self.brush_color.g,
+            self.brush_color.b,
+            brush_alpha,
+        );
+
+        // Blend using normal blending mode (alpha compositing)
+        let blended_pixel = self.blend_normal(existing_pixel, brush_pixel);
+
+        // Set the blended pixel
+        layer.set_pixel(x, y, blended_pixel)?;
+
+        Ok(())
+    }
+
+    /// Normal blending mode (alpha compositing)
+    fn blend_normal(
+        &self,
+        base: psoc_core::RgbaPixel,
+        overlay: psoc_core::RgbaPixel,
+    ) -> psoc_core::RgbaPixel {
+        let base_alpha = base.a as f32 / 255.0;
+        let overlay_alpha = overlay.a as f32 / 255.0;
+
+        // Alpha compositing formula
+        let result_alpha = overlay_alpha + base_alpha * (1.0 - overlay_alpha);
+
+        if result_alpha == 0.0 {
+            return psoc_core::RgbaPixel::transparent();
+        }
+
+        let inv_result_alpha = 1.0 / result_alpha;
+
+        let result_r = ((overlay.r as f32 * overlay_alpha
+            + base.r as f32 * base_alpha * (1.0 - overlay_alpha))
+            * inv_result_alpha) as u8;
+        let result_g = ((overlay.g as f32 * overlay_alpha
+            + base.g as f32 * base_alpha * (1.0 - overlay_alpha))
+            * inv_result_alpha) as u8;
+        let result_b = ((overlay.b as f32 * overlay_alpha
+            + base.b as f32 * base_alpha * (1.0 - overlay_alpha))
+            * inv_result_alpha) as u8;
+        let result_a = (result_alpha * 255.0) as u8;
+
+        psoc_core::RgbaPixel::new(result_r, result_g, result_b, result_a)
     }
 }
 
@@ -482,5 +670,251 @@ impl Tool for MoveTool {
             _ => {}
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use psoc_core::{Document, Layer, Point, RgbaPixel};
+
+    #[test]
+    fn test_brush_tool_creation() {
+        let brush = BrushTool::new();
+
+        assert_eq!(brush.brush_size, 10.0);
+        assert_eq!(brush.brush_color, RgbaPixel::new(0, 0, 0, 255));
+        assert_eq!(brush.brush_hardness, 1.0);
+        assert!(!brush.is_painting);
+    }
+
+    #[test]
+    fn test_brush_tool_options() {
+        let brush = BrushTool::new();
+        let options = brush.options();
+
+        assert_eq!(options.len(), 3);
+
+        // Check size option
+        assert_eq!(options[0].name, "size");
+        assert_eq!(options[0].display_name, "Brush Size");
+        assert_eq!(options[0].default_value, ToolOptionValue::Float(10.0));
+
+        // Check hardness option
+        assert_eq!(options[1].name, "hardness");
+        assert_eq!(options[1].display_name, "Brush Hardness");
+        assert_eq!(options[1].default_value, ToolOptionValue::Float(1.0));
+
+        // Check color option
+        assert_eq!(options[2].name, "color");
+        assert_eq!(options[2].display_name, "Brush Color");
+        assert_eq!(
+            options[2].default_value,
+            ToolOptionValue::Color([0, 0, 0, 255])
+        );
+    }
+
+    #[test]
+    fn test_brush_tool_set_options() {
+        let mut brush = BrushTool::new();
+
+        // Test size option
+        brush
+            .set_option("size", ToolOptionValue::Float(20.0))
+            .unwrap();
+        assert_eq!(brush.brush_size, 20.0);
+
+        // Test hardness option
+        brush
+            .set_option("hardness", ToolOptionValue::Float(0.5))
+            .unwrap();
+        assert_eq!(brush.brush_hardness, 0.5);
+
+        // Test color option
+        brush
+            .set_option("color", ToolOptionValue::Color([255, 128, 64, 200]))
+            .unwrap();
+        assert_eq!(brush.brush_color, RgbaPixel::new(255, 128, 64, 200));
+
+        // Test clamping
+        brush
+            .set_option("size", ToolOptionValue::Float(150.0))
+            .unwrap();
+        assert_eq!(brush.brush_size, 100.0); // Should be clamped to max
+
+        brush
+            .set_option("hardness", ToolOptionValue::Float(-0.5))
+            .unwrap();
+        assert_eq!(brush.brush_hardness, 0.0); // Should be clamped to min
+    }
+
+    #[test]
+    fn test_brush_tool_get_options() {
+        let mut brush = BrushTool::new();
+        brush.brush_size = 25.0;
+        brush.brush_hardness = 0.7;
+        brush.brush_color = RgbaPixel::new(100, 150, 200, 180);
+
+        assert_eq!(brush.get_option("size"), Some(ToolOptionValue::Float(25.0)));
+        assert_eq!(
+            brush.get_option("hardness"),
+            Some(ToolOptionValue::Float(0.7))
+        );
+        assert_eq!(
+            brush.get_option("color"),
+            Some(ToolOptionValue::Color([100, 150, 200, 180]))
+        );
+        assert_eq!(brush.get_option("invalid"), None);
+    }
+
+    #[test]
+    fn test_brush_tool_event_handling() {
+        use super::super::tool_trait::{KeyModifiers, MouseButton, ToolEvent, ToolState};
+
+        let mut brush = BrushTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Add a layer to paint on
+        let layer = Layer::new_pixel("Test Layer".to_string(), 100, 100);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Test mouse pressed event
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(50.0, 50.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        brush
+            .handle_event(press_event, &mut document, &mut state)
+            .unwrap();
+        assert!(brush.is_painting);
+        assert!(state.is_active);
+        assert_eq!(state.last_position, Some(Point::new(50.0, 50.0)));
+        assert!(document.is_dirty);
+
+        // Test mouse dragged event
+        let drag_event = ToolEvent::MouseDragged {
+            position: Point::new(60.0, 60.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        brush
+            .handle_event(drag_event, &mut document, &mut state)
+            .unwrap();
+        assert!(brush.is_painting);
+        assert_eq!(state.last_position, Some(Point::new(60.0, 60.0)));
+
+        // Test mouse released event
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(60.0, 60.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        brush
+            .handle_event(release_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!brush.is_painting);
+        assert!(!state.is_active);
+    }
+
+    #[test]
+    fn test_brush_alpha_calculation() {
+        let brush = BrushTool::new();
+
+        // Test hard brush (hardness = 1.0)
+        assert_eq!(brush.calculate_brush_alpha(0.0, 10.0), 1.0); // Center
+        assert_eq!(brush.calculate_brush_alpha(5.0, 10.0), 1.0); // Within radius
+        assert_eq!(brush.calculate_brush_alpha(10.0, 10.0), 0.0); // At edge
+        assert_eq!(brush.calculate_brush_alpha(15.0, 10.0), 0.0); // Outside
+
+        // Test soft brush (hardness = 0.0)
+        let mut soft_brush = BrushTool::new();
+        soft_brush.brush_hardness = 0.0;
+        assert_eq!(soft_brush.calculate_brush_alpha(0.0, 10.0), 1.0); // Center
+        assert!(soft_brush.calculate_brush_alpha(5.0, 10.0) > 0.0); // Within radius
+        assert!(soft_brush.calculate_brush_alpha(5.0, 10.0) < 1.0); // But less than full
+        assert_eq!(soft_brush.calculate_brush_alpha(10.0, 10.0), 0.0); // At edge
+    }
+
+    #[test]
+    fn test_brush_normal_blending() {
+        let brush = BrushTool::new();
+
+        // Test blending with transparent background
+        let transparent = RgbaPixel::transparent();
+        let red = RgbaPixel::new(255, 0, 0, 255);
+        let result = brush.blend_normal(transparent, red);
+        assert_eq!(result, red);
+
+        // Test blending with opaque background
+        let blue = RgbaPixel::new(0, 0, 255, 255);
+        let semi_red = RgbaPixel::new(255, 0, 0, 128);
+        let result = brush.blend_normal(blue, semi_red);
+
+        // Result should be a mix of blue and red
+        assert!(result.r > 0);
+        assert!(result.b > 0);
+        assert_eq!(result.a, 255);
+    }
+
+    #[test]
+    fn test_brush_painting_on_layer() {
+        let mut brush = BrushTool::new();
+        brush.brush_size = 4.0; // Small brush for testing
+        brush.brush_color = RgbaPixel::new(255, 0, 0, 255); // Red
+
+        let mut document = Document::new("Test".to_string(), 20, 20);
+        let layer = Layer::new_pixel("Test Layer".to_string(), 20, 20);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Paint at center
+        let center = Point::new(10.0, 10.0);
+        brush.paint_at_position(center, &mut document).unwrap();
+
+        // Check that pixels were painted
+        let active_layer = document.active_layer().unwrap();
+        let center_pixel = active_layer.get_pixel(10, 10).unwrap();
+
+        // Center pixel should be red (or close to it due to blending)
+        assert!(center_pixel.r > 0);
+        assert!(center_pixel.a > 0);
+    }
+
+    #[test]
+    fn test_brush_stroke_painting() {
+        let mut brush = BrushTool::new();
+        brush.brush_size = 2.0;
+        brush.brush_color = RgbaPixel::new(0, 255, 0, 255); // Green
+
+        let mut document = Document::new("Test".to_string(), 50, 50);
+        let layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Paint a stroke from (10, 10) to (20, 20)
+        let from = Point::new(10.0, 10.0);
+        let to = Point::new(20.0, 20.0);
+        brush.paint_stroke(from, to, &mut document).unwrap();
+
+        // Check that pixels along the stroke were painted
+        let active_layer = document.active_layer().unwrap();
+
+        // Start point should be painted
+        let start_pixel = active_layer.get_pixel(10, 10).unwrap();
+        assert!(start_pixel.g > 0);
+
+        // End point should be painted
+        let end_pixel = active_layer.get_pixel(20, 20).unwrap();
+        assert!(end_pixel.g > 0);
+
+        // Some point in between should be painted
+        let mid_pixel = active_layer.get_pixel(15, 15).unwrap();
+        assert!(mid_pixel.g > 0);
     }
 }
