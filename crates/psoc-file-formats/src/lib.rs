@@ -229,13 +229,12 @@ impl FileIO {
             .ok_or_else(|| anyhow::anyhow!("Unsupported file format: {}", path.display()))?;
 
         let document = match format {
-            FileFormat::Project => {
-                project::load_project(path)?
-            }
+            FileFormat::Project => project::load_project(path)?,
             FileFormat::Png | FileFormat::Jpeg => {
                 // Load as image and convert to document
                 let image = ImageIO::load_image(path)?;
-                let title = path.file_stem()
+                let title = path
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("Untitled")
                     .to_string();

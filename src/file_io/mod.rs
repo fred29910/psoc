@@ -102,7 +102,11 @@ impl FileManager {
 
     /// Export a document as a flattened image
     #[instrument(skip_all, fields(path = %path.as_ref().display()))]
-    pub async fn export_flattened<P: AsRef<Path>>(&self, document: &Document, path: P) -> Result<()> {
+    pub async fn export_flattened<P: AsRef<Path>>(
+        &self,
+        document: &Document,
+        path: P,
+    ) -> Result<()> {
         let path = path.as_ref();
         info!("Exporting flattened document to: {}", path.display());
 

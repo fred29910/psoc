@@ -46,7 +46,7 @@ impl ProjectFile {
     /// Create a new project file from a document
     pub fn new(document: Document) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
-        
+
         Self {
             version: PROJECT_FORMAT_VERSION.to_string(),
             metadata: ProjectMetadata {
@@ -178,21 +178,21 @@ mod tests {
     fn test_save_and_load_project() -> Result<()> {
         // Create a test document with layers
         let mut document = Document::new("Test Project".to_string(), 200, 150);
-        
+
         let mut layer1 = Layer::new_pixel("Background".to_string(), 200, 150);
         layer1.fill(RgbaPixel::new(255, 0, 0, 255)); // Red background
-        
+
         let mut layer2 = Layer::new_pixel("Foreground".to_string(), 100, 75);
         layer2.fill(RgbaPixel::new(0, 255, 0, 128)); // Semi-transparent green
         layer2.opacity = 0.8;
-        
+
         document.add_layer(layer1);
         document.add_layer(layer2);
 
         // Save to temporary file
         let temp_file = NamedTempFile::new()?;
         let temp_path = temp_file.path().with_extension("psoc");
-        
+
         save_project(&document, &temp_path)?;
 
         // Load back and verify
@@ -230,7 +230,7 @@ mod tests {
         // Save and load
         let temp_file = NamedTempFile::new()?;
         let temp_path = temp_file.path().with_extension("psoc");
-        
+
         save_project(&document, &temp_path)?;
         let loaded_document = load_project(&temp_path)?;
 

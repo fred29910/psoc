@@ -96,7 +96,8 @@ impl ToolManager {
         if !self.tools.contains_key(&tool_type) {
             return Err(ToolManagerError::ToolNotFound {
                 tool_type: format!("{:?}", tool_type),
-            }.into());
+            }
+            .into());
         }
 
         // Activate the new tool
@@ -127,11 +128,7 @@ impl ToolManager {
     }
 
     /// Handle a tool event
-    pub fn handle_event(
-        &mut self,
-        event: ToolEvent,
-        document: &mut Document,
-    ) -> ToolResult<()> {
+    pub fn handle_event(&mut self, event: ToolEvent, document: &mut Document) -> ToolResult<()> {
         if let Some(tool_type) = self.active_tool_type {
             if let Some(tool) = self.tools.get_mut(&tool_type) {
                 // Check if the tool can handle this event
@@ -227,11 +224,11 @@ mod tests {
     #[test]
     fn test_tool_switching() {
         let mut manager = ToolManager::new();
-        
+
         // Switch to brush tool
         assert!(manager.set_active_tool(ToolType::Brush).is_ok());
         assert_eq!(manager.active_tool_type(), Some(ToolType::Brush));
-        
+
         // Switch to eraser tool
         assert!(manager.set_active_tool(ToolType::Eraser).is_ok());
         assert_eq!(manager.active_tool_type(), Some(ToolType::Eraser));
@@ -241,13 +238,13 @@ mod tests {
     fn test_tool_history() {
         let mut manager = ToolManager::new();
         let initial_history_len = manager.tool_history().len();
-        
+
         manager.set_active_tool(ToolType::Brush).unwrap();
         assert_eq!(manager.tool_history().len(), initial_history_len + 1);
-        
+
         manager.set_active_tool(ToolType::Eraser).unwrap();
         assert_eq!(manager.tool_history().len(), initial_history_len + 2);
-        
+
         manager.clear_history();
         assert_eq!(manager.tool_history().len(), 0);
     }
@@ -255,10 +252,54 @@ mod tests {
     #[test]
     fn test_tool_info() {
         let manager = ToolManager::new();
-        
+
         let info = manager.tool_info(ToolType::Select).unwrap();
         assert_eq!(info.tool_type, ToolType::Select);
         assert!(!info.name.is_empty());
         assert!(!info.description.is_empty());
+    }
+
+    #[test]
+    fn test_selection_tool_events() {
+        use super::super::tool_trait::{KeyModifiers, MouseButton, ToolEvent};
+        use psoc_core::{Document, Point};
+
+        let mut manager = ToolManager::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Switch to selection tool
+        manager.set_active_tool(ToolType::Select).unwrap();
+
+        // Simulate selection creation
+        let start_event = ToolEvent::MousePressed {
+            position: Point::new(10.0, 20.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        let drag_event = ToolEvent::MouseDragged {
+            position: Point::new(60.0, 50.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(60.0, 50.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        // Process events
+        manager.handle_event(start_event, &mut document).unwrap();
+        manager.handle_event(drag_event, &mut document).unwrap();
+        manager.handle_event(release_event, &mut document).unwrap();
+
+        // Check that selection was created
+        assert!(document.has_selection());
+        let bounds = document.selection_bounds().unwrap();
+        assert_eq!(bounds.x, 10.0);
+        assert_eq!(bounds.y, 20.0);
+        assert_eq!(bounds.width, 50.0);
+        assert_eq!(bounds.height, 30.0);
     }
 }

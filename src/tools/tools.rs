@@ -6,10 +6,9 @@
 use tracing::debug;
 
 use super::tool_trait::{
-    Tool, ToolCursor, ToolEvent, ToolOption, ToolOptionType, ToolOptionValue, ToolResult,
-    ToolState,
+    Tool, ToolCursor, ToolEvent, ToolOption, ToolOptionType, ToolOptionValue, ToolResult, ToolState,
 };
-use psoc_core::{Document, Point, RgbaPixel};
+use psoc_core::{Document, Point, RgbaPixel, Selection};
 use serde::{Deserialize, Serialize};
 
 /// Tool types available in the application
@@ -74,7 +73,7 @@ impl Tool for SelectTool {
     fn handle_event(
         &mut self,
         event: ToolEvent,
-        _document: &mut Document,
+        document: &mut Document,
         state: &mut ToolState,
     ) -> ToolResult<()> {
         match event {
@@ -89,7 +88,12 @@ impl Tool for SelectTool {
                 if self.is_selecting {
                     debug!("Selection dragged to: {:?}", position);
                     state.last_position = Some(position);
-                    // TODO: Update selection rectangle
+
+                    // Update selection rectangle in real-time
+                    if let Some(start) = self.selection_start {
+                        let selection = Selection::rectangle_from_points(start, position);
+                        document.set_selection(selection);
+                    }
                 }
             }
             ToolEvent::MouseReleased { position, .. } => {
@@ -97,7 +101,15 @@ impl Tool for SelectTool {
                     debug!("Selection completed at: {:?}", position);
                     self.is_selecting = false;
                     state.is_active = false;
-                    // TODO: Finalize selection
+
+                    // Finalize selection
+                    if let Some(start) = self.selection_start {
+                        let selection = Selection::rectangle_from_points(start, position);
+                        debug!("Created selection: {}", selection);
+                        document.set_selection(selection);
+                    }
+
+                    self.selection_start = None;
                 }
             }
             _ => {}
@@ -162,19 +174,19 @@ impl Tool for BrushTool {
                 self.is_painting = true;
                 state.is_active = true;
                 state.last_position = Some(position);
-                
+
                 // Start painting at this position
                 self.paint_at_position(position, document)?;
             }
             ToolEvent::MouseDragged { position, .. } => {
                 if self.is_painting {
                     debug!("Brush stroke continued to: {:?}", position);
-                    
+
                     // Paint from last position to current position
                     if let Some(last_pos) = state.last_position {
                         self.paint_stroke(last_pos, position, document)?;
                     }
-                    
+
                     state.last_position = Some(position);
                 }
             }
@@ -197,7 +209,10 @@ impl Tool for BrushTool {
                 name: "size".to_string(),
                 display_name: "Brush Size".to_string(),
                 description: "Size of the brush in pixels".to_string(),
-                option_type: ToolOptionType::Float { min: 1.0, max: 100.0 },
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 100.0,
+                },
                 default_value: ToolOptionValue::Float(self.brush_size),
             },
             ToolOption {
@@ -239,21 +254,24 @@ impl Tool for BrushTool {
 impl BrushTool {
     fn paint_at_position(&self, position: Point, document: &mut Document) -> ToolResult<()> {
         // TODO: Implement actual painting logic
-        debug!("Painting at position: {:?} with size: {}", position, self.brush_size);
-        
+        debug!(
+            "Painting at position: {:?} with size: {}",
+            position, self.brush_size
+        );
+
         // For now, just mark the document as dirty
         document.mark_dirty();
-        
+
         Ok(())
     }
 
     fn paint_stroke(&self, from: Point, to: Point, document: &mut Document) -> ToolResult<()> {
         // TODO: Implement stroke painting logic
         debug!("Painting stroke from {:?} to {:?}", from, to);
-        
+
         // For now, just mark the document as dirty
         document.mark_dirty();
-        
+
         Ok(())
     }
 }
@@ -311,19 +329,19 @@ impl Tool for EraserTool {
                 self.is_erasing = true;
                 state.is_active = true;
                 state.last_position = Some(position);
-                
+
                 // Start erasing at this position
                 self.erase_at_position(position, document)?;
             }
             ToolEvent::MouseDragged { position, .. } => {
                 if self.is_erasing {
                     debug!("Eraser continued to: {:?}", position);
-                    
+
                     // Erase from last position to current position
                     if let Some(last_pos) = state.last_position {
                         self.erase_stroke(last_pos, position, document)?;
                     }
-                    
+
                     state.last_position = Some(position);
                 }
             }
@@ -345,7 +363,10 @@ impl Tool for EraserTool {
                 name: "size".to_string(),
                 display_name: "Eraser Size".to_string(),
                 description: "Size of the eraser in pixels".to_string(),
-                option_type: ToolOptionType::Float { min: 1.0, max: 100.0 },
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 100.0,
+                },
                 default_value: ToolOptionValue::Float(self.eraser_size),
             },
             ToolOption {
@@ -362,21 +383,24 @@ impl Tool for EraserTool {
 impl EraserTool {
     fn erase_at_position(&self, position: Point, document: &mut Document) -> ToolResult<()> {
         // TODO: Implement actual erasing logic
-        debug!("Erasing at position: {:?} with size: {}", position, self.eraser_size);
-        
+        debug!(
+            "Erasing at position: {:?} with size: {}",
+            position, self.eraser_size
+        );
+
         // For now, just mark the document as dirty
         document.mark_dirty();
-        
+
         Ok(())
     }
 
     fn erase_stroke(&self, from: Point, to: Point, document: &mut Document) -> ToolResult<()> {
         // TODO: Implement stroke erasing logic
         debug!("Erasing stroke from {:?} to {:?}", from, to);
-        
+
         // For now, just mark the document as dirty
         document.mark_dirty();
-        
+
         Ok(())
     }
 }
@@ -440,7 +464,7 @@ impl Tool for MoveTool {
                         let delta_x = position.x - start_pos.x;
                         let delta_y = position.y - start_pos.y;
                         debug!("Moving by delta: ({}, {})", delta_x, delta_y);
-                        
+
                         // TODO: Apply movement to active layer
                         document.mark_dirty();
                     }

@@ -3,6 +3,9 @@
 use crate::{utils::logging::LogConfig, Result};
 use tracing::{debug, error, info, instrument, warn};
 
+#[cfg(not(feature = "gui"))]
+use crate::PsocError;
+
 /// Main application structure
 pub struct Application {
     /// Application configuration
@@ -174,6 +177,7 @@ impl Application {
         }
 
         // Graceful shutdown
+        #[cfg(feature = "gui")]
         self.shutdown()?;
         Ok(())
     }

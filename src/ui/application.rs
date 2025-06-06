@@ -35,8 +35,6 @@ pub struct PsocApp {
     tool_manager: ToolManager,
 }
 
-
-
 /// Application state
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -459,7 +457,10 @@ impl PsocApp {
 impl PsocApp {
     /// Handle canvas-specific messages
     fn handle_canvas_message(&mut self, message: CanvasMessage) {
-        use crate::tools::{ToolEvent, tool_trait::{MouseButton, KeyModifiers}};
+        use crate::tools::{
+            tool_trait::{KeyModifiers, MouseButton},
+            ToolEvent,
+        };
         use psoc_core::Point;
 
         match message {

@@ -4,9 +4,10 @@
 //! including document metadata, layer management, and document operations.
 
 use crate::color::ColorSpace;
-use crate::geometry::{Rect, Size};
+use crate::geometry::{Point, Rect, Size};
 use crate::layer::Layer;
 use crate::pixel::{PixelData, RgbaPixel};
+use crate::selection::Selection;
 use anyhow::{Context, Result};
 use image::{DynamicImage, GenericImageView};
 use serde::{Deserialize, Serialize};
@@ -162,6 +163,8 @@ pub struct Document {
     pub active_layer_index: Option<usize>,
     /// Document canvas bounds
     pub canvas_bounds: Rect,
+    /// Current selection
+    pub selection: Selection,
     /// Whether document has unsaved changes
     pub is_dirty: bool,
     /// File path (if document was loaded from or saved to a file)
@@ -187,6 +190,7 @@ impl Document {
             layers: Vec::new(),
             active_layer_index: None,
             canvas_bounds,
+            selection: Selection::default(),
             is_dirty: false,
             file_path: None,
         }
@@ -489,6 +493,38 @@ impl Document {
         self.insert_layer(index + 1, layer)?;
         Ok(())
     }
+
+    /// Set the current selection
+    pub fn set_selection(&mut self, selection: Selection) {
+        self.selection = selection;
+        self.mark_dirty();
+    }
+
+    /// Get the current selection
+    pub fn get_selection(&self) -> &Selection {
+        &self.selection
+    }
+
+    /// Clear the current selection (select all)
+    pub fn clear_selection(&mut self) {
+        self.selection = Selection::None;
+        self.mark_dirty();
+    }
+
+    /// Check if there is an active selection
+    pub fn has_selection(&self) -> bool {
+        !self.selection.is_select_all()
+    }
+
+    /// Check if a point is within the current selection
+    pub fn is_point_selected(&self, point: Point) -> bool {
+        self.selection.contains_point(point)
+    }
+
+    /// Get the bounds of the current selection
+    pub fn selection_bounds(&self) -> Option<Rect> {
+        self.selection.bounds()
+    }
 }
 
 #[cfg(test)]
@@ -610,5 +646,38 @@ mod tests {
         for layer in &doc.layers {
             assert_eq!(layer.blend_mode, BlendMode::Normal);
         }
+    }
+
+    #[test]
+    fn test_document_selection_management() {
+        let mut doc = Document::new("Test".to_string(), 100, 100);
+
+        // Initially no selection (select all)
+        assert!(doc.get_selection().is_select_all());
+        assert!(!doc.has_selection());
+
+        // Set a rectangular selection
+        let selection = Selection::rectangle(10.0, 20.0, 50.0, 30.0);
+        doc.set_selection(selection.clone());
+
+        assert!(!doc.get_selection().is_select_all());
+        assert!(doc.has_selection());
+        assert!(doc.is_dirty);
+
+        // Check selection bounds
+        let bounds = doc.selection_bounds().unwrap();
+        assert_eq!(bounds.x, 10.0);
+        assert_eq!(bounds.y, 20.0);
+        assert_eq!(bounds.width, 50.0);
+        assert_eq!(bounds.height, 30.0);
+
+        // Test point selection
+        assert!(doc.is_point_selected(Point::new(30.0, 35.0))); // Inside
+        assert!(!doc.is_point_selected(Point::new(5.0, 35.0))); // Outside
+
+        // Clear selection
+        doc.clear_selection();
+        assert!(doc.get_selection().is_select_all());
+        assert!(!doc.has_selection());
     }
 }

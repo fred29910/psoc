@@ -117,15 +117,9 @@ pub enum ToolEvent {
         modifiers: KeyModifiers,
     },
     /// Key pressed
-    KeyPressed {
-        key: Key,
-        modifiers: KeyModifiers,
-    },
+    KeyPressed { key: Key, modifiers: KeyModifiers },
     /// Key released
-    KeyReleased {
-        key: Key,
-        modifiers: KeyModifiers,
-    },
+    KeyReleased { key: Key, modifiers: KeyModifiers },
     /// Tool-specific custom event
     Custom(String),
 }
@@ -297,7 +291,9 @@ mod tests {
         };
 
         match event {
-            ToolEvent::MousePressed { position, button, .. } => {
+            ToolEvent::MousePressed {
+                position, button, ..
+            } => {
                 assert_eq!(position.x, 10.0);
                 assert_eq!(position.y, 20.0);
                 assert_eq!(button, MouseButton::Left);

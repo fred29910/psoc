@@ -1,7 +1,7 @@
 //! Integration tests for P2.3 Layer Blending and Rendering
 
-use psoc::core::{Document, Layer, RgbaPixel, Point, BlendMode};
-use psoc::rendering::{RenderEngine, AppRenderer};
+use psoc::core::{BlendMode, Document, Layer, Point, RgbaPixel};
+use psoc::rendering::{AppRenderer, RenderEngine};
 
 #[test]
 fn test_render_engine_creation() {
@@ -76,9 +76,21 @@ fn test_blend_modes_rendering() {
     let pixel = pixel_data.get_pixel(50, 50).unwrap();
     // Multiply of blue (0,0,255) and red (255,0,0) should be (0,0,0)
     // Allow for small rounding errors in the blending calculation
-    assert!(pixel.r <= 1, "Red channel should be 0 or very close, got {}", pixel.r);
-    assert!(pixel.g <= 1, "Green channel should be 0 or very close, got {}", pixel.g);
-    assert!(pixel.b <= 1, "Blue channel should be 0 or very close, got {}", pixel.b);
+    assert!(
+        pixel.r <= 1,
+        "Red channel should be 0 or very close, got {}",
+        pixel.r
+    );
+    assert!(
+        pixel.g <= 1,
+        "Green channel should be 0 or very close, got {}",
+        pixel.g
+    );
+    assert!(
+        pixel.b <= 1,
+        "Blue channel should be 0 or very close, got {}",
+        pixel.b
+    );
 }
 
 #[test]

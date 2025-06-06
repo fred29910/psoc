@@ -274,7 +274,9 @@ mod tests {
 
         // Export as flattened image
         let file_manager = FileManager::new();
-        file_manager.export_flattened(&document, &export_path).await?;
+        file_manager
+            .export_flattened(&document, &export_path)
+            .await?;
 
         // Verify file exists
         assert!(export_path.exists());
@@ -317,7 +319,10 @@ mod tests {
 
         // Verify all properties are preserved
         assert_eq!(loaded_document.layers.len(), 3);
-        assert_eq!(loaded_document.metadata.description, document.metadata.description);
+        assert_eq!(
+            loaded_document.metadata.description,
+            document.metadata.description
+        );
 
         for (i, layer) in loaded_document.layers.iter().enumerate() {
             assert_eq!(layer.name, format!("Layer {}", i + 1));

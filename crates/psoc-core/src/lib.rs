@@ -11,6 +11,7 @@ pub mod layer;
 pub mod math;
 pub mod pixel;
 pub mod rendering;
+pub mod selection;
 
 // Re-export commonly used types
 pub use color::*;
@@ -20,3 +21,4 @@ pub use layer::*;
 pub use math::*;
 pub use pixel::*;
 pub use rendering::*;
+pub use selection::*;

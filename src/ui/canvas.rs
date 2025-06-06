@@ -288,6 +288,8 @@ impl canvas::Program<Message> for ImageCanvas {
         // Draw document or image if available
         if let Some(ref document) = self.document {
             self.draw_document(&mut frame, bounds, document);
+            // Draw selection overlay
+            self.draw_selection(&mut frame, bounds, document);
         } else if let Some(ref image_data) = self.image_data {
             self.draw_image(&mut frame, bounds, image_data);
         } else {
@@ -630,6 +632,97 @@ impl ImageCanvas {
             Size::new(6.0, 6.0),
             Color::from_rgb(0.0, 0.5, 1.0),
         );
+    }
+
+    /// Draw selection overlay
+    fn draw_selection(&self, frame: &mut Frame, bounds: Rectangle, document: &Document) {
+        // Only draw selection if there's an active selection
+        if document.has_selection() {
+            if let Some(selection_bounds) = document.selection_bounds() {
+                // Transform selection coordinates to canvas coordinates
+                let doc_width = document.size.width * self.state.zoom;
+                let doc_height = document.size.height * self.state.zoom;
+
+                let doc_x = (bounds.width - doc_width) / 2.0 + self.state.pan_offset.x;
+                let doc_y = (bounds.height - doc_height) / 2.0 + self.state.pan_offset.y;
+
+                // Convert selection bounds to canvas coordinates
+                let sel_x = doc_x + selection_bounds.x * self.state.zoom;
+                let sel_y = doc_y + selection_bounds.y * self.state.zoom;
+                let sel_width = selection_bounds.width * self.state.zoom;
+                let sel_height = selection_bounds.height * self.state.zoom;
+
+                // Draw selection border with marching ants effect
+                self.draw_marching_ants(frame, sel_x, sel_y, sel_width, sel_height);
+
+                // Draw selection handles at corners
+                self.draw_selection_handles(frame, sel_x, sel_y, sel_width, sel_height);
+            }
+        }
+    }
+
+    /// Draw marching ants selection border
+    fn draw_marching_ants(&self, frame: &mut Frame, x: f32, y: f32, width: f32, height: f32) {
+        let stroke_width = 1.0;
+        let _dash_length = 8.0;
+
+        // Create selection rectangle path
+        let selection_rect = Path::rectangle(Point::new(x, y), Size::new(width, height));
+
+        // Draw outer border (white)
+        frame.stroke(
+            &selection_rect,
+            Stroke::default()
+                .with_width(stroke_width + 2.0)
+                .with_color(Color::WHITE),
+        );
+
+        // Draw inner border (black)
+        // Note: iced canvas doesn't support line dash in current version
+        frame.stroke(
+            &selection_rect,
+            Stroke::default()
+                .with_width(stroke_width)
+                .with_color(Color::BLACK),
+        );
+    }
+
+    /// Draw selection handles at corners and edges
+    fn draw_selection_handles(&self, frame: &mut Frame, x: f32, y: f32, width: f32, height: f32) {
+        let handle_size = 6.0;
+        let half_handle = handle_size / 2.0;
+
+        // Define handle positions
+        let handles = [
+            // Corners
+            (x - half_handle, y - half_handle),         // Top-left
+            (x + width - half_handle, y - half_handle), // Top-right
+            (x + width - half_handle, y + height - half_handle), // Bottom-right
+            (x - half_handle, y + height - half_handle), // Bottom-left
+            // Edges
+            (x + width / 2.0 - half_handle, y - half_handle), // Top-center
+            (x + width - half_handle, y + height / 2.0 - half_handle), // Right-center
+            (x + width / 2.0 - half_handle, y + height - half_handle), // Bottom-center
+            (x - half_handle, y + height / 2.0 - half_handle), // Left-center
+        ];
+
+        for (handle_x, handle_y) in handles.iter() {
+            // Draw handle background (white)
+            frame.fill_rectangle(
+                Point::new(*handle_x, *handle_y),
+                Size::new(handle_size, handle_size),
+                Color::WHITE,
+            );
+
+            // Draw handle border (black)
+            frame.stroke(
+                &Path::rectangle(
+                    Point::new(*handle_x, *handle_y),
+                    Size::new(handle_size, handle_size),
+                ),
+                Stroke::default().with_width(1.0).with_color(Color::BLACK),
+            );
+        }
     }
 }
 

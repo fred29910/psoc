@@ -19,9 +19,9 @@ pub mod plugins;
 // Re-export commonly used types
 pub use app::{AppConfig, Application};
 pub use core::{Document, Layer};
+pub use tools::{Tool, ToolManager, ToolType};
 #[cfg(feature = "gui")]
 pub use ui::{AppState, ImageCanvas, ImageData, Message, PsocApp};
-pub use tools::{Tool, ToolManager, ToolType};
 pub use utils::{
     error::{ContextResult, PsocError, Result},
     logging::{init_default_logging, init_env_logging, LogConfig, LogFormat, LogLevel},
