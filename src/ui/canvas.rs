@@ -7,7 +7,7 @@ use iced::{
 };
 use tracing::{debug, trace};
 
-use crate::ui::application::{Message, CanvasMessage};
+use crate::ui::application::{CanvasMessage, Message};
 
 /// Interactive canvas for image editing
 #[derive(Debug)]
@@ -274,7 +274,9 @@ impl canvas::Program<Message> for ImageCanvas {
         // Draw canvas border
         frame.stroke(
             &Path::rectangle(Point::ORIGIN, bounds.size()),
-            Stroke::default().with_width(1.0).with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.3)),
+            Stroke::default()
+                .with_width(1.0)
+                .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.3)),
         );
 
         vec![frame.into_geometry()]
@@ -339,7 +341,9 @@ impl ImageCanvas {
                 Point::new(image_x, image_y),
                 Size::new(image_width, image_height),
             ),
-            Stroke::default().with_width(2.0).with_color(Color::from_rgb(0.3, 0.3, 0.3)),
+            Stroke::default()
+                .with_width(2.0)
+                .with_color(Color::from_rgb(0.3, 0.3, 0.3)),
         );
 
         // Draw a pattern to indicate this is an image
@@ -350,10 +354,15 @@ impl ImageCanvas {
         while x < image_x + image_width {
             let mut y = image_y;
             while y < image_y + image_height {
-                if ((x - image_x) / pattern_size) as i32 % 2 == ((y - image_y) / pattern_size) as i32 % 2 {
+                if ((x - image_x) / pattern_size) as i32 % 2
+                    == ((y - image_y) / pattern_size) as i32 % 2
+                {
                     frame.fill_rectangle(
                         Point::new(x, y),
-                        Size::new(pattern_size.min(image_x + image_width - x), pattern_size.min(image_y + image_height - y)),
+                        Size::new(
+                            pattern_size.min(image_x + image_width - x),
+                            pattern_size.min(image_y + image_height - y),
+                        ),
                         pattern_color,
                     );
                 }
