@@ -41,12 +41,12 @@
     *   [ x ] 初始化Git仓库，制定分支策略 (e.g., Gitflow)。
     *   [ x ] 搭建基础CI/CD流程 (e.g., GitHub Actions for automated builds and tests)。
 *   **P0.4: 项目结构设计**
-    *   [ ] `Cargo.toml` 初始化，添加基础依赖。
-    *   [ ] 定义初步的模块结构 (e.g., `core_logic`, `ui`, `rendering`, `file_io`, `image_processing`).
+    *   [x] `Cargo.toml` 初始化，添加基础依赖。
+    *   [x] 定义初步的模块结构 (e.g., `core_logic`, `ui`, `rendering`, `file_io`, `image_processing`).
 *   **P0.5: 制定编码规范与代码审查流程**
-    *   [ ] 统一代码格式化 (`rustfmt`).
-    *   [ ] 静态分析工具 (`clippy`).
-    *   [ ] 制定代码审查清单和流程。
+    *   [x] 统一代码格式化 (`rustfmt`).
+    *   [x] 静态分析工具 (`clippy`).
+    *   [x] 制定代码审查清单和流程。
 *   **P0.6: 基础错误处理和日志系统**
     *   [ ] 选择错误处理库 (e.g., `anyhow`, `thiserror`).
     *   [ ] 集成日志库 (e.g., `log`, `tracing` with `env_logger` or `tracing-subscriber`).
