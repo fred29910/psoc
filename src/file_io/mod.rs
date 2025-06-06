@@ -5,7 +5,7 @@
 
 use std::path::Path;
 use anyhow::Result;
-use image::DynamicImage;
+use psoc_file_formats::DynamicImage;
 use tracing::{debug, info, instrument};
 
 pub mod import;
@@ -19,6 +19,7 @@ pub use import::*;
 pub use export::*;
 
 /// File I/O manager for the application
+#[derive(Debug, Clone)]
 pub struct FileManager;
 
 impl FileManager {

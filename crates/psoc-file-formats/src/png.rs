@@ -4,12 +4,11 @@
 
 use std::path::Path;
 use anyhow::{Context, Result};
-use image::{DynamicImage, ImageFormat};
 use tracing::{debug, instrument};
 
 /// Load a PNG image from a file path
 #[instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub fn load_png<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
+pub fn load_png<P: AsRef<Path>>(path: P) -> Result<image::DynamicImage> {
     let path = path.as_ref();
     debug!("Loading PNG image from: {}", path.display());
 
@@ -26,12 +25,12 @@ pub fn load_png<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
 
 /// Save a PNG image to a file path
 #[instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub fn save_png<P: AsRef<Path>>(image: &DynamicImage, path: P) -> Result<()> {
+pub fn save_png<P: AsRef<Path>>(image: &image::DynamicImage, path: P) -> Result<()> {
     let path = path.as_ref();
     debug!("Saving PNG image to: {}", path.display());
 
     image
-        .save_with_format(path, ImageFormat::Png)
+        .save_with_format(path, image::ImageFormat::Png)
         .with_context(|| format!("Failed to save PNG image to: {}", path.display()))?;
 
     Ok(())
@@ -58,9 +57,9 @@ impl Default for PngOptions {
 /// Save a PNG image with specific options
 #[instrument(skip_all, fields(path = %path.as_ref().display()))]
 pub fn save_png_with_options<P: AsRef<Path>>(
-    image: &DynamicImage,
+    image: &image::DynamicImage,
     path: P,
-    options: &PngOptions,
+    _options: &PngOptions,
 ) -> Result<()> {
     let path = path.as_ref();
     debug!("Saving PNG image with options to: {}", path.display());
@@ -84,7 +83,7 @@ mod tests {
 
         // Create a simple test image
         let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(100, 100);
-        let dynamic_img = DynamicImage::ImageRgb8(img);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
 
         // Save the image
         save_png(&dynamic_img, &file_path)?;
@@ -116,7 +115,7 @@ mod tests {
 
         // Create a simple test image
         let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(50, 50);
-        let dynamic_img = DynamicImage::ImageRgb8(img);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
 
         let options = PngOptions {
             compression_level: 9,

@@ -1,6 +1,6 @@
 //! Application framework module
 
-use crate::{utils::logging::LogConfig, Result, PsocError};
+use crate::{utils::logging::LogConfig, Result};
 use tracing::{debug, error, info, instrument, warn};
 
 /// Main application structure

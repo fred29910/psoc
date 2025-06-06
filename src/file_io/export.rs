@@ -4,7 +4,7 @@
 
 use std::path::Path;
 use anyhow::{Context, Result};
-use image::DynamicImage;
+use psoc_file_formats::DynamicImage;
 use tracing::{debug, info, instrument, warn};
 
 /// Export an image to a file path

@@ -5,6 +5,7 @@ pub mod geometry;
 pub mod math;
 
 // Re-export commonly used types
-pub use color::*;
-pub use geometry::*;
-pub use math::*;
+// TODO: Uncomment when modules have actual content
+// pub use color::*;
+// pub use geometry::*;
+// pub use math::*;

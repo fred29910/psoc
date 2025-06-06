@@ -5,8 +5,7 @@
 
 use std::path::Path;
 use anyhow::Result;
-use image::{DynamicImage, ImageFormat};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, info, instrument};
 
 pub mod png;
 pub mod jpeg;
@@ -14,6 +13,9 @@ pub mod jpeg;
 // Re-export commonly used types
 pub use png::*;
 pub use jpeg::*;
+
+// Re-export image types for convenience
+pub use image::{DynamicImage, ImageFormat};
 
 /// Supported image formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,10 +43,10 @@ impl SupportedFormat {
     }
 
     /// Get the image format for the image crate
-    pub fn to_image_format(self) -> ImageFormat {
+    pub fn to_image_format(self) -> image::ImageFormat {
         match self {
-            Self::Png => ImageFormat::Png,
-            Self::Jpeg => ImageFormat::Jpeg,
+            Self::Png => image::ImageFormat::Png,
+            Self::Jpeg => image::ImageFormat::Jpeg,
         }
     }
 
@@ -71,7 +73,7 @@ pub struct ImageIO;
 impl ImageIO {
     /// Load an image from a file path
     #[instrument(skip_all, fields(path = %path.as_ref().display()))]
-    pub fn load_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
+    pub fn load_image<P: AsRef<Path>>(path: P) -> Result<image::DynamicImage> {
         let path = path.as_ref();
         debug!("Loading image from: {}", path.display());
 
@@ -95,7 +97,7 @@ impl ImageIO {
 
     /// Save an image to a file path
     #[instrument(skip_all, fields(path = %path.as_ref().display()))]
-    pub fn save_image<P: AsRef<Path>>(image: &DynamicImage, path: P) -> Result<()> {
+    pub fn save_image<P: AsRef<Path>>(image: &image::DynamicImage, path: P) -> Result<()> {
         let path = path.as_ref();
         debug!("Saving image to: {}", path.display());
 

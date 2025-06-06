@@ -294,8 +294,8 @@ pub fn tool_button<Message: Clone + 'static>(
     .on_press(message);
 
     if is_active {
-        button.style(iced::theme::Button::Primary)
+        button
     } else {
-        button.style(iced::theme::Button::Secondary)
+        button
     }
 }

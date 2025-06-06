@@ -27,9 +27,9 @@ pub fn toolbar<Message: Clone + 'static>(
             container(
                 row(tool_buttons)
                     .spacing(8.0)
-                    .align_items(iced::Alignment::Center)
+                    .align_y(iced::alignment::Vertical::Center)
             )
-            .style(iced::theme::Container::Box)
+            
             .padding(8.0),
 
             // Separator
@@ -43,15 +43,15 @@ pub fn toolbar<Message: Clone + 'static>(
                     simple_icon_button(Icon::ZoomIn, zoom_in),
                 ]
                 .spacing(8.0)
-                .align_items(iced::Alignment::Center)
+                .align_y(iced::alignment::Vertical::Center)
             )
-            .style(iced::theme::Container::Box)
+            
             .padding(8.0),
         ]
         .spacing(16.0)
-        .align_items(iced::Alignment::Center)
+        .align_y(iced::alignment::Vertical::Center)
     )
-    .style(iced::theme::Container::Box)
+    
     .padding(16.0)
     .width(Length::Fill)
     .into()
@@ -77,7 +77,7 @@ pub fn menu_bar<Message: Clone + 'static>(
                 ]
                 .spacing(8.0)
             )
-            .style(iced::theme::Container::Box)
+            
             .padding(8.0),
 
             // Spacer
@@ -87,12 +87,12 @@ pub fn menu_bar<Message: Clone + 'static>(
             container(
                 simple_icon_button(Icon::Close, exit_app)
             )
-            .style(iced::theme::Container::Box)
+            
             .padding(8.0),
         ]
-        .align_items(iced::Alignment::Center)
+        .align_y(iced::alignment::Vertical::Center)
     )
-    .style(iced::theme::Container::Box)
+    
     .padding(16.0)
     .width(Length::Fill)
     .into()
@@ -100,7 +100,7 @@ pub fn menu_bar<Message: Clone + 'static>(
 
 /// Create a modern side panel
 pub fn side_panel<Message: 'static>(
-    title: &str,
+    title: String,
     content: Vec<Element<'static, Message>>,
     width: f32,
 ) -> Element<'static, Message> {
@@ -110,9 +110,9 @@ pub fn side_panel<Message: 'static>(
             container(
                 text(title)
                     .size(16.0)
-                    .style(iced::theme::Text::Color(iced::Color::WHITE))
+                    .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::WHITE) })
             )
-            .style(iced::theme::Container::Box)
+            
             .padding(16.0)
             .width(Length::Fill),
 
@@ -122,12 +122,12 @@ pub fn side_panel<Message: 'static>(
                     .spacing(16.0)
                     .padding(16.0)
             )
-            .style(iced::theme::Container::Box)
+            
             .width(Length::Fill)
             .height(Length::Fill),
         ]
     )
-    .style(iced::theme::Container::Box)
+    
     .width(Length::Fixed(width))
     .height(Length::Fill)
     .into()
@@ -151,9 +151,9 @@ pub fn status_bar<Message: 'static>(
             text(format!("Zoom: {:.0}%", zoom_level * 100.0))
                 .size(12.0),
         ]
-        .align_items(iced::Alignment::Center)
+        .align_y(iced::alignment::Vertical::Center)
     )
-    .style(iced::theme::Container::Box)
+    
     .padding(8.0)
     .width(Length::Fill)
     .into()
@@ -164,15 +164,15 @@ pub fn card<Message: 'static>(
     content: Element<'static, Message>,
 ) -> Element<'static, Message> {
     container(content)
-        .style(iced::theme::Container::Box)
+        
         .padding(24.0)
         .into()
 }
 
 /// Create a property row (label + value)
 pub fn property_row<Message: 'static>(
-    label: &str,
-    value: &str,
+    label: String,
+    value: String,
 ) -> Element<'static, Message> {
     row![
         text(label)
@@ -182,20 +182,20 @@ pub fn property_row<Message: 'static>(
             .size(12.0),
     ]
     .spacing(16.0)
-    .align_items(iced::Alignment::Center)
+    .align_y(iced::alignment::Vertical::Center)
     .into()
 }
 
 /// Create a section header
 pub fn section_header<Message: 'static>(
-    title: &str,
+    title: String,
 ) -> Element<'static, Message> {
     container(
         text(title)
             .size(16.0)
-            .style(iced::theme::Text::Color(iced::Color::WHITE))
+            .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::WHITE) })
     )
-    .padding([16.0, 0.0, 8.0, 0.0])
+    .padding(iced::Padding::new(16.0).left(0.0).right(0.0).bottom(8.0))
     .into()
 }
 
@@ -226,16 +226,16 @@ pub fn tool_palette<Message: Clone + 'static>(
         column(tool_grid)
             .spacing(8.0)
     )
-    .style(iced::theme::Container::Box)
+    
     .padding(16.0)
     .into()
 }
 
 /// Create a layer item
 pub fn layer_item<Message: Clone + 'static>(
-    name: &str,
+    name: String,
     is_visible: bool,
-    is_selected: bool,
+    _is_selected: bool,
     toggle_visibility: Message,
     select_layer: Message,
 ) -> Element<'static, Message> {
@@ -245,11 +245,7 @@ pub fn layer_item<Message: Clone + 'static>(
         Icon::LayerHidden
     };
 
-    let layer_style = if is_selected {
-        iced::theme::Button::Primary
-    } else {
-        iced::theme::Button::Secondary
-    };
+    // Note: Simplified without custom styling for now
 
     container(
         row![
@@ -261,14 +257,13 @@ pub fn layer_item<Message: Clone + 'static>(
                 text(name)
                     .size(12.0)
             )
-            .style(layer_style)
             .on_press(select_layer)
             .width(Length::Fill),
         ]
         .spacing(8.0)
-        .align_items(iced::Alignment::Center)
+        .align_y(iced::alignment::Vertical::Center)
     )
-    .style(iced::theme::Container::Box)
+    
     .padding(8.0)
     .width(Length::Fill)
     .into()
@@ -284,28 +279,28 @@ pub fn canvas_placeholder<Message: 'static>(
         column![
             text("Canvas Area")
                 .size(18.0)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7))),
+                .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7)) }),
 
             Space::new(Length::Shrink, Length::Fixed(24.0)),
 
-            property_row("Zoom", &format!("{:.0}%", zoom_level * 100.0)),
-            property_row("Pan X", &format!("{:.1}", pan_offset.0)),
-            property_row("Pan Y", &format!("{:.1}", pan_offset.1)),
-            property_row("Tool", current_tool),
+            property_row("Zoom".to_string(), format!("{:.0}%", zoom_level * 100.0)),
+            property_row("Pan X".to_string(), format!("{:.1}", pan_offset.0)),
+            property_row("Pan Y".to_string(), format!("{:.1}", pan_offset.1)),
+            property_row("Tool".to_string(), current_tool.to_string()),
 
             Space::new(Length::Shrink, Length::Fixed(24.0)),
 
             text("Click 'New' to create a document")
                 .size(12.0)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
+                .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)) }),
         ]
-        .align_items(iced::Alignment::Center)
+        .align_x(iced::alignment::Horizontal::Center)
         .spacing(8.0)
     )
-    .style(iced::theme::Container::Box)
+    
     .width(Length::Fill)
     .height(Length::Fill)
-    .center_x()
-    .center_y()
+    .center_x(Length::Fill)
+    .center_y(Length::Fill)
     .into()
 }

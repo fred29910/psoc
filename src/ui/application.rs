@@ -3,7 +3,7 @@
 #[cfg(feature = "gui")]
 use iced::{
     widget::{column, container},
-    Application, Element, Length, Settings, Theme, Task,
+    Element, Length, Settings, Theme, Task,
 };
 use tracing::{debug, error, info};
 
@@ -15,7 +15,7 @@ use super::{
 };
 
 /// Main GUI application
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PsocApp {
     /// Current application state
     state: AppState,
@@ -141,14 +141,7 @@ impl Default for AppState {
 }
 
 impl PsocApp {
-    /// Create a new application instance
-    pub fn new() -> Self {
-        info!("Creating new PSOC GUI application");
-        Self {
-            state: AppState::default(),
-            error_message: None,
-        }
-    }
+
 
     /// Get the current application state
     pub fn state(&self) -> &AppState {
@@ -159,30 +152,9 @@ impl PsocApp {
     pub fn run() -> Result<()> {
         info!("Starting PSOC GUI application");
 
-        let settings = Settings {
-            id: None,
-            window: iced::window::Settings {
-                size: (1200, 800),
-                min_size: Some((800, 600)),
-                max_size: None,
-                position: iced::window::Position::Centered,
-                resizable: true,
-                decorations: true,
-                transparent: false,
-                visible: true,
-                level: iced::window::Level::Normal,
-                icon: None,
-                platform_specific: Default::default(),
-            },
-            flags: (),
-            default_font: iced::Font::DEFAULT,
-            default_text_size: 14.0,
-            antialiasing: true,
-            exit_on_close_request: true,
-        };
+        let _settings = Settings::default();
 
         iced::run(PsocApp::title, PsocApp::update, PsocApp::view)
-            .settings(settings)
             .map_err(|e| {
                 error!("Failed to run GUI application: {}", e);
                 PsocError::gui(format!("GUI application error: {}", e))
@@ -218,7 +190,7 @@ impl PsocApp {
         }
     }
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Message) -> Task<Message> {
         debug!("Processing message: {:?}", message);
 
         match message {
@@ -233,7 +205,7 @@ impl PsocApp {
                 info!("Opening document");
                 #[cfg(feature = "gui")]
                 {
-                    return Command::perform(
+                    return Task::perform(
                         async {
                             rfd::AsyncFileDialog::new()
                                 .add_filter("Image Files", &["png", "jpg", "jpeg"])
@@ -257,7 +229,7 @@ impl PsocApp {
             Message::FileSelected(path) => {
                 info!("File selected: {}", path.display());
                 let file_manager = self.state.file_manager.clone();
-                return Command::perform(
+                return Task::perform(
                     async move {
                         file_manager.import_image(&path).await
                     },
@@ -287,7 +259,7 @@ impl PsocApp {
                         let file_manager = self.state.file_manager.clone();
                         let image_clone = image.clone();
                         let path_clone = path.clone();
-                        return Command::perform(
+                        return Task::perform(
                             async move {
                                 file_manager.export_image(&image_clone, &path_clone).await
                             },
@@ -309,7 +281,7 @@ impl PsocApp {
                 if self.state.current_image.is_some() {
                     #[cfg(feature = "gui")]
                     {
-                        return Command::perform(
+                        return Task::perform(
                             async {
                                 rfd::AsyncFileDialog::new()
                                     .add_filter("PNG Files", &["png"])
@@ -341,7 +313,7 @@ impl PsocApp {
                     let image_clone = image.clone();
                     let path_clone = path.clone();
                     self.state.current_file_path = Some(path);
-                    return Command::perform(
+                    return Task::perform(
                         async move {
                             file_manager.export_image(&image_clone, &path_clone).await
                         },
@@ -360,7 +332,7 @@ impl PsocApp {
             }
             Message::Exit => {
                 info!("Exiting application");
-                return iced::window::close();
+                return iced::exit();
             }
             Message::ToolChanged(tool) => {
                 debug!("Tool changed to: {}", tool);
@@ -391,10 +363,10 @@ impl PsocApp {
             }
         }
 
-        Command::none()
+        Task::none()
     }
 
-    fn view(&self) -> Element<Self::Message> {
+    fn view(&self) -> Element<Message> {
         let content = column![
             self.menu_bar(),
             self.toolbar(),
@@ -409,7 +381,7 @@ impl PsocApp {
             .into()
     }
 
-    fn theme(&self) -> Self::Theme {
+    fn theme(&self) -> Theme {
         self.state.theme.to_iced_theme()
     }
 }
@@ -490,14 +462,14 @@ impl PsocApp {
 
         let layers_content = vec![
             components::layer_item(
-                "Layer 1",
+                "Layer 1".to_string(),
                 true,
                 true,
                 Message::Error("Layer visibility toggle not implemented".to_string()),
                 Message::Error("Layer selection not implemented".to_string()),
             ),
             components::layer_item(
-                "Background",
+                "Background".to_string(),
                 true,
                 false,
                 Message::Error("Layer visibility toggle not implemented".to_string()),
@@ -507,12 +479,12 @@ impl PsocApp {
 
         column![
             components::side_panel(
-                "Tools",
+                "Tools".to_string(),
                 vec![components::tool_palette(tools)],
                 250.0
             ),
             components::side_panel(
-                "Layers",
+                "Layers".to_string(),
                 layers_content,
                 250.0
             ),
@@ -534,18 +506,18 @@ impl PsocApp {
                 column![
                     iced::widget::text("No Document Open")
                         .size(24.0)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7))),
+                        .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7)) }),
                     iced::widget::text("Click 'New' to create a document")
                         .size(16.0)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
+                        .style(|_theme| iced::widget::text::Style { color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)) }),
                 ]
-                .align_items(iced::Alignment::Center)
+                .align_x(iced::alignment::Horizontal::Center)
                 .spacing(spacing::LG)
             )
             .width(Length::Fill)
             .height(Length::Fill)
-            .center_x()
-            .center_y()
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
             .into()
         }
     }
@@ -553,21 +525,21 @@ impl PsocApp {
     /// Create the right panel (properties)
     fn right_panel(&self) -> Element<Message> {
         let properties_content = vec![
-            components::section_header("Tool Properties"),
-            components::property_row("Current Tool", &self.state.current_tool.to_string()),
-            components::property_row("Zoom", &format!("{:.0}%", self.state.zoom_level * 100.0)),
+            components::section_header("Tool Properties".to_string()),
+            components::property_row("Current Tool".to_string(), self.state.current_tool.to_string()),
+            components::property_row("Zoom".to_string(), format!("{:.0}%", self.state.zoom_level * 100.0)),
 
-            components::section_header("Document"),
-            components::property_row("Status", if self.state.document_open { "Open" } else { "None" }),
-            components::property_row("Theme", match self.state.theme {
-                PsocTheme::Dark => "Dark",
-                PsocTheme::Light => "Light",
-                PsocTheme::HighContrast => "High Contrast",
+            components::section_header("Document".to_string()),
+            components::property_row("Status".to_string(), if self.state.document_open { "Open".to_string() } else { "None".to_string() }),
+            components::property_row("Theme".to_string(), match self.state.theme {
+                PsocTheme::Dark => "Dark".to_string(),
+                PsocTheme::Light => "Light".to_string(),
+                PsocTheme::HighContrast => "High Contrast".to_string(),
             }),
         ];
 
         components::side_panel(
-            "Properties",
+            "Properties".to_string(),
             properties_content,
             250.0
         )
