@@ -19,7 +19,10 @@ pub use application::{AppState, LayerMessage, Message, PsocApp};
 #[cfg(feature = "gui")]
 pub use canvas::{ImageCanvas, ImageData};
 #[cfg(feature = "gui")]
-pub use dialogs::{AboutDialog, BrightnessContrastDialog, GaussianBlurDialog};
+pub use dialogs::{
+    AboutDialog, BrightnessContrastDialog, ColorPaletteDialog, ColorPickerDialog,
+    GaussianBlurDialog,
+};
 #[cfg(feature = "gui")]
 pub use icons::Icon;
 #[cfg(feature = "gui")]

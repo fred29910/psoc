@@ -2,16 +2,17 @@
 
 #[cfg(feature = "gui")]
 use iced::{
-    widget::{column, container, Column},
+    widget::{column, container},
     Element, Length, Settings, Task, Theme,
 };
 use tracing::{debug, error, info};
 
 use super::{
     canvas::{ImageCanvas, ImageData},
-    components,
+    components::{self, ColorHistory},
     dialogs::{
         AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage,
+        ColorPaletteDialog, ColorPaletteMessage, ColorPickerDialog, ColorPickerMessage,
         GaussianBlurDialog, GaussianBlurMessage,
     },
     icons::Icon,
@@ -41,6 +42,10 @@ pub struct PsocApp {
     brightness_contrast_dialog: BrightnessContrastDialog,
     /// Gaussian Blur filter dialog
     gaussian_blur_dialog: GaussianBlurDialog,
+    /// Color Picker dialog
+    color_picker_dialog: ColorPickerDialog,
+    /// Color Palette dialog
+    color_palette_dialog: ColorPaletteDialog,
     /// Image canvas for rendering
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
@@ -74,6 +79,8 @@ pub struct AppState {
     pub mouse_position: Option<(f32, f32)>,
     /// Current pixel color under mouse cursor
     pub current_pixel_color: Option<psoc_core::RgbaPixel>,
+    /// Color history for recently used colors
+    pub color_history: ColorHistory,
 }
 
 /// Status information for display
@@ -136,6 +143,14 @@ pub enum Message {
     BrightnessContrast(BrightnessContrastMessage),
     /// Gaussian Blur dialog messages
     GaussianBlur(GaussianBlurMessage),
+    /// Color Picker dialog messages
+    ColorPicker(ColorPickerMessage),
+    /// Show color picker dialog
+    ShowColorPicker,
+    /// Color Palette dialog messages
+    ColorPalette(ColorPaletteMessage),
+    /// Show color palette dialog
+    ShowColorPalette,
     /// Layer-related messages
     Layer(LayerMessage),
     /// Undo the last operation
@@ -304,6 +319,7 @@ impl Default for AppState {
             file_manager: crate::file_io::FileManager::new(),
             mouse_position: None,
             current_pixel_color: None,
+            color_history: ColorHistory::new(),
         }
     }
 }
@@ -390,6 +406,8 @@ impl PsocApp {
                 about_dialog: AboutDialog::new(),
                 brightness_contrast_dialog: BrightnessContrastDialog::new(),
                 gaussian_blur_dialog: GaussianBlurDialog::new(),
+                color_picker_dialog: ColorPickerDialog::new(),
+                color_palette_dialog: ColorPaletteDialog::new(),
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
             },
@@ -626,6 +644,22 @@ impl PsocApp {
                 debug!("Gaussian Blur dialog message: {:?}", gb_msg);
                 self.handle_gaussian_blur_message(gb_msg);
             }
+            Message::ColorPicker(cp_msg) => {
+                debug!("Color Picker dialog message: {:?}", cp_msg);
+                self.handle_color_picker_message(cp_msg);
+            }
+            Message::ColorPalette(cpal_msg) => {
+                debug!("Color Palette dialog message: {:?}", cpal_msg);
+                self.handle_color_palette_message(cpal_msg);
+            }
+            Message::ShowColorPicker => {
+                info!("Showing color picker dialog");
+                self.show_color_picker(None);
+            }
+            Message::ShowColorPalette => {
+                info!("Showing color palette dialog");
+                self.show_color_palette();
+            }
             Message::Layer(layer_msg) => {
                 debug!("Layer message: {:?}", layer_msg);
                 self.handle_layer_message(layer_msg);
@@ -720,6 +754,22 @@ impl PsocApp {
 
         if self.gaussian_blur_dialog.visible {
             layers.push(self.gaussian_blur_dialog.view(Message::GaussianBlur));
+        }
+
+        if self.color_picker_dialog.is_visible() {
+            layers.push(
+                self.color_picker_dialog
+                    .view(std::convert::identity)
+                    .map(Message::ColorPicker),
+            );
+        }
+
+        if self.color_palette_dialog.is_visible() {
+            layers.push(
+                self.color_palette_dialog
+                    .view(std::convert::identity)
+                    .map(Message::ColorPalette),
+            );
         }
 
         if layers.len() > 1 {
@@ -929,6 +979,8 @@ impl PsocApp {
             Message::Adjustment(AdjustmentMessage::ShowGaussianBlur),
             Message::Adjustment(AdjustmentMessage::ShowUnsharpMask),
             Message::Adjustment(AdjustmentMessage::ShowAddNoise),
+            Message::ShowColorPicker,
+            Message::ShowColorPalette,
             Message::ShowAbout,
             Message::Exit,
         )
@@ -2477,5 +2529,77 @@ impl PsocApp {
             "Gaussian blur preview: radius={}, quality={}",
             _radius, _quality
         );
+    }
+
+    /// Handle color picker dialog messages
+    fn handle_color_picker_message(&mut self, message: ColorPickerMessage) {
+        match message {
+            ColorPickerMessage::Apply => {
+                let selected_color = self.color_picker_dialog.current_color();
+
+                // Add color to history
+                self.state.color_history.add_color(selected_color);
+
+                // Apply color to current tool if applicable
+                self.apply_selected_color(selected_color);
+
+                self.color_picker_dialog.hide();
+            }
+            ColorPickerMessage::Cancel => {
+                self.color_picker_dialog.hide();
+            }
+            _ => {
+                self.color_picker_dialog.update(message);
+            }
+        }
+    }
+
+    /// Handle color palette dialog messages
+    fn handle_color_palette_message(&mut self, message: ColorPaletteMessage) {
+        match message {
+            ColorPaletteMessage::SelectColor(color) => {
+                // Add color to history
+                self.state.color_history.add_color(color);
+
+                // Apply color to current tool if applicable
+                self.apply_selected_color(color);
+
+                // Optionally close the palette dialog
+                // self.color_palette_dialog.hide();
+            }
+            ColorPaletteMessage::Close => {
+                self.color_palette_dialog.hide();
+            }
+            _ => {
+                self.color_palette_dialog.update(message);
+            }
+        }
+    }
+
+    /// Apply selected color to current tool
+    fn apply_selected_color(&mut self, color: psoc_core::RgbaPixel) {
+        // Convert RgbaPixel to tool color format
+        let tool_color = [color.r, color.g, color.b, color.a];
+
+        // Apply to current tool if it supports color
+        if let Err(e) = self.tool_manager.set_tool_option(
+            "color",
+            crate::tools::tool_trait::ToolOptionValue::Color(tool_color),
+        ) {
+            debug!("Failed to set tool color: {}", e);
+        }
+
+        debug!("Applied color to tool: {:?}", tool_color);
+    }
+
+    /// Show color picker dialog with current color
+    pub fn show_color_picker(&mut self, current_color: Option<psoc_core::RgbaPixel>) {
+        let color = current_color.unwrap_or_else(|| psoc_core::RgbaPixel::new(255, 255, 255, 255));
+        self.color_picker_dialog.show(color);
+    }
+
+    /// Show color palette dialog
+    pub fn show_color_palette(&mut self) {
+        self.color_palette_dialog.show();
     }
 }

@@ -6,6 +6,9 @@ use iced::{
 };
 
 use super::icons::{icon_button, simple_icon_button, tool_button, Icon};
+use psoc_core::RgbaPixel;
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 /// Create a modern toolbar with icons and proper spacing
 pub fn toolbar<Message: Clone + 'static>(
@@ -68,6 +71,8 @@ pub fn menu_bar<Message: Clone + 'static>(
     gaussian_blur: Message,
     unsharp_mask: Message,
     add_noise: Message,
+    show_color_picker: Message,
+    show_color_palette: Message,
     show_about: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
@@ -161,6 +166,27 @@ pub fn menu_bar<Message: Clone + 'static>(
                         }
                     }))
                     .on_press(add_noise)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Color menu section
+            container(
+                row![
+                    button(text("Color Picker").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_color_picker)
+                    .padding([4.0, 8.0]),
+                    button(text("Color Palette").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_color_palette)
                     .padding([4.0, 8.0]),
                 ]
                 .spacing(8.0)
@@ -705,6 +731,91 @@ impl<Message: Clone + 'static> ToolOptionControl<Message> {
                 .spacing(4.0)
                 .padding(8.0)
                 .into()
+            }
+        }
+    }
+}
+
+/// Maximum number of colors to keep in history
+const MAX_HISTORY_SIZE: usize = 20;
+
+/// Color history messages
+#[derive(Debug, Clone)]
+pub enum ColorHistoryMessage {
+    /// Select a color from history
+    SelectColor(RgbaPixel),
+    /// Clear all history
+    ClearHistory,
+}
+
+/// Color history component
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColorHistory {
+    /// Recently used colors (most recent first)
+    colors: VecDeque<RgbaPixel>,
+}
+
+impl Default for ColorHistory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ColorHistory {
+    /// Create a new color history
+    pub fn new() -> Self {
+        Self {
+            colors: VecDeque::new(),
+        }
+    }
+
+    /// Add a color to the history
+    pub fn add_color(&mut self, color: RgbaPixel) {
+        // Remove the color if it already exists
+        self.colors.retain(|&c| c != color);
+
+        // Add to front
+        self.colors.push_front(color);
+
+        // Limit size
+        if self.colors.len() > MAX_HISTORY_SIZE {
+            self.colors.pop_back();
+        }
+    }
+
+    /// Get all colors in history (most recent first)
+    pub fn colors(&self) -> &VecDeque<RgbaPixel> {
+        &self.colors
+    }
+
+    /// Get the most recent color
+    pub fn most_recent(&self) -> Option<RgbaPixel> {
+        self.colors.front().copied()
+    }
+
+    /// Clear all history
+    pub fn clear(&mut self) {
+        self.colors.clear();
+    }
+
+    /// Check if history is empty
+    pub fn is_empty(&self) -> bool {
+        self.colors.is_empty()
+    }
+
+    /// Get the number of colors in history
+    pub fn len(&self) -> usize {
+        self.colors.len()
+    }
+
+    /// Handle color history messages
+    pub fn update(&mut self, message: ColorHistoryMessage) {
+        match message {
+            ColorHistoryMessage::SelectColor(_color) => {
+                // Color selection will be handled by parent
+            }
+            ColorHistoryMessage::ClearHistory => {
+                self.clear();
             }
         }
     }
