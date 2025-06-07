@@ -73,6 +73,11 @@ impl ToolManager {
         self.register_tool(ToolType::Transform, Box::new(TransformTool::new()));
         self.register_tool(ToolType::Text, Box::new(TextTool::new()));
         self.register_tool(ToolType::Gradient, Box::new(GradientTool::new()));
+        // Shape tools
+        self.register_tool(ToolType::Rectangle, Box::new(RectangleTool::new()));
+        self.register_tool(ToolType::Ellipse, Box::new(EllipseShapeTool::new()));
+        self.register_tool(ToolType::Line, Box::new(LineTool::new()));
+        self.register_tool(ToolType::Polygon, Box::new(PolygonTool::new()));
     }
 
     /// Register a tool with the manager
@@ -206,6 +211,11 @@ impl ToolManager {
             ToolType::Transform => Box::new(TransformTool::new()),
             ToolType::Text => Box::new(TextTool::new()),
             ToolType::Gradient => Box::new(GradientTool::new()),
+            // Shape tools
+            ToolType::Rectangle => Box::new(RectangleTool::new()),
+            ToolType::Ellipse => Box::new(EllipseShapeTool::new()),
+            ToolType::Line => Box::new(LineTool::new()),
+            ToolType::Polygon => Box::new(PolygonTool::new()),
         };
 
         Ok(tool)
@@ -318,7 +328,7 @@ mod tests {
     fn test_tool_manager_creation() {
         let manager = ToolManager::new();
         assert!(manager.active_tool_type.is_some());
-        assert_eq!(manager.available_tools().len(), 10); // Select, EllipseSelect, LassoSelect, MagicWand, Brush, Eraser, Move, Transform, Text, Gradient
+        assert_eq!(manager.available_tools().len(), 14); // Select, EllipseSelect, LassoSelect, MagicWand, Brush, Eraser, Move, Transform, Text, Gradient, Rectangle, Ellipse, Line, Polygon
     }
 
     #[test]

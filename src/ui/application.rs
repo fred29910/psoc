@@ -1140,6 +1140,27 @@ impl PsocApp {
                 Message::ToolChanged(ToolType::Gradient),
                 self.state.current_tool == ToolType::Gradient,
             ),
+            // Shape tools
+            (
+                Icon::Rectangle,
+                Message::ToolChanged(ToolType::Rectangle),
+                self.state.current_tool == ToolType::Rectangle,
+            ),
+            (
+                Icon::Ellipse,
+                Message::ToolChanged(ToolType::Ellipse),
+                self.state.current_tool == ToolType::Ellipse,
+            ),
+            (
+                Icon::Line,
+                Message::ToolChanged(ToolType::Line),
+                self.state.current_tool == ToolType::Line,
+            ),
+            (
+                Icon::Polygon,
+                Message::ToolChanged(ToolType::Polygon),
+                self.state.current_tool == ToolType::Polygon,
+            ),
         ];
 
         components::toolbar(tools, Message::ZoomIn, Message::ZoomOut, Message::ZoomReset)
@@ -1185,6 +1206,27 @@ impl PsocApp {
                 Icon::Gradient,
                 Message::ToolChanged(ToolType::Gradient),
                 self.state.current_tool == ToolType::Gradient,
+            ),
+            // Shape tools
+            (
+                Icon::Rectangle,
+                Message::ToolChanged(ToolType::Rectangle),
+                self.state.current_tool == ToolType::Rectangle,
+            ),
+            (
+                Icon::Ellipse,
+                Message::ToolChanged(ToolType::Ellipse),
+                self.state.current_tool == ToolType::Ellipse,
+            ),
+            (
+                Icon::Line,
+                Message::ToolChanged(ToolType::Line),
+                self.state.current_tool == ToolType::Line,
+            ),
+            (
+                Icon::Polygon,
+                Message::ToolChanged(ToolType::Polygon),
+                self.state.current_tool == ToolType::Polygon,
             ),
         ];
 
@@ -1391,6 +1433,10 @@ impl PsocApp {
             ToolType::Transform => "Transform",
             ToolType::Text => "Text",
             ToolType::Gradient => "Gradient",
+            ToolType::Rectangle => "Rectangle",
+            ToolType::Ellipse => "Ellipse",
+            ToolType::Line => "Line",
+            ToolType::Polygon => "Polygon",
         };
 
         let options = self.tool_manager.get_active_tool_options();

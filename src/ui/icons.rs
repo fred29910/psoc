@@ -36,6 +36,12 @@ pub enum Icon {
     Shape,
     Gradient,
 
+    // Shape tools
+    Rectangle,
+    Ellipse,
+    Line,
+    Polygon,
+
     // View operations
     ZoomIn,
     ZoomOut,
@@ -121,6 +127,12 @@ impl Icon {
             Icon::Text => 'T',
             Icon::Shape => '◇',
             Icon::Gradient => '▦',
+
+            // Shape tools
+            Icon::Rectangle => '▭',
+            Icon::Ellipse => '○',
+            Icon::Line => '/',
+            Icon::Polygon => '⬟',
 
             // View operations
             Icon::ZoomIn => '+',
@@ -217,6 +229,10 @@ impl Icon {
             Icon::Text => "Text",
             Icon::Shape => "Shape",
             Icon::Gradient => "Gradient",
+            Icon::Rectangle => "Rectangle",
+            Icon::Ellipse => "Ellipse",
+            Icon::Line => "Line",
+            Icon::Polygon => "Polygon",
             Icon::ZoomIn => "Zoom In",
             Icon::ZoomOut => "Zoom Out",
             Icon::ZoomFit => "Zoom to Fit",

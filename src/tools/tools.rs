@@ -24,6 +24,11 @@ pub enum ToolType {
     Transform,
     Text,
     Gradient,
+    // Shape tools
+    Rectangle,
+    Ellipse,
+    Line,
+    Polygon,
 }
 
 impl std::fmt::Display for ToolType {
@@ -39,6 +44,10 @@ impl std::fmt::Display for ToolType {
             ToolType::Transform => write!(f, "Transform"),
             ToolType::Text => write!(f, "Text"),
             ToolType::Gradient => write!(f, "Gradient"),
+            ToolType::Rectangle => write!(f, "Rectangle"),
+            ToolType::Ellipse => write!(f, "Ellipse"),
+            ToolType::Line => write!(f, "Line"),
+            ToolType::Polygon => write!(f, "Polygon"),
         }
     }
 }
@@ -4286,5 +4295,1886 @@ mod gradient_tool_tests {
         let solid_gradient = RgbaPixel::new(0, 255, 0, 255); // Solid green
         let result = tool.blend_gradient_pixel(transparent_base, solid_gradient);
         assert_eq!(result, solid_gradient); // Should be completely green
+    }
+}
+
+// ============================================================================
+// SHAPE TOOLS IMPLEMENTATION
+// ============================================================================
+
+/// Shape drawing mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeMode {
+    /// Draw shape outline only
+    Stroke,
+    /// Fill shape with solid color
+    Fill,
+    /// Both stroke and fill
+    Both,
+}
+
+impl std::fmt::Display for ShapeMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShapeMode::Stroke => write!(f, "Stroke"),
+            ShapeMode::Fill => write!(f, "Fill"),
+            ShapeMode::Both => write!(f, "Both"),
+        }
+    }
+}
+
+/// Rectangle tool for drawing rectangles
+#[derive(Debug)]
+pub struct RectangleTool {
+    /// Start point of rectangle
+    start_point: Option<Point>,
+    /// End point of rectangle
+    end_point: Option<Point>,
+    /// Whether we're currently drawing
+    is_drawing: bool,
+    /// Shape drawing mode
+    shape_mode: ShapeMode,
+    /// Stroke color
+    stroke_color: RgbaPixel,
+    /// Fill color
+    fill_color: RgbaPixel,
+    /// Stroke width
+    stroke_width: f32,
+    /// Whether to maintain aspect ratio
+    maintain_aspect_ratio: bool,
+}
+
+impl RectangleTool {
+    pub fn new() -> Self {
+        Self {
+            start_point: None,
+            end_point: None,
+            is_drawing: false,
+            shape_mode: ShapeMode::Stroke,
+            stroke_color: RgbaPixel::new(0, 0, 0, 255), // Black
+            fill_color: RgbaPixel::new(255, 255, 255, 255), // White
+            stroke_width: 2.0,
+            maintain_aspect_ratio: false,
+        }
+    }
+
+    /// Start drawing a rectangle
+    fn start_drawing(&mut self, start: Point) {
+        self.start_point = Some(start);
+        self.end_point = Some(start);
+        self.is_drawing = true;
+        debug!("Started drawing rectangle at: {:?}", start);
+    }
+
+    /// Update rectangle drawing
+    fn update_drawing(&mut self, end: Point) {
+        if self.is_drawing {
+            let adjusted_end = if self.maintain_aspect_ratio {
+                if let Some(start) = self.start_point {
+                    // Make it a square by using the smaller dimension
+                    let dx = (end.x - start.x).abs();
+                    let dy = (end.y - start.y).abs();
+                    let size = dx.min(dy);
+
+                    let sign_x = if end.x >= start.x { 1.0 } else { -1.0 };
+                    let sign_y = if end.y >= start.y { 1.0 } else { -1.0 };
+
+                    Point::new(start.x + size * sign_x, start.y + size * sign_y)
+                } else {
+                    end
+                }
+            } else {
+                end
+            };
+
+            self.end_point = Some(adjusted_end);
+            debug!("Updated rectangle to: {:?}", adjusted_end);
+        }
+    }
+
+    /// Finish drawing and create rectangle on layer
+    fn finish_drawing(&mut self, document: &mut Document) -> ToolResult<()> {
+        if !self.is_drawing {
+            return Ok(());
+        }
+
+        if let (Some(start), Some(end)) = (self.start_point, self.end_point) {
+            self.draw_rectangle_on_layer(start, end, document)?;
+        }
+
+        self.is_drawing = false;
+        self.start_point = None;
+        self.end_point = None;
+        Ok(())
+    }
+
+    /// Draw rectangle on the active layer
+    fn draw_rectangle_on_layer(
+        &self,
+        start: Point,
+        end: Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        let active_layer = document.active_layer_mut();
+        if active_layer.is_none() {
+            debug!("No active layer to draw rectangle on");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        // Calculate rectangle bounds
+        let min_x = start.x.min(end.x) as i32;
+        let max_x = start.x.max(end.x) as i32;
+        let min_y = start.y.min(end.y) as i32;
+        let max_y = start.y.max(end.y) as i32;
+
+        // Draw based on shape mode
+        match self.shape_mode {
+            ShapeMode::Fill => {
+                self.fill_rectangle(layer, min_x, min_y, max_x, max_y)?;
+            }
+            ShapeMode::Stroke => {
+                self.stroke_rectangle(layer, min_x, min_y, max_x, max_y)?;
+            }
+            ShapeMode::Both => {
+                self.fill_rectangle(layer, min_x, min_y, max_x, max_y)?;
+                self.stroke_rectangle(layer, min_x, min_y, max_x, max_y)?;
+            }
+        }
+
+        document.mark_dirty();
+        Ok(())
+    }
+
+    /// Fill rectangle with solid color
+    fn fill_rectangle(
+        &self,
+        layer: &mut psoc_core::Layer,
+        min_x: i32,
+        min_y: i32,
+        max_x: i32,
+        max_y: i32,
+    ) -> ToolResult<()> {
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                if x >= 0 && y >= 0 {
+                    layer.set_pixel(x as u32, y as u32, self.fill_color)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Draw rectangle outline
+    fn stroke_rectangle(
+        &self,
+        layer: &mut psoc_core::Layer,
+        min_x: i32,
+        min_y: i32,
+        max_x: i32,
+        max_y: i32,
+    ) -> ToolResult<()> {
+        let stroke_width = self.stroke_width as i32;
+
+        // Draw top and bottom edges
+        for x in min_x..=max_x {
+            for offset in 0..stroke_width {
+                // Top edge
+                let top_y = min_y + offset;
+                if x >= 0 && top_y >= 0 {
+                    layer.set_pixel(x as u32, top_y as u32, self.stroke_color)?;
+                }
+
+                // Bottom edge
+                let bottom_y = max_y - offset;
+                if x >= 0 && bottom_y >= 0 && bottom_y != top_y {
+                    layer.set_pixel(x as u32, bottom_y as u32, self.stroke_color)?;
+                }
+            }
+        }
+
+        // Draw left and right edges
+        for y in min_y..=max_y {
+            for offset in 0..stroke_width {
+                // Left edge
+                let left_x = min_x + offset;
+                if left_x >= 0 && y >= 0 {
+                    layer.set_pixel(left_x as u32, y as u32, self.stroke_color)?;
+                }
+
+                // Right edge
+                let right_x = max_x - offset;
+                if right_x >= 0 && y >= 0 && right_x != left_x {
+                    layer.set_pixel(right_x as u32, y as u32, self.stroke_color)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Cancel drawing
+    fn cancel_drawing(&mut self) {
+        self.is_drawing = false;
+        self.start_point = None;
+        self.end_point = None;
+        debug!("Cancelled rectangle drawing");
+    }
+}
+
+impl Default for RectangleTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for RectangleTool {
+    fn id(&self) -> &'static str {
+        "rectangle"
+    }
+
+    fn name(&self) -> &'static str {
+        "Rectangle Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Draw rectangles and squares"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed {
+                position,
+                button,
+                modifiers,
+                ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left {
+                    debug!("Rectangle tool mouse pressed at: {:?}", position);
+
+                    // Check for shift key to maintain aspect ratio
+                    self.maintain_aspect_ratio = modifiers.shift;
+
+                    self.start_drawing(position);
+                    state.is_active = true;
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseDragged {
+                position,
+                button,
+                modifiers,
+                ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_drawing {
+                    debug!("Rectangle tool dragging to: {:?}", position);
+
+                    // Update aspect ratio constraint
+                    self.maintain_aspect_ratio = modifiers.shift;
+
+                    self.update_drawing(position);
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseReleased {
+                position, button, ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_drawing {
+                    debug!("Rectangle tool mouse released at: {:?}", position);
+                    self.update_drawing(position);
+                    self.finish_drawing(document)?;
+                    state.is_active = false;
+                }
+            }
+            ToolEvent::KeyPressed { key, .. } => match key {
+                super::tool_trait::Key::Escape => {
+                    if self.is_drawing {
+                        debug!("Cancelling rectangle drawing");
+                        self.cancel_drawing();
+                        state.is_active = false;
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "shape_mode".to_string(),
+                display_name: "Shape Mode".to_string(),
+                description: "How to draw the rectangle".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Stroke".to_string(),
+                    "Fill".to_string(),
+                    "Both".to_string(),
+                ]),
+                default_value: ToolOptionValue::String("Stroke".to_string()),
+            },
+            ToolOption {
+                name: "stroke_color".to_string(),
+                display_name: "Stroke Color".to_string(),
+                description: "Color of the rectangle outline".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.stroke_color.r,
+                    self.stroke_color.g,
+                    self.stroke_color.b,
+                    self.stroke_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "fill_color".to_string(),
+                display_name: "Fill Color".to_string(),
+                description: "Color to fill the rectangle".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.fill_color.r,
+                    self.fill_color.g,
+                    self.fill_color.b,
+                    self.fill_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "stroke_width".to_string(),
+                display_name: "Stroke Width".to_string(),
+                description: "Width of the rectangle outline".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 20.0,
+                },
+                default_value: ToolOptionValue::Float(self.stroke_width),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "shape_mode" => {
+                if let ToolOptionValue::String(mode) = value {
+                    self.shape_mode = match mode.as_str() {
+                        "Fill" => ShapeMode::Fill,
+                        "Both" => ShapeMode::Both,
+                        _ => ShapeMode::Stroke,
+                    };
+                }
+            }
+            "stroke_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.stroke_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "fill_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.fill_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "stroke_width" => {
+                if let ToolOptionValue::Float(width) = value {
+                    self.stroke_width = width.clamp(1.0, 20.0);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "shape_mode" => Some(ToolOptionValue::String(self.shape_mode.to_string())),
+            "stroke_color" => Some(ToolOptionValue::Color([
+                self.stroke_color.r,
+                self.stroke_color.g,
+                self.stroke_color.b,
+                self.stroke_color.a,
+            ])),
+            "fill_color" => Some(ToolOptionValue::Color([
+                self.fill_color.r,
+                self.fill_color.g,
+                self.fill_color.b,
+                self.fill_color.a,
+            ])),
+            "stroke_width" => Some(ToolOptionValue::Float(self.stroke_width)),
+            _ => None,
+        }
+    }
+}
+
+/// Ellipse tool for drawing ellipses and circles
+#[derive(Debug)]
+pub struct EllipseShapeTool {
+    /// Start point of ellipse
+    start_point: Option<Point>,
+    /// End point of ellipse
+    end_point: Option<Point>,
+    /// Whether we're currently drawing
+    is_drawing: bool,
+    /// Shape drawing mode
+    shape_mode: ShapeMode,
+    /// Stroke color
+    stroke_color: RgbaPixel,
+    /// Fill color
+    fill_color: RgbaPixel,
+    /// Stroke width
+    stroke_width: f32,
+    /// Whether to maintain aspect ratio (circle)
+    maintain_aspect_ratio: bool,
+}
+
+impl EllipseShapeTool {
+    pub fn new() -> Self {
+        Self {
+            start_point: None,
+            end_point: None,
+            is_drawing: false,
+            shape_mode: ShapeMode::Stroke,
+            stroke_color: RgbaPixel::new(0, 0, 0, 255), // Black
+            fill_color: RgbaPixel::new(255, 255, 255, 255), // White
+            stroke_width: 2.0,
+            maintain_aspect_ratio: false,
+        }
+    }
+
+    /// Start drawing an ellipse
+    fn start_drawing(&mut self, start: Point) {
+        self.start_point = Some(start);
+        self.end_point = Some(start);
+        self.is_drawing = true;
+        debug!("Started drawing ellipse at: {:?}", start);
+    }
+
+    /// Update ellipse drawing
+    fn update_drawing(&mut self, end: Point) {
+        if self.is_drawing {
+            let adjusted_end = if self.maintain_aspect_ratio {
+                if let Some(start) = self.start_point {
+                    // Make it a circle by using the smaller dimension
+                    let dx = (end.x - start.x).abs();
+                    let dy = (end.y - start.y).abs();
+                    let size = dx.min(dy);
+
+                    let sign_x = if end.x >= start.x { 1.0 } else { -1.0 };
+                    let sign_y = if end.y >= start.y { 1.0 } else { -1.0 };
+
+                    Point::new(start.x + size * sign_x, start.y + size * sign_y)
+                } else {
+                    end
+                }
+            } else {
+                end
+            };
+
+            self.end_point = Some(adjusted_end);
+            debug!("Updated ellipse to: {:?}", adjusted_end);
+        }
+    }
+
+    /// Finish drawing and create ellipse on layer
+    fn finish_drawing(&mut self, document: &mut Document) -> ToolResult<()> {
+        if !self.is_drawing {
+            return Ok(());
+        }
+
+        if let (Some(start), Some(end)) = (self.start_point, self.end_point) {
+            self.draw_ellipse_on_layer(start, end, document)?;
+        }
+
+        self.is_drawing = false;
+        self.start_point = None;
+        self.end_point = None;
+        Ok(())
+    }
+
+    /// Draw ellipse on the active layer
+    fn draw_ellipse_on_layer(
+        &self,
+        start: Point,
+        end: Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        let active_layer = document.active_layer_mut();
+        if active_layer.is_none() {
+            debug!("No active layer to draw ellipse on");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        // Calculate ellipse parameters
+        let center_x = (start.x + end.x) / 2.0;
+        let center_y = (start.y + end.y) / 2.0;
+        let radius_x = (end.x - start.x).abs() / 2.0;
+        let radius_y = (end.y - start.y).abs() / 2.0;
+
+        // Draw based on shape mode
+        match self.shape_mode {
+            ShapeMode::Fill => {
+                self.fill_ellipse(layer, center_x, center_y, radius_x, radius_y)?;
+            }
+            ShapeMode::Stroke => {
+                self.stroke_ellipse(layer, center_x, center_y, radius_x, radius_y)?;
+            }
+            ShapeMode::Both => {
+                self.fill_ellipse(layer, center_x, center_y, radius_x, radius_y)?;
+                self.stroke_ellipse(layer, center_x, center_y, radius_x, radius_y)?;
+            }
+        }
+
+        document.mark_dirty();
+        Ok(())
+    }
+
+    /// Fill ellipse with solid color
+    fn fill_ellipse(
+        &self,
+        layer: &mut psoc_core::Layer,
+        center_x: f32,
+        center_y: f32,
+        radius_x: f32,
+        radius_y: f32,
+    ) -> ToolResult<()> {
+        let min_x = (center_x - radius_x).floor() as i32;
+        let max_x = (center_x + radius_x).ceil() as i32;
+        let min_y = (center_y - radius_y).floor() as i32;
+        let max_y = (center_y + radius_y).ceil() as i32;
+
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                if x >= 0 && y >= 0 {
+                    let dx = x as f32 - center_x;
+                    let dy = y as f32 - center_y;
+
+                    // Check if point is inside ellipse
+                    let ellipse_eq =
+                        (dx * dx) / (radius_x * radius_x) + (dy * dy) / (radius_y * radius_y);
+                    if ellipse_eq <= 1.0 {
+                        layer.set_pixel(x as u32, y as u32, self.fill_color)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Draw ellipse outline using Bresenham-like algorithm
+    fn stroke_ellipse(
+        &self,
+        layer: &mut psoc_core::Layer,
+        center_x: f32,
+        center_y: f32,
+        radius_x: f32,
+        radius_y: f32,
+    ) -> ToolResult<()> {
+        let stroke_width = self.stroke_width;
+
+        // Draw ellipse outline by checking distance from ellipse edge
+        let min_x = (center_x - radius_x - stroke_width).floor() as i32;
+        let max_x = (center_x + radius_x + stroke_width).ceil() as i32;
+        let min_y = (center_y - radius_y - stroke_width).floor() as i32;
+        let max_y = (center_y + radius_y + stroke_width).ceil() as i32;
+
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                if x >= 0 && y >= 0 {
+                    let dx = x as f32 - center_x;
+                    let dy = y as f32 - center_y;
+
+                    // Calculate distance from ellipse edge
+                    let ellipse_eq =
+                        (dx * dx) / (radius_x * radius_x) + (dy * dy) / (radius_y * radius_y);
+                    let distance_from_edge =
+                        (ellipse_eq.sqrt() - 1.0).abs() * radius_x.min(radius_y);
+
+                    if distance_from_edge <= stroke_width / 2.0 {
+                        layer.set_pixel(x as u32, y as u32, self.stroke_color)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Cancel drawing
+    fn cancel_drawing(&mut self) {
+        self.is_drawing = false;
+        self.start_point = None;
+        self.end_point = None;
+        debug!("Cancelled ellipse drawing");
+    }
+}
+
+impl Default for EllipseShapeTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for EllipseShapeTool {
+    fn id(&self) -> &'static str {
+        "ellipse_shape"
+    }
+
+    fn name(&self) -> &'static str {
+        "Ellipse Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Draw ellipses and circles"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed {
+                position,
+                button,
+                modifiers,
+                ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left {
+                    debug!("Ellipse tool mouse pressed at: {:?}", position);
+
+                    // Check for shift key to maintain aspect ratio (circle)
+                    self.maintain_aspect_ratio = modifiers.shift;
+
+                    self.start_drawing(position);
+                    state.is_active = true;
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseDragged {
+                position,
+                button,
+                modifiers,
+                ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_drawing {
+                    debug!("Ellipse tool dragging to: {:?}", position);
+
+                    // Update aspect ratio constraint
+                    self.maintain_aspect_ratio = modifiers.shift;
+
+                    self.update_drawing(position);
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseReleased {
+                position, button, ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_drawing {
+                    debug!("Ellipse tool mouse released at: {:?}", position);
+                    self.update_drawing(position);
+                    self.finish_drawing(document)?;
+                    state.is_active = false;
+                }
+            }
+            ToolEvent::KeyPressed { key, .. } => match key {
+                super::tool_trait::Key::Escape => {
+                    if self.is_drawing {
+                        debug!("Cancelling ellipse drawing");
+                        self.cancel_drawing();
+                        state.is_active = false;
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "shape_mode".to_string(),
+                display_name: "Shape Mode".to_string(),
+                description: "How to draw the ellipse".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Stroke".to_string(),
+                    "Fill".to_string(),
+                    "Both".to_string(),
+                ]),
+                default_value: ToolOptionValue::String("Stroke".to_string()),
+            },
+            ToolOption {
+                name: "stroke_color".to_string(),
+                display_name: "Stroke Color".to_string(),
+                description: "Color of the ellipse outline".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.stroke_color.r,
+                    self.stroke_color.g,
+                    self.stroke_color.b,
+                    self.stroke_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "fill_color".to_string(),
+                display_name: "Fill Color".to_string(),
+                description: "Color to fill the ellipse".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.fill_color.r,
+                    self.fill_color.g,
+                    self.fill_color.b,
+                    self.fill_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "stroke_width".to_string(),
+                display_name: "Stroke Width".to_string(),
+                description: "Width of the ellipse outline".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 20.0,
+                },
+                default_value: ToolOptionValue::Float(self.stroke_width),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "shape_mode" => {
+                if let ToolOptionValue::String(mode) = value {
+                    self.shape_mode = match mode.as_str() {
+                        "Fill" => ShapeMode::Fill,
+                        "Both" => ShapeMode::Both,
+                        _ => ShapeMode::Stroke,
+                    };
+                }
+            }
+            "stroke_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.stroke_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "fill_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.fill_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "stroke_width" => {
+                if let ToolOptionValue::Float(width) = value {
+                    self.stroke_width = width.clamp(1.0, 20.0);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "shape_mode" => Some(ToolOptionValue::String(self.shape_mode.to_string())),
+            "stroke_color" => Some(ToolOptionValue::Color([
+                self.stroke_color.r,
+                self.stroke_color.g,
+                self.stroke_color.b,
+                self.stroke_color.a,
+            ])),
+            "fill_color" => Some(ToolOptionValue::Color([
+                self.fill_color.r,
+                self.fill_color.g,
+                self.fill_color.b,
+                self.fill_color.a,
+            ])),
+            "stroke_width" => Some(ToolOptionValue::Float(self.stroke_width)),
+            _ => None,
+        }
+    }
+}
+
+/// Line tool for drawing straight lines
+#[derive(Debug)]
+pub struct LineTool {
+    /// Start point of line
+    start_point: Option<Point>,
+    /// End point of line
+    end_point: Option<Point>,
+    /// Whether we're currently drawing
+    is_drawing: bool,
+    /// Line color
+    line_color: RgbaPixel,
+    /// Line width
+    line_width: f32,
+    /// Whether to constrain to 45-degree angles
+    constrain_angle: bool,
+}
+
+impl LineTool {
+    pub fn new() -> Self {
+        Self {
+            start_point: None,
+            end_point: None,
+            is_drawing: false,
+            line_color: RgbaPixel::new(0, 0, 0, 255), // Black
+            line_width: 2.0,
+            constrain_angle: false,
+        }
+    }
+
+    /// Start drawing a line
+    fn start_drawing(&mut self, start: Point) {
+        self.start_point = Some(start);
+        self.end_point = Some(start);
+        self.is_drawing = true;
+        debug!("Started drawing line at: {:?}", start);
+    }
+
+    /// Update line drawing
+    fn update_drawing(&mut self, end: Point) {
+        if self.is_drawing {
+            let adjusted_end = if self.constrain_angle {
+                if let Some(start) = self.start_point {
+                    // Constrain to 45-degree angles
+                    let dx = end.x - start.x;
+                    let dy = end.y - start.y;
+                    let abs_dx = dx.abs();
+                    let abs_dy = dy.abs();
+
+                    if abs_dx > abs_dy * 2.0 {
+                        // Horizontal line
+                        Point::new(end.x, start.y)
+                    } else if abs_dy > abs_dx * 2.0 {
+                        // Vertical line
+                        Point::new(start.x, end.y)
+                    } else {
+                        // Diagonal line (45 degrees)
+                        let size = abs_dx.min(abs_dy);
+                        let sign_x = if dx >= 0.0 { 1.0 } else { -1.0 };
+                        let sign_y = if dy >= 0.0 { 1.0 } else { -1.0 };
+                        Point::new(start.x + size * sign_x, start.y + size * sign_y)
+                    }
+                } else {
+                    end
+                }
+            } else {
+                end
+            };
+
+            self.end_point = Some(adjusted_end);
+            debug!("Updated line to: {:?}", adjusted_end);
+        }
+    }
+
+    /// Finish drawing and create line on layer
+    fn finish_drawing(&mut self, document: &mut Document) -> ToolResult<()> {
+        if !self.is_drawing {
+            return Ok(());
+        }
+
+        if let (Some(start), Some(end)) = (self.start_point, self.end_point) {
+            self.draw_line_on_layer(start, end, document)?;
+        }
+
+        self.is_drawing = false;
+        self.start_point = None;
+        self.end_point = None;
+        Ok(())
+    }
+
+    /// Draw line on the active layer using Bresenham's algorithm
+    fn draw_line_on_layer(
+        &self,
+        start: Point,
+        end: Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        let active_layer = document.active_layer_mut();
+        if active_layer.is_none() {
+            debug!("No active layer to draw line on");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        // Use Bresenham's line algorithm with anti-aliasing
+        self.draw_thick_line(layer, start, end)?;
+
+        document.mark_dirty();
+        Ok(())
+    }
+
+    /// Draw a thick line using multiple parallel thin lines
+    fn draw_thick_line(
+        &self,
+        layer: &mut psoc_core::Layer,
+        start: Point,
+        end: Point,
+    ) -> ToolResult<()> {
+        let thickness = self.line_width;
+        let half_thickness = thickness / 2.0;
+
+        // Calculate perpendicular vector for thickness
+        let dx = end.x - start.x;
+        let dy = end.y - start.y;
+        let length = (dx * dx + dy * dy).sqrt();
+
+        if length == 0.0 {
+            // Single point
+            self.draw_circle_at(layer, start, half_thickness)?;
+            return Ok(());
+        }
+
+        let perp_x = -dy / length * half_thickness;
+        let perp_y = dx / length * half_thickness;
+
+        // Draw multiple parallel lines to create thickness
+        let steps = (thickness as i32).max(1);
+        for i in 0..steps {
+            let t = if steps == 1 {
+                0.0
+            } else {
+                (i as f32) / (steps - 1) as f32 - 0.5
+            };
+            let offset_x = perp_x * t * 2.0;
+            let offset_y = perp_y * t * 2.0;
+
+            let line_start = Point::new(start.x + offset_x, start.y + offset_y);
+            let line_end = Point::new(end.x + offset_x, end.y + offset_y);
+
+            self.draw_thin_line(layer, line_start, line_end)?;
+        }
+
+        // Draw rounded end caps
+        self.draw_circle_at(layer, start, half_thickness)?;
+        self.draw_circle_at(layer, end, half_thickness)?;
+
+        Ok(())
+    }
+
+    /// Draw a thin line using Bresenham's algorithm
+    fn draw_thin_line(
+        &self,
+        layer: &mut psoc_core::Layer,
+        start: Point,
+        end: Point,
+    ) -> ToolResult<()> {
+        let x0 = start.x as i32;
+        let y0 = start.y as i32;
+        let x1 = end.x as i32;
+        let y1 = end.y as i32;
+
+        let dx = (x1 - x0).abs();
+        let dy = (y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx - dy;
+
+        let mut x = x0;
+        let mut y = y0;
+
+        loop {
+            if x >= 0 && y >= 0 {
+                layer.set_pixel(x as u32, y as u32, self.line_color)?;
+            }
+
+            if x == x1 && y == y1 {
+                break;
+            }
+
+            let e2 = 2 * err;
+            if e2 > -dy {
+                err -= dy;
+                x += sx;
+            }
+            if e2 < dx {
+                err += dx;
+                y += sy;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Draw a filled circle at a point (for line caps)
+    fn draw_circle_at(
+        &self,
+        layer: &mut psoc_core::Layer,
+        center: Point,
+        radius: f32,
+    ) -> ToolResult<()> {
+        let min_x = (center.x - radius).floor() as i32;
+        let max_x = (center.x + radius).ceil() as i32;
+        let min_y = (center.y - radius).floor() as i32;
+        let max_y = (center.y + radius).ceil() as i32;
+
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                if x >= 0 && y >= 0 {
+                    let dx = x as f32 - center.x;
+                    let dy = y as f32 - center.y;
+                    let distance = (dx * dx + dy * dy).sqrt();
+
+                    if distance <= radius {
+                        layer.set_pixel(x as u32, y as u32, self.line_color)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Cancel drawing
+    fn cancel_drawing(&mut self) {
+        self.is_drawing = false;
+        self.start_point = None;
+        self.end_point = None;
+        debug!("Cancelled line drawing");
+    }
+}
+
+impl Default for LineTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for LineTool {
+    fn id(&self) -> &'static str {
+        "line"
+    }
+
+    fn name(&self) -> &'static str {
+        "Line Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Draw straight lines"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed {
+                position,
+                button,
+                modifiers,
+                ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left {
+                    debug!("Line tool mouse pressed at: {:?}", position);
+
+                    // Check for shift key to constrain angles
+                    self.constrain_angle = modifiers.shift;
+
+                    self.start_drawing(position);
+                    state.is_active = true;
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseDragged {
+                position,
+                button,
+                modifiers,
+                ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_drawing {
+                    debug!("Line tool dragging to: {:?}", position);
+
+                    // Update angle constraint
+                    self.constrain_angle = modifiers.shift;
+
+                    self.update_drawing(position);
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseReleased {
+                position, button, ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_drawing {
+                    debug!("Line tool mouse released at: {:?}", position);
+                    self.update_drawing(position);
+                    self.finish_drawing(document)?;
+                    state.is_active = false;
+                }
+            }
+            ToolEvent::KeyPressed { key, .. } => match key {
+                super::tool_trait::Key::Escape => {
+                    if self.is_drawing {
+                        debug!("Cancelling line drawing");
+                        self.cancel_drawing();
+                        state.is_active = false;
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "line_color".to_string(),
+                display_name: "Line Color".to_string(),
+                description: "Color of the line".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.line_color.r,
+                    self.line_color.g,
+                    self.line_color.b,
+                    self.line_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "line_width".to_string(),
+                display_name: "Line Width".to_string(),
+                description: "Width of the line".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 50.0,
+                },
+                default_value: ToolOptionValue::Float(self.line_width),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "line_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.line_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "line_width" => {
+                if let ToolOptionValue::Float(width) = value {
+                    self.line_width = width.clamp(1.0, 50.0);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "line_color" => Some(ToolOptionValue::Color([
+                self.line_color.r,
+                self.line_color.g,
+                self.line_color.b,
+                self.line_color.a,
+            ])),
+            "line_width" => Some(ToolOptionValue::Float(self.line_width)),
+            _ => None,
+        }
+    }
+}
+
+/// Polygon tool for drawing polygons
+#[derive(Debug)]
+pub struct PolygonTool {
+    /// Points of the polygon being drawn
+    points: Vec<Point>,
+    /// Whether we're currently drawing
+    is_drawing: bool,
+    /// Shape drawing mode
+    shape_mode: ShapeMode,
+    /// Stroke color
+    stroke_color: RgbaPixel,
+    /// Fill color
+    fill_color: RgbaPixel,
+    /// Stroke width
+    stroke_width: f32,
+    /// Minimum distance between points
+    min_point_distance: f32,
+}
+
+impl PolygonTool {
+    pub fn new() -> Self {
+        Self {
+            points: Vec::new(),
+            is_drawing: false,
+            shape_mode: ShapeMode::Stroke,
+            stroke_color: RgbaPixel::new(0, 0, 0, 255), // Black
+            fill_color: RgbaPixel::new(255, 255, 255, 255), // White
+            stroke_width: 2.0,
+            min_point_distance: 5.0,
+        }
+    }
+
+    /// Start drawing a polygon
+    fn start_drawing(&mut self, start: Point) {
+        self.points.clear();
+        self.points.push(start);
+        self.is_drawing = true;
+        debug!("Started drawing polygon at: {:?}", start);
+    }
+
+    /// Add a point to the polygon
+    fn add_point(&mut self, point: Point) -> bool {
+        if !self.is_drawing {
+            return false;
+        }
+
+        // Check if point is close to the first point (to close polygon)
+        if self.points.len() >= 3 {
+            let first_point = self.points[0];
+            let distance =
+                ((point.x - first_point.x).powi(2) + (point.y - first_point.y).powi(2)).sqrt();
+            if distance <= self.min_point_distance * 2.0 {
+                // Close the polygon
+                return true;
+            }
+        }
+
+        // Check minimum distance from last point
+        if let Some(last_point) = self.points.last() {
+            let distance =
+                ((point.x - last_point.x).powi(2) + (point.y - last_point.y).powi(2)).sqrt();
+            if distance < self.min_point_distance {
+                return false; // Too close to last point
+            }
+        }
+
+        self.points.push(point);
+        debug!(
+            "Added polygon point: {:?}, total points: {}",
+            point,
+            self.points.len()
+        );
+        false
+    }
+
+    /// Finish drawing and create polygon on layer
+    fn finish_drawing(&mut self, document: &mut Document) -> ToolResult<()> {
+        if !self.is_drawing || self.points.len() < 3 {
+            self.cancel_drawing();
+            return Ok(());
+        }
+
+        self.draw_polygon_on_layer(document)?;
+
+        self.is_drawing = false;
+        self.points.clear();
+        Ok(())
+    }
+
+    /// Draw polygon on the active layer
+    fn draw_polygon_on_layer(&self, document: &mut Document) -> ToolResult<()> {
+        let active_layer = document.active_layer_mut();
+        if active_layer.is_none() {
+            debug!("No active layer to draw polygon on");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        // Draw based on shape mode
+        match self.shape_mode {
+            ShapeMode::Fill => {
+                self.fill_polygon(layer)?;
+            }
+            ShapeMode::Stroke => {
+                self.stroke_polygon(layer)?;
+            }
+            ShapeMode::Both => {
+                self.fill_polygon(layer)?;
+                self.stroke_polygon(layer)?;
+            }
+        }
+
+        document.mark_dirty();
+        Ok(())
+    }
+
+    /// Fill polygon using scanline algorithm
+    fn fill_polygon(&self, layer: &mut psoc_core::Layer) -> ToolResult<()> {
+        if self.points.len() < 3 {
+            return Ok(());
+        }
+
+        // Find bounding box
+        let _min_x = self.points.iter().map(|p| p.x as i32).min().unwrap_or(0);
+        let _max_x = self.points.iter().map(|p| p.x as i32).max().unwrap_or(0);
+        let min_y = self.points.iter().map(|p| p.y as i32).min().unwrap_or(0);
+        let max_y = self.points.iter().map(|p| p.y as i32).max().unwrap_or(0);
+
+        // Scanline fill algorithm
+        for y in min_y..=max_y {
+            let mut intersections = Vec::new();
+
+            // Find intersections with polygon edges
+            for i in 0..self.points.len() {
+                let p1 = self.points[i];
+                let p2 = self.points[(i + 1) % self.points.len()];
+
+                let y1 = p1.y as i32;
+                let y2 = p2.y as i32;
+
+                if (y1 <= y && y < y2) || (y2 <= y && y < y1) {
+                    // Edge crosses scanline
+                    let x_intersect = p1.x + (y as f32 - p1.y) * (p2.x - p1.x) / (p2.y - p1.y);
+                    intersections.push(x_intersect as i32);
+                }
+            }
+
+            // Sort intersections
+            intersections.sort();
+
+            // Fill between pairs of intersections
+            for chunk in intersections.chunks(2) {
+                if chunk.len() == 2 {
+                    let start_x = chunk[0].max(0);
+                    let end_x = chunk[1];
+
+                    for x in start_x..=end_x {
+                        if x >= 0 && y >= 0 {
+                            layer.set_pixel(x as u32, y as u32, self.fill_color)?;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Draw polygon outline
+    fn stroke_polygon(&self, layer: &mut psoc_core::Layer) -> ToolResult<()> {
+        if self.points.len() < 2 {
+            return Ok(());
+        }
+
+        // Draw lines between consecutive points
+        for i in 0..self.points.len() {
+            let start = self.points[i];
+            let end = self.points[(i + 1) % self.points.len()];
+            self.draw_thick_line(layer, start, end)?;
+        }
+
+        Ok(())
+    }
+
+    /// Draw a thick line (similar to LineTool implementation)
+    fn draw_thick_line(
+        &self,
+        layer: &mut psoc_core::Layer,
+        start: Point,
+        end: Point,
+    ) -> ToolResult<()> {
+        let thickness = self.stroke_width;
+        let half_thickness = thickness / 2.0;
+
+        // Calculate perpendicular vector for thickness
+        let dx = end.x - start.x;
+        let dy = end.y - start.y;
+        let length = (dx * dx + dy * dy).sqrt();
+
+        if length == 0.0 {
+            return Ok(());
+        }
+
+        let perp_x = -dy / length * half_thickness;
+        let perp_y = dx / length * half_thickness;
+
+        // Draw multiple parallel lines to create thickness
+        let steps = (thickness as i32).max(1);
+        for i in 0..steps {
+            let t = if steps == 1 {
+                0.0
+            } else {
+                (i as f32) / (steps - 1) as f32 - 0.5
+            };
+            let offset_x = perp_x * t * 2.0;
+            let offset_y = perp_y * t * 2.0;
+
+            let line_start = Point::new(start.x + offset_x, start.y + offset_y);
+            let line_end = Point::new(end.x + offset_x, end.y + offset_y);
+
+            self.draw_thin_line(layer, line_start, line_end)?;
+        }
+
+        Ok(())
+    }
+
+    /// Draw a thin line using Bresenham's algorithm
+    fn draw_thin_line(
+        &self,
+        layer: &mut psoc_core::Layer,
+        start: Point,
+        end: Point,
+    ) -> ToolResult<()> {
+        let x0 = start.x as i32;
+        let y0 = start.y as i32;
+        let x1 = end.x as i32;
+        let y1 = end.y as i32;
+
+        let dx = (x1 - x0).abs();
+        let dy = (y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx - dy;
+
+        let mut x = x0;
+        let mut y = y0;
+
+        loop {
+            if x >= 0 && y >= 0 {
+                layer.set_pixel(x as u32, y as u32, self.stroke_color)?;
+            }
+
+            if x == x1 && y == y1 {
+                break;
+            }
+
+            let e2 = 2 * err;
+            if e2 > -dy {
+                err -= dy;
+                x += sx;
+            }
+            if e2 < dx {
+                err += dx;
+                y += sy;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Cancel drawing
+    fn cancel_drawing(&mut self) {
+        self.is_drawing = false;
+        self.points.clear();
+        debug!("Cancelled polygon drawing");
+    }
+}
+
+impl Default for PolygonTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for PolygonTool {
+    fn id(&self) -> &'static str {
+        "polygon"
+    }
+
+    fn name(&self) -> &'static str {
+        "Polygon Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Draw polygons by clicking points"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed {
+                position, button, ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left {
+                    debug!("Polygon tool mouse pressed at: {:?}", position);
+
+                    if !self.is_drawing {
+                        // Start new polygon
+                        self.start_drawing(position);
+                        state.is_active = true;
+                    } else {
+                        // Add point or close polygon
+                        let should_close = self.add_point(position);
+                        if should_close {
+                            self.finish_drawing(document)?;
+                            state.is_active = false;
+                        }
+                    }
+                    state.last_position = Some(position);
+                }
+            }
+            // Note: Double-click functionality removed as MouseDoubleClicked event is not available
+            // Users can use Enter key or click near start point to finish polygon
+            ToolEvent::KeyPressed { key, .. } => match key {
+                super::tool_trait::Key::Escape => {
+                    if self.is_drawing {
+                        debug!("Cancelling polygon drawing");
+                        self.cancel_drawing();
+                        state.is_active = false;
+                    }
+                }
+                super::tool_trait::Key::Enter => {
+                    if self.is_drawing {
+                        debug!("Enter pressed, finishing polygon");
+                        self.finish_drawing(document)?;
+                        state.is_active = false;
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "shape_mode".to_string(),
+                display_name: "Shape Mode".to_string(),
+                description: "How to draw the polygon".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Stroke".to_string(),
+                    "Fill".to_string(),
+                    "Both".to_string(),
+                ]),
+                default_value: ToolOptionValue::String("Stroke".to_string()),
+            },
+            ToolOption {
+                name: "stroke_color".to_string(),
+                display_name: "Stroke Color".to_string(),
+                description: "Color of the polygon outline".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.stroke_color.r,
+                    self.stroke_color.g,
+                    self.stroke_color.b,
+                    self.stroke_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "fill_color".to_string(),
+                display_name: "Fill Color".to_string(),
+                description: "Color to fill the polygon".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.fill_color.r,
+                    self.fill_color.g,
+                    self.fill_color.b,
+                    self.fill_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "stroke_width".to_string(),
+                display_name: "Stroke Width".to_string(),
+                description: "Width of the polygon outline".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 20.0,
+                },
+                default_value: ToolOptionValue::Float(self.stroke_width),
+            },
+            ToolOption {
+                name: "min_point_distance".to_string(),
+                display_name: "Min Point Distance".to_string(),
+                description: "Minimum distance between polygon points".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 50.0,
+                },
+                default_value: ToolOptionValue::Float(self.min_point_distance),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "shape_mode" => {
+                if let ToolOptionValue::String(mode) = value {
+                    self.shape_mode = match mode.as_str() {
+                        "Fill" => ShapeMode::Fill,
+                        "Both" => ShapeMode::Both,
+                        _ => ShapeMode::Stroke,
+                    };
+                }
+            }
+            "stroke_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.stroke_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "fill_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.fill_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "stroke_width" => {
+                if let ToolOptionValue::Float(width) = value {
+                    self.stroke_width = width.clamp(1.0, 20.0);
+                }
+            }
+            "min_point_distance" => {
+                if let ToolOptionValue::Float(distance) = value {
+                    self.min_point_distance = distance.clamp(1.0, 50.0);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "shape_mode" => Some(ToolOptionValue::String(self.shape_mode.to_string())),
+            "stroke_color" => Some(ToolOptionValue::Color([
+                self.stroke_color.r,
+                self.stroke_color.g,
+                self.stroke_color.b,
+                self.stroke_color.a,
+            ])),
+            "fill_color" => Some(ToolOptionValue::Color([
+                self.fill_color.r,
+                self.fill_color.g,
+                self.fill_color.b,
+                self.fill_color.a,
+            ])),
+            "stroke_width" => Some(ToolOptionValue::Float(self.stroke_width)),
+            "min_point_distance" => Some(ToolOptionValue::Float(self.min_point_distance)),
+            _ => None,
+        }
+    }
+}
+
+// ============================================================================
+// SHAPE TOOLS TESTS
+// ============================================================================
+
+#[cfg(test)]
+mod shape_tool_tests {
+    use super::*;
+    use psoc_core::{Document, Point, RgbaPixel};
+
+    #[test]
+    fn test_rectangle_tool_creation() {
+        let tool = RectangleTool::new();
+        assert_eq!(tool.id(), "rectangle");
+        assert_eq!(tool.name(), "Rectangle Tool");
+        assert!(!tool.is_drawing);
+        assert_eq!(tool.shape_mode, ShapeMode::Stroke);
+    }
+
+    #[test]
+    fn test_rectangle_tool_options() {
+        let tool = RectangleTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 4);
+
+        // Check that all expected options are present
+        let option_names: Vec<&str> = options.iter().map(|o| o.name.as_str()).collect();
+        assert!(option_names.contains(&"shape_mode"));
+        assert!(option_names.contains(&"stroke_color"));
+        assert!(option_names.contains(&"fill_color"));
+        assert!(option_names.contains(&"stroke_width"));
+    }
+
+    #[test]
+    fn test_rectangle_tool_set_option() {
+        let mut tool = RectangleTool::new();
+
+        // Test setting shape mode
+        tool.set_option("shape_mode", ToolOptionValue::String("Fill".to_string()))
+            .unwrap();
+        assert_eq!(tool.shape_mode, ShapeMode::Fill);
+
+        // Test setting stroke color
+        tool.set_option("stroke_color", ToolOptionValue::Color([255, 0, 0, 255]))
+            .unwrap();
+        assert_eq!(tool.stroke_color, RgbaPixel::new(255, 0, 0, 255));
+
+        // Test setting stroke width
+        tool.set_option("stroke_width", ToolOptionValue::Float(5.0))
+            .unwrap();
+        assert_eq!(tool.stroke_width, 5.0);
+    }
+
+    #[test]
+    fn test_ellipse_tool_creation() {
+        let tool = EllipseShapeTool::new();
+        assert_eq!(tool.id(), "ellipse_shape");
+        assert_eq!(tool.name(), "Ellipse Tool");
+        assert!(!tool.is_drawing);
+        assert_eq!(tool.shape_mode, ShapeMode::Stroke);
+    }
+
+    #[test]
+    fn test_ellipse_tool_options() {
+        let tool = EllipseShapeTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 4);
+
+        // Check that all expected options are present
+        let option_names: Vec<&str> = options.iter().map(|o| o.name.as_str()).collect();
+        assert!(option_names.contains(&"shape_mode"));
+        assert!(option_names.contains(&"stroke_color"));
+        assert!(option_names.contains(&"fill_color"));
+        assert!(option_names.contains(&"stroke_width"));
+    }
+
+    #[test]
+    fn test_line_tool_creation() {
+        let tool = LineTool::new();
+        assert_eq!(tool.id(), "line");
+        assert_eq!(tool.name(), "Line Tool");
+        assert!(!tool.is_drawing);
+        assert_eq!(tool.line_color, RgbaPixel::new(0, 0, 0, 255));
+        assert_eq!(tool.line_width, 2.0);
+    }
+
+    #[test]
+    fn test_line_tool_options() {
+        let tool = LineTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 2);
+
+        // Check that all expected options are present
+        let option_names: Vec<&str> = options.iter().map(|o| o.name.as_str()).collect();
+        assert!(option_names.contains(&"line_color"));
+        assert!(option_names.contains(&"line_width"));
+    }
+
+    #[test]
+    fn test_polygon_tool_creation() {
+        let tool = PolygonTool::new();
+        assert_eq!(tool.id(), "polygon");
+        assert_eq!(tool.name(), "Polygon Tool");
+        assert!(!tool.is_drawing);
+        assert_eq!(tool.shape_mode, ShapeMode::Stroke);
+        assert!(tool.points.is_empty());
+    }
+
+    #[test]
+    fn test_polygon_tool_options() {
+        let tool = PolygonTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 5);
+
+        // Check that all expected options are present
+        let option_names: Vec<&str> = options.iter().map(|o| o.name.as_str()).collect();
+        assert!(option_names.contains(&"shape_mode"));
+        assert!(option_names.contains(&"stroke_color"));
+        assert!(option_names.contains(&"fill_color"));
+        assert!(option_names.contains(&"stroke_width"));
+        assert!(option_names.contains(&"min_point_distance"));
+    }
+
+    #[test]
+    fn test_shape_mode_display() {
+        assert_eq!(ShapeMode::Stroke.to_string(), "Stroke");
+        assert_eq!(ShapeMode::Fill.to_string(), "Fill");
+        assert_eq!(ShapeMode::Both.to_string(), "Both");
+    }
+
+    #[test]
+    fn test_rectangle_tool_drawing_state() {
+        let mut tool = RectangleTool::new();
+        let start_point = Point::new(10.0, 20.0);
+
+        // Test start drawing
+        tool.start_drawing(start_point);
+        assert!(tool.is_drawing);
+        assert_eq!(tool.start_point, Some(start_point));
+        assert_eq!(tool.end_point, Some(start_point));
+
+        // Test update drawing
+        let end_point = Point::new(50.0, 60.0);
+        tool.update_drawing(end_point);
+        assert_eq!(tool.end_point, Some(end_point));
+
+        // Test cancel drawing
+        tool.cancel_drawing();
+        assert!(!tool.is_drawing);
+        assert_eq!(tool.start_point, None);
+        assert_eq!(tool.end_point, None);
+    }
+
+    #[test]
+    fn test_line_tool_angle_constraint() {
+        let mut tool = LineTool::new();
+        let start_point = Point::new(10.0, 10.0);
+
+        tool.start_drawing(start_point);
+        tool.constrain_angle = true;
+
+        // Test horizontal constraint
+        let horizontal_end = Point::new(50.0, 15.0); // Slight vertical offset
+        tool.update_drawing(horizontal_end);
+        if let Some(end) = tool.end_point {
+            assert_eq!(end.y, start_point.y); // Should be constrained to horizontal
+        }
+    }
+
+    #[test]
+    fn test_polygon_tool_point_management() {
+        let mut tool = PolygonTool::new();
+        let start_point = Point::new(10.0, 10.0);
+
+        // Start drawing
+        tool.start_drawing(start_point);
+        assert!(tool.is_drawing);
+        assert_eq!(tool.points.len(), 1);
+        assert_eq!(tool.points[0], start_point);
+
+        // Add second point
+        let second_point = Point::new(20.0, 10.0);
+        let should_close = tool.add_point(second_point);
+        assert!(!should_close);
+        assert_eq!(tool.points.len(), 2);
+
+        // Add third point
+        let third_point = Point::new(15.0, 20.0);
+        let should_close = tool.add_point(third_point);
+        assert!(!should_close);
+        assert_eq!(tool.points.len(), 3);
+
+        // Try to close by clicking near start point
+        let close_point = Point::new(11.0, 11.0); // Close to start point
+        let should_close = tool.add_point(close_point);
+        assert!(should_close); // Should trigger close
     }
 }

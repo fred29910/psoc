@@ -703,10 +703,11 @@ mod tests {
         let initial_count = manager.count();
 
         // Add a new gradient
-        let custom_gradient = Gradient::linear_two_color(
+        let mut custom_gradient = Gradient::linear_two_color(
             RgbaPixel::new(255, 0, 0, 255),
             RgbaPixel::new(0, 0, 255, 255),
         );
+        custom_gradient.name = "Red to Blue".to_string();
         manager.add_gradient(custom_gradient);
         assert_eq!(manager.count(), initial_count + 1);
 
