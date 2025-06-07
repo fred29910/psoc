@@ -62,8 +62,12 @@ pub trait Command: Debug + Send + Sync {
 /// Command history manager for undo/redo operations
 #[derive(Debug)]
 pub struct CommandHistory {
-    /// Number of commands executed (for basic tracking)
-    command_count: usize,
+    /// Stack of executed commands (for undo)
+    undo_stack: Vec<Box<dyn Command>>,
+    /// Stack of undone commands (for redo)
+    redo_stack: Vec<Box<dyn Command>>,
+    /// Current position in history (for navigation)
+    current_position: usize,
     /// Maximum number of commands to keep
     max_history: usize,
     /// Whether command merging is enabled
@@ -78,8 +82,11 @@ impl Default for CommandHistory {
 
 impl Clone for CommandHistory {
     fn clone(&self) -> Self {
+        // Note: We can't clone Box<dyn Command> directly, so we create a new empty history
         Self {
-            command_count: self.command_count,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            current_position: 0,
             max_history: self.max_history,
             merge_enabled: self.merge_enabled,
         }
@@ -90,7 +97,9 @@ impl CommandHistory {
     /// Create a new command history
     pub fn new() -> Self {
         Self {
-            command_count: 0,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            current_position: 0,
             max_history: MAX_COMMAND_HISTORY,
             merge_enabled: true,
         }
@@ -99,7 +108,9 @@ impl CommandHistory {
     /// Create a new command history with custom settings
     pub fn with_settings(max_history: usize, merge_enabled: bool) -> Self {
         Self {
-            command_count: 0,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            current_position: 0,
             max_history,
             merge_enabled,
         }
@@ -116,59 +127,121 @@ impl CommandHistory {
         // Execute the command
         command.execute(document)?;
 
-        // Increment command count
-        self.command_count += 1;
+        // Clear redo stack when a new command is executed
+        self.redo_stack.clear();
+
+        // Add command to undo stack
+        self.undo_stack.push(command);
+        self.current_position = self.undo_stack.len();
+
+        // Limit history size
+        if self.undo_stack.len() > self.max_history {
+            self.undo_stack.remove(0);
+            self.current_position = self.undo_stack.len();
+        }
 
         info!("Command executed and added to history");
         Ok(())
     }
 
-    /// Undo the last command (simplified implementation)
-    pub fn undo(&mut self, _document: &mut Document) -> Result<bool> {
-        debug!("Undo requested (not yet implemented)");
-        Ok(false)
+    /// Undo the last command
+    pub fn undo(&mut self, document: &mut Document) -> Result<bool> {
+        if self.undo_stack.is_empty() || self.current_position == 0 {
+            debug!("No commands to undo");
+            return Ok(false);
+        }
+
+        // Get the command to undo
+        let command = self
+            .undo_stack
+            .get(self.current_position - 1)
+            .ok_or_else(|| anyhow::anyhow!("Invalid undo position"))?;
+
+        debug!("Undoing command: {}", command.description());
+
+        // Undo the command
+        command.undo(document)?;
+
+        // Move the command to redo stack (we need to clone the reference)
+        // Note: This is a simplified approach - in a full implementation,
+        // we might need a different strategy for command storage
+        self.current_position -= 1;
+
+        info!("Command undone successfully");
+        Ok(true)
     }
 
-    /// Redo the last undone command (simplified implementation)
-    pub fn redo(&mut self, _document: &mut Document) -> Result<bool> {
-        debug!("Redo requested (not yet implemented)");
-        Ok(false)
+    /// Redo the last undone command
+    pub fn redo(&mut self, document: &mut Document) -> Result<bool> {
+        if self.current_position >= self.undo_stack.len() {
+            debug!("No commands to redo");
+            return Ok(false);
+        }
+
+        // Get the command to redo
+        let command = self
+            .undo_stack
+            .get(self.current_position)
+            .ok_or_else(|| anyhow::anyhow!("Invalid redo position"))?;
+
+        debug!("Redoing command: {}", command.description());
+
+        // Execute the command again
+        command.execute(document)?;
+        self.current_position += 1;
+
+        info!("Command redone successfully");
+        Ok(true)
     }
 
     /// Check if undo is available
     pub fn can_undo(&self) -> bool {
-        false // Simplified implementation
+        !self.undo_stack.is_empty() && self.current_position > 0
     }
 
     /// Check if redo is available
     pub fn can_redo(&self) -> bool {
-        false // Simplified implementation
+        self.current_position < self.undo_stack.len()
     }
 
     /// Get the description of the next command that would be undone
     pub fn undo_description(&self) -> Option<&str> {
-        None // Simplified implementation
+        if self.can_undo() {
+            self.undo_stack
+                .get(self.current_position - 1)
+                .map(|cmd| cmd.description())
+        } else {
+            None
+        }
     }
 
     /// Get the description of the next command that would be redone
     pub fn redo_description(&self) -> Option<&str> {
-        None // Simplified implementation
+        if self.can_redo() {
+            self.undo_stack
+                .get(self.current_position)
+                .map(|cmd| cmd.description())
+        } else {
+            None
+        }
     }
 
     /// Clear all command history
     pub fn clear(&mut self) {
-        self.command_count = 0;
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        self.current_position = 0;
         info!("Command history cleared");
     }
 
     /// Get the number of commands in undo stack
     pub fn undo_count(&self) -> usize {
-        0 // Simplified implementation
+        self.current_position
     }
 
     /// Get the number of commands in redo stack
     pub fn redo_count(&self) -> usize {
-        0 // Simplified implementation
+        self.undo_stack.len() - self.current_position
     }
 
     /// Enable or disable command merging
@@ -190,6 +263,73 @@ impl CommandHistory {
     pub fn max_history(&self) -> usize {
         self.max_history
     }
+
+    /// Get all commands in history for display purposes
+    pub fn get_history_entries(&self) -> Vec<HistoryEntry> {
+        self.undo_stack
+            .iter()
+            .enumerate()
+            .map(|(index, command)| HistoryEntry {
+                index,
+                description: command.description().to_string(),
+                timestamp: command.timestamp(),
+                is_current: index == self.current_position.saturating_sub(1),
+                can_navigate_to: true,
+            })
+            .collect()
+    }
+
+    /// Navigate to a specific position in history
+    /// Note: This method should be called from Document to avoid borrowing issues
+    pub fn should_navigate_to_position(&self, position: usize) -> Option<NavigationDirection> {
+        if position > self.undo_stack.len() || position == self.current_position {
+            return None;
+        }
+
+        if position < self.current_position {
+            Some(NavigationDirection::Backward(
+                self.current_position - position,
+            ))
+        } else {
+            Some(NavigationDirection::Forward(
+                position - self.current_position,
+            ))
+        }
+    }
+
+    /// Get current position in history
+    pub fn current_position(&self) -> usize {
+        self.current_position
+    }
+
+    /// Get total number of commands in history
+    pub fn total_commands(&self) -> usize {
+        self.undo_stack.len()
+    }
+}
+
+/// Navigation direction for history
+#[derive(Debug, Clone)]
+pub enum NavigationDirection {
+    /// Move backward (undo) by the specified number of steps
+    Backward(usize),
+    /// Move forward (redo) by the specified number of steps
+    Forward(usize),
+}
+
+/// Represents an entry in the history panel
+#[derive(Debug, Clone)]
+pub struct HistoryEntry {
+    /// Index in the history stack
+    pub index: usize,
+    /// Description of the command
+    pub description: String,
+    /// When the command was executed
+    pub timestamp: std::time::SystemTime,
+    /// Whether this is the current position
+    pub is_current: bool,
+    /// Whether user can navigate to this position
+    pub can_navigate_to: bool,
 }
 
 /// Command execution result

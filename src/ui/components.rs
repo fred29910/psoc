@@ -6,7 +6,7 @@ use iced::{
 };
 
 use super::icons::{icon_button, simple_icon_button, tool_button, Icon};
-use psoc_core::RgbaPixel;
+use psoc_core::{HistoryEntry, RgbaPixel};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -590,6 +590,116 @@ pub fn tool_options_panel<Message: Clone + 'static>(
     }
 
     side_panel("Tool Options".to_string(), content, 250.0)
+}
+
+/// Create a history panel showing command history
+pub fn history_panel<Message: Clone + 'static>(
+    history_entries: Vec<HistoryEntry>,
+    navigate_to: impl Fn(usize) -> Message + 'static,
+    clear_history: Message,
+) -> Element<'static, Message> {
+    let mut content = vec![section_header("History".to_string())];
+
+    // Add clear history button
+    content.push(
+        container(
+            button(text("Clear History").size(12.0))
+                .on_press(clear_history)
+                .style(|theme: &iced::Theme, status| {
+                    let palette = theme.extended_palette();
+                    button::Style {
+                        background: Some(iced::Background::Color(palette.danger.base.color)),
+                        text_color: iced::Color::WHITE,
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
+                        ..button::primary(theme, status)
+                    }
+                }),
+        )
+        .padding(8.0)
+        .width(Length::Fill)
+        .into(),
+    );
+
+    if history_entries.is_empty() {
+        content.push(
+            container(
+                text("No history")
+                    .size(12.0)
+                    .style(|_theme| iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                    }),
+            )
+            .padding(16.0)
+            .center_x(Length::Fill)
+            .into(),
+        );
+    } else {
+        // Add history entries
+        for entry in history_entries {
+            content.push(history_entry_item(
+                entry.description.clone(),
+                entry.is_current,
+                navigate_to(entry.index + 1), // +1 because we want to navigate to the position after this command
+            ));
+        }
+    }
+
+    side_panel("History".to_string(), content, 250.0)
+}
+
+/// Create a single history entry item
+fn history_entry_item<Message: Clone + 'static>(
+    description: String,
+    is_current: bool,
+    navigate_message: Message,
+) -> Element<'static, Message> {
+    let text_color = if is_current {
+        iced::Color::from_rgb(0.2, 0.6, 1.0) // Blue for current
+    } else {
+        iced::Color::WHITE
+    };
+
+    let entry_content = button(
+        text(description)
+            .size(12.0)
+            .style(move |_theme: &iced::Theme| iced::widget::text::Style {
+                color: Some(text_color),
+            }),
+    )
+    .on_press(navigate_message)
+    .style(move |theme: &iced::Theme, status| {
+        let palette = theme.extended_palette();
+        if is_current {
+            button::Style {
+                background: Some(iced::Background::Color(palette.primary.weak.color)),
+                text_color,
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
+                ..button::secondary(theme, status)
+            }
+        } else {
+            button::Style {
+                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                text_color,
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
+                ..button::text(theme, status)
+            }
+        }
+    })
+    .width(Length::Fill);
+
+    container(entry_content)
+        .padding(2.0)
+        .width(Length::Fill)
+        .into()
 }
 
 /// Tool option control types

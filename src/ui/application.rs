@@ -170,8 +170,19 @@ pub enum Message {
     View(ViewMessage),
     /// Keyboard shortcut triggered
     Shortcut(ShortcutAction),
+    /// History panel messages
+    History(HistoryMessage),
     /// Error occurred
     Error(String),
+}
+
+/// History panel messages
+#[derive(Debug, Clone)]
+pub enum HistoryMessage {
+    /// Navigate to a specific position in history
+    NavigateToPosition(usize),
+    /// Clear all history
+    ClearHistory,
 }
 
 /// Layer-specific messages
@@ -785,6 +796,10 @@ impl PsocApp {
                 debug!("Shortcut triggered: {:?}", action);
                 self.handle_shortcut_action(action);
             }
+            Message::History(history_msg) => {
+                debug!("History message: {:?}", history_msg);
+                self.handle_history_message(history_msg);
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
@@ -1146,6 +1161,7 @@ impl PsocApp {
         ];
 
         let layers_content = self.create_layers_content();
+        let history_content = self.create_history_content();
 
         column![
             components::side_panel(
@@ -1154,6 +1170,7 @@ impl PsocApp {
                 250.0
             ),
             column(layers_content).spacing(0),
+            history_content,
         ]
         .spacing(spacing::SM)
         .into()
@@ -1548,6 +1565,59 @@ impl PsocApp {
                 None,
                 None,
             )]
+        }
+    }
+
+    /// Create the history content
+    fn create_history_content(&self) -> Element<Message> {
+        if let Some(ref document) = self.state.current_document {
+            let history_entries = document.command_history.get_history_entries();
+            components::history_panel(
+                history_entries,
+                |position| Message::History(HistoryMessage::NavigateToPosition(position)),
+                Message::History(HistoryMessage::ClearHistory),
+            )
+        } else {
+            // No document open - return empty history panel
+            components::history_panel(
+                vec![],
+                |_| Message::Error("No document open".to_string()),
+                Message::Error("No document open".to_string()),
+            )
+        }
+    }
+
+    /// Handle history-specific messages
+    fn handle_history_message(&mut self, message: HistoryMessage) {
+        if let Some(ref mut document) = self.state.current_document {
+            match message {
+                HistoryMessage::NavigateToPosition(position) => {
+                    info!("Navigating to history position: {}", position);
+                    match document.navigate_to_history_position(position) {
+                        Ok(true) => {
+                            info!("Successfully navigated to position {}", position);
+                            // Update canvas with the modified document
+                            self.canvas.set_document(document.clone());
+                            self.sync_canvas_state();
+                            self.error_message = None;
+                        }
+                        Ok(false) => {
+                            debug!("Already at position {}", position);
+                        }
+                        Err(e) => {
+                            error!("Failed to navigate to position {}: {}", position, e);
+                            self.error_message = Some(format!("Navigation failed: {}", e));
+                        }
+                    }
+                }
+                HistoryMessage::ClearHistory => {
+                    info!("Clearing command history");
+                    document.clear_history();
+                    self.error_message = None;
+                }
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
         }
     }
 

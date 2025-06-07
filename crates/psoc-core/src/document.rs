@@ -581,6 +581,31 @@ impl Document {
         &self.selection
     }
 
+    /// Navigate to a specific position in command history
+    pub fn navigate_to_history_position(&mut self, position: usize) -> Result<bool> {
+        if let Some(direction) = self.command_history.should_navigate_to_position(position) {
+            match direction {
+                crate::NavigationDirection::Backward(steps) => {
+                    for _ in 0..steps {
+                        if !self.undo()? {
+                            break;
+                        }
+                    }
+                }
+                crate::NavigationDirection::Forward(steps) => {
+                    for _ in 0..steps {
+                        if !self.redo()? {
+                            break;
+                        }
+                    }
+                }
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     /// Clear the current selection (select all)
     pub fn clear_selection(&mut self) {
         self.selection = Selection::None;
