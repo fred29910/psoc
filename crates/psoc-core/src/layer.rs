@@ -3,10 +3,12 @@
 //! This module defines the layer system for the PSOC image editor, including
 //! layer types, blend modes, and layer operations.
 
-use crate::geometry::{Point, Rect, Transform};
+use crate::geometry::{Point, Rect, Size, Transform};
 use crate::pixel::{PixelData, RgbaPixel};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+// use std::collections::HashMap; // Commented out - not currently used
+use std::path::PathBuf;
 use uuid::Uuid;
 
 /// Layer blend modes
@@ -419,6 +421,76 @@ impl BlendMode {
     }
 }
 
+/// Smart object content type
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SmartObjectContentType {
+    /// Embedded image file
+    EmbeddedImage {
+        /// Original file path (for reference)
+        original_path: Option<PathBuf>,
+        /// Embedded image data
+        image_data: Vec<u8>,
+        /// Image format (png, jpg, etc.)
+        format: String,
+    },
+    /// Linked image file
+    LinkedImage {
+        /// Path to the linked file
+        file_path: PathBuf,
+        /// Last modification time for update detection
+        last_modified: Option<std::time::SystemTime>,
+    },
+    /// Embedded document (nested PSOC project)
+    EmbeddedDocument {
+        /// Serialized document data
+        document_data: Vec<u8>,
+    },
+}
+
+/// Smart transformation parameters for non-destructive editing
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SmartTransform {
+    /// Scale factors (x, y)
+    pub scale: (f32, f32),
+    /// Rotation angle in radians
+    pub rotation: f32,
+    /// Translation offset
+    pub translation: Point,
+    /// Whether to maintain aspect ratio
+    pub maintain_aspect_ratio: bool,
+    /// Interpolation quality for transformations
+    pub interpolation_quality: InterpolationQuality,
+}
+
+impl Default for SmartTransform {
+    fn default() -> Self {
+        Self {
+            scale: (1.0, 1.0),
+            rotation: 0.0,
+            translation: Point::origin(),
+            maintain_aspect_ratio: true,
+            interpolation_quality: InterpolationQuality::High,
+        }
+    }
+}
+
+/// Interpolation quality for smart object transformations
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InterpolationQuality {
+    /// Nearest neighbor (fastest, lowest quality)
+    Nearest,
+    /// Linear interpolation (balanced)
+    Linear,
+    /// High quality interpolation (slowest, best quality)
+    High,
+}
+
+impl Default for InterpolationQuality {
+    fn default() -> Self {
+        Self::High
+    }
+}
+
 /// Layer type enumeration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LayerType {
@@ -442,6 +514,17 @@ pub enum LayerType {
     Adjustment {
         adjustment_type: String,
         parameters: std::collections::HashMap<String, f32>,
+    },
+    /// Smart object layer
+    SmartObject {
+        /// Source content type
+        content_type: SmartObjectContentType,
+        /// Original dimensions before any transformations
+        original_size: Size,
+        /// Non-destructive transformation parameters
+        smart_transform: SmartTransform,
+        /// Whether the content has been modified externally
+        needs_update: bool,
     },
 }
 
@@ -562,6 +645,42 @@ impl Layer {
         }
     }
 
+    /// Create a new smart object layer
+    pub fn new_smart_object(
+        name: String,
+        content_type: SmartObjectContentType,
+        original_size: Size,
+        position: Point,
+    ) -> Self {
+        let id = Uuid::new_v4();
+        let bounds = Rect::new(
+            position.x,
+            position.y,
+            original_size.width,
+            original_size.height,
+        );
+
+        Self {
+            id,
+            name,
+            layer_type: LayerType::SmartObject {
+                content_type,
+                original_size,
+                smart_transform: SmartTransform::default(),
+                needs_update: false,
+            },
+            pixel_data: None, // Smart objects generate pixel data on demand
+            visible: true,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            offset: position,
+            transform: Transform::identity(),
+            bounds,
+            locked: false,
+            mask: None,
+        }
+    }
+
     /// Get layer dimensions
     pub fn dimensions(&self) -> Option<(u32, u32)> {
         self.pixel_data.as_ref().map(|data| data.dimensions())
@@ -652,10 +771,180 @@ impl Layer {
         self.visible && self.effective_opacity() > 0.0
     }
 
+    /// Check if layer has a mask
+    pub fn has_mask(&self) -> bool {
+        self.mask.is_some()
+    }
+
+    /// Get mask dimensions
+    pub fn mask_dimensions(&self) -> Option<(u32, u32)> {
+        self.mask.as_ref().map(|mask| mask.dimensions())
+    }
+
+    /// Create a new mask for this layer
+    pub fn create_mask(&mut self, width: u32, height: u32) -> Result<()> {
+        let mut mask = PixelData::new_grayscale(width, height);
+        // Initialize mask to fully opaque (white)
+        mask.fill(RgbaPixel::white());
+        self.mask = Some(mask);
+        Ok(())
+    }
+
+    /// Remove the mask from this layer
+    pub fn remove_mask(&mut self) {
+        self.mask = None;
+    }
+
+    /// Get mask pixel at coordinates
+    pub fn get_mask_pixel(&self, x: u32, y: u32) -> Option<RgbaPixel> {
+        self.mask.as_ref()?.get_pixel(x, y)
+    }
+
+    /// Set mask pixel at coordinates
+    pub fn set_mask_pixel(&mut self, x: u32, y: u32, pixel: RgbaPixel) -> Result<()> {
+        if let Some(ref mut mask) = self.mask {
+            mask.set_pixel(x, y, pixel)
+        } else {
+            Err(anyhow::anyhow!("Layer has no mask"))
+        }
+    }
+
+    /// Fill mask with color
+    pub fn fill_mask(&mut self, color: RgbaPixel) -> Result<()> {
+        if let Some(ref mut mask) = self.mask {
+            mask.fill(color);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer has no mask"))
+        }
+    }
+
+    /// Clear mask (fill with black - fully transparent)
+    pub fn clear_mask(&mut self) -> Result<()> {
+        self.fill_mask(RgbaPixel::black())
+    }
+
+    /// Invert mask
+    pub fn invert_mask(&mut self) -> Result<()> {
+        if let Some(ref mut mask) = self.mask {
+            let (width, height) = mask.dimensions();
+            for y in 0..height {
+                for x in 0..width {
+                    if let Some(pixel) = mask.get_pixel(x, y) {
+                        let inverted =
+                            RgbaPixel::new(255 - pixel.r, 255 - pixel.g, 255 - pixel.b, pixel.a);
+                        mask.set_pixel(x, y, inverted)?;
+                    }
+                }
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer has no mask"))
+        }
+    }
+
+    /// Apply mask to get effective pixel opacity
+    pub fn get_masked_pixel(&self, x: u32, y: u32) -> Option<RgbaPixel> {
+        let mut pixel = self.get_pixel(x, y)?;
+
+        if let Some(mask_pixel) = self.get_mask_pixel(x, y) {
+            // Use the red channel of the mask as the mask value (grayscale)
+            let mask_value = mask_pixel.r as f32 / 255.0;
+            let new_alpha = (pixel.a as f32 * mask_value) as u8;
+            pixel.a = new_alpha;
+        }
+
+        Some(pixel)
+    }
+
     /// Get layer bounds in document coordinates
     pub fn document_bounds(&self) -> Rect {
         self.transform
             .transform_rect(self.bounds.translate(self.offset.x, self.offset.y))
+    }
+
+    /// Check if this is a smart object layer
+    pub fn is_smart_object(&self) -> bool {
+        matches!(self.layer_type, LayerType::SmartObject { .. })
+    }
+
+    /// Get smart object content type (if this is a smart object)
+    pub fn smart_object_content_type(&self) -> Option<&SmartObjectContentType> {
+        if let LayerType::SmartObject { content_type, .. } = &self.layer_type {
+            Some(content_type)
+        } else {
+            None
+        }
+    }
+
+    /// Get smart object original size (if this is a smart object)
+    pub fn smart_object_original_size(&self) -> Option<Size> {
+        if let LayerType::SmartObject { original_size, .. } = &self.layer_type {
+            Some(*original_size)
+        } else {
+            None
+        }
+    }
+
+    /// Get smart object transform parameters (if this is a smart object)
+    pub fn smart_object_transform(&self) -> Option<&SmartTransform> {
+        if let LayerType::SmartObject {
+            smart_transform, ..
+        } = &self.layer_type
+        {
+            Some(smart_transform)
+        } else {
+            None
+        }
+    }
+
+    /// Check if smart object needs update (if this is a smart object)
+    pub fn smart_object_needs_update(&self) -> bool {
+        if let LayerType::SmartObject { needs_update, .. } = &self.layer_type {
+            *needs_update
+        } else {
+            false
+        }
+    }
+
+    /// Mark smart object as needing update
+    pub fn mark_smart_object_for_update(&mut self) {
+        if let LayerType::SmartObject { needs_update, .. } = &mut self.layer_type {
+            *needs_update = true;
+        }
+    }
+
+    /// Clear smart object update flag
+    pub fn clear_smart_object_update_flag(&mut self) {
+        if let LayerType::SmartObject { needs_update, .. } = &mut self.layer_type {
+            *needs_update = false;
+        }
+    }
+
+    /// Update smart object transform parameters
+    pub fn update_smart_object_transform(&mut self, new_transform: SmartTransform) -> Result<()> {
+        if let LayerType::SmartObject {
+            smart_transform, ..
+        } = &mut self.layer_type
+        {
+            *smart_transform = new_transform;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer is not a smart object"))
+        }
+    }
+
+    /// Reset smart object transform to default
+    pub fn reset_smart_object_transform(&mut self) -> Result<()> {
+        if let LayerType::SmartObject {
+            smart_transform, ..
+        } = &mut self.layer_type
+        {
+            *smart_transform = SmartTransform::default();
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer is not a smart object"))
+        }
     }
 }
 
@@ -941,5 +1230,92 @@ mod tests {
             results_different,
             "HSL blend modes should produce at least some different results"
         );
+    }
+
+    #[test]
+    fn test_layer_mask_creation() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 100, 50);
+
+        assert!(!layer.has_mask());
+        assert!(layer.mask_dimensions().is_none());
+
+        // Create a mask
+        layer.create_mask(100, 50).unwrap();
+
+        assert!(layer.has_mask());
+        assert_eq!(layer.mask_dimensions(), Some((100, 50)));
+    }
+
+    #[test]
+    fn test_layer_mask_removal() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 100, 50);
+
+        // Create and then remove mask
+        layer.create_mask(100, 50).unwrap();
+        assert!(layer.has_mask());
+
+        layer.remove_mask();
+        assert!(!layer.has_mask());
+        assert!(layer.mask_dimensions().is_none());
+    }
+
+    #[test]
+    fn test_layer_mask_pixel_operations() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+        layer.create_mask(10, 10).unwrap();
+
+        // Test setting and getting mask pixels
+        let white_pixel = RgbaPixel::white();
+        let black_pixel = RgbaPixel::black();
+
+        layer.set_mask_pixel(5, 5, black_pixel).unwrap();
+        assert_eq!(layer.get_mask_pixel(5, 5), Some(black_pixel));
+
+        // Test mask fill
+        layer.fill_mask(white_pixel).unwrap();
+        assert_eq!(layer.get_mask_pixel(5, 5), Some(white_pixel));
+
+        // Test mask clear
+        layer.clear_mask().unwrap();
+        assert_eq!(layer.get_mask_pixel(5, 5), Some(black_pixel));
+    }
+
+    #[test]
+    fn test_layer_mask_inversion() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+        layer.create_mask(10, 10).unwrap();
+
+        // Fill with white, then invert to black
+        layer.fill_mask(RgbaPixel::white()).unwrap();
+        layer.invert_mask().unwrap();
+
+        let pixel = layer.get_mask_pixel(5, 5).unwrap();
+        assert_eq!(pixel.r, 0); // Should be black after inversion
+        assert_eq!(pixel.g, 0);
+        assert_eq!(pixel.b, 0);
+    }
+
+    #[test]
+    fn test_masked_pixel_retrieval() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+
+        // Set a red pixel
+        let red_pixel = RgbaPixel::new(255, 0, 0, 255);
+        layer.set_pixel(5, 5, red_pixel).unwrap();
+
+        // Without mask, should get full opacity
+        assert_eq!(layer.get_masked_pixel(5, 5), Some(red_pixel));
+
+        // Create mask and set to half opacity (gray)
+        layer.create_mask(10, 10).unwrap();
+        let gray_pixel = RgbaPixel::new(128, 128, 128, 255);
+        layer.set_mask_pixel(5, 5, gray_pixel).unwrap();
+
+        // Should get pixel with reduced alpha
+        let masked_pixel = layer.get_masked_pixel(5, 5).unwrap();
+        assert_eq!(masked_pixel.r, 255); // Color unchanged
+        assert_eq!(masked_pixel.g, 0);
+        assert_eq!(masked_pixel.b, 0);
+        assert!(masked_pixel.a < 255); // Alpha reduced by mask
     }
 }

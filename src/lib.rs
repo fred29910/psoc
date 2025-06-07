@@ -7,7 +7,9 @@ pub mod app;
 pub mod commands;
 pub mod core;
 pub mod file_io;
+pub mod i18n;
 pub mod image_processing;
+pub mod preferences;
 pub mod rendering;
 pub mod shortcuts;
 pub mod tools;
@@ -21,6 +23,7 @@ pub mod plugins;
 // Re-export commonly used types
 pub use app::{AppConfig, Application};
 pub use core::{Document, Layer};
+pub use i18n::{init_localization, t, t_with_args, Language, LocalizationManager};
 pub use tools::{Tool, ToolManager, ToolType};
 #[cfg(feature = "gui")]
 pub use ui::{AppState, ImageCanvas, ImageData, Message, PsocApp};

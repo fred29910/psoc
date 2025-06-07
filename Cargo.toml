@@ -1,6 +1,6 @@
 [package]
 name = "psoc"
-version = "0.3.0"
+version = "0.8.6"
 edition = "2021"
 authors = ["PSOC Development Team <dev@psoc.project>"]
 description = "A Photoshop-like image editor built with Rust"
@@ -11,6 +11,7 @@ documentation = "https://docs.rs/psoc"
 readme = "README.md"
 keywords = ["image", "editor", "graphics", "photoshop", "gui"]
 categories = ["graphics", "multimedia::images", "gui"]
+build = "build.rs"
 
 [workspace]
 members = [
@@ -50,6 +51,17 @@ glam = "0.30.3"
 # Async runtime
 tokio = { version = "1.45.1", features = ["full"] }
 
+# Internationalization (i18n)
+fluent = "0.17.0"
+fluent-bundle = "0.16.0"
+unic-langid = { version = "0.9.6", features = ["unic-langid-macros"] }
+sys-locale = "0.3.2"
+
+# System utilities
+dirs = "6.0.0"
+num_cpus = "1.17.0"
+ron = "0.10.1"
+
 # Icons and fonts (optional for now)
 # iced_aw = { version = "0.7", features = ["icons", "card", "tabs", "split"] }
 
@@ -71,10 +83,15 @@ proptest = "1.6.0"
 tempfile = "3.20.0"
 tokio-test = "0.4.4"
 
+[build-dependencies]
+# For embedding resources and building platform-specific assets
+winres = { version = "0.1.12", optional = true }
+
 [features]
 default = ["gui"]
 gui = ["dep:iced", "dep:rfd"]
 plugins = ["psoc-plugins", "dep:mlua", "dep:wasmtime"]
+windows-resources = ["dep:winres"]
 
 [profile.dev]
 opt-level = 0

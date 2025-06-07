@@ -1,0 +1,194 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  Copyright (C) 2024 PSOC Development Team
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+  <Product
+    Id='*'
+    Name='PSOC Image Editor'
+    UpgradeCode='12345678-1234-1234-1234-111111111111'
+    Manufacturer='PSOC Development Team'
+    Language='1033'
+    Codepage='1252'
+    Version='$(var.Version)'>
+
+    <Package Id='*'
+      Keywords='Installer'
+      Description='PSOC Image Editor Installer'
+      Manufacturer='PSOC Development Team'
+      InstallerVersion='450'
+      Languages='1033'
+      Compressed='yes'
+      SummaryCodepage='1252' />
+
+    <MajorUpgrade
+      Schedule='afterInstallInitialize'
+      DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.' />
+
+    <Media Id='1' Cabinet='Sample.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1' />
+    <Property Id='DiskPrompt' Value='PSOC Image Editor Installation' />
+
+    <Directory Id='TARGETDIR' Name='SourceDir'>
+      <Directory Id='ProgramFiles64Folder' Name='PFiles'>
+        <Directory Id='APPLICATIONROOTDIRECTORY' Name='PSOC'>
+          <Component Id='Path' Guid='12345678-1234-1234-1234-222222222222' KeyPath='yes'>
+            <Environment
+              Id='PATH'
+              Name='PATH'
+              Value='[APPLICATIONROOTDIRECTORY]'
+              Permanent='no'
+              Part='last'
+              Action='set'
+              System='yes' />
+          </Component>
+          <Component Id='binary0' Guid='*'>
+            <File
+              Id='exe0'
+              Name='psoc.exe'
+              DiskId='1'
+              Source='$(var.CargoTargetBinDir)\psoc.exe'
+              KeyPath='yes' />
+          </Component>
+        </Directory>
+      </Directory>
+      <Directory Id='ProgramMenuFolder'>
+        <Directory Id='ApplicationProgramsFolder' Name='PSOC Image Editor'>
+          <Component Id='ApplicationShortcut' Guid='*'>
+            <Shortcut
+              Id='ApplicationStartMenuShortcut'
+              Name='PSOC Image Editor'
+              Description='Professional Simple Open-source image editor'
+              Target='[APPLICATIONROOTDIRECTORY]psoc.exe'
+              WorkingDirectory='APPLICATIONROOTDIRECTORY' />
+            <RemoveFolder Id='ApplicationProgramsFolder' On='uninstall' />
+            <RegistryValue
+              Root='HKCU'
+              Key='Software\PSOC\ImageEditor'
+              Name='installed'
+              Type='integer'
+              Value='1'
+              KeyPath='yes' />
+          </Component>
+        </Directory>
+      </Directory>
+      <Directory Id='DesktopFolder' Name='Desktop'>
+        <Component Id='ApplicationShortcutDesktop' Guid='*'>
+          <Shortcut
+            Id='ApplicationDesktopShortcut'
+            Name='PSOC Image Editor'
+            Description='Professional Simple Open-source image editor'
+            Target='[APPLICATIONROOTDIRECTORY]psoc.exe'
+            WorkingDirectory='APPLICATIONROOTDIRECTORY' />
+          <RemoveFolder Id='DesktopFolder' On='uninstall' />
+          <RegistryValue
+            Root='HKCU'
+            Key='Software\PSOC\ImageEditor'
+            Name='desktop_shortcut'
+            Type='integer'
+            Value='1'
+            KeyPath='yes' />
+        </Component>
+      </Directory>
+    </Directory>
+
+    <Feature
+      Id='Binaries'
+      Title='Application'
+      Description='Installs all binaries and the license.'
+      Level='1'
+      ConfigurableDirectory='APPLICATIONROOTDIRECTORY'
+      AllowAdvertise='no'
+      Display='expand'
+      Absent='disallow'>
+      <ComponentRef Id='binary0' />
+      <ComponentRef Id='Path' />
+      <Feature
+        Id='Environment'
+        Title='PATH Environment Variable'
+        Description='Add the install location of the [ProductName] executable to the PATH system environment variable. This allows the [ProductName] executable to be called from any location.'
+        Level='1'
+        Absent='allow'>
+        <ComponentRef Id='Path' />
+      </Feature>
+    </Feature>
+
+    <Feature
+      Id='Shortcuts'
+      Title='Shortcuts'
+      Description='Add shortcuts to the Start Menu and Desktop.'
+      Level='1'
+      AllowAdvertise='no'>
+      <ComponentRef Id='ApplicationShortcut' />
+      <ComponentRef Id='ApplicationShortcutDesktop' />
+    </Feature>
+
+    <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONROOTDIRECTORY]' After='CostFinalize' />
+
+    <!-- File associations -->
+    <DirectoryRef Id='APPLICATIONROOTDIRECTORY'>
+      <Component Id='FileAssociations' Guid='*'>
+        <!-- PNG files -->
+        <RegistryValue Root='HKCR' Key='.png\OpenWithProgids' Name='PSOC.ImageFile' Value='' Type='string' />
+        <RegistryValue Root='HKCR' Key='PSOC.ImageFile' Value='PSOC Image File' Type='string' />
+        <RegistryValue Root='HKCR' Key='PSOC.ImageFile\DefaultIcon' Value='[APPLICATIONROOTDIRECTORY]psoc.exe,0' Type='string' />
+        <RegistryValue Root='HKCR' Key='PSOC.ImageFile\shell\open\command' Value='"[APPLICATIONROOTDIRECTORY]psoc.exe" "%1"' Type='string' />
+        
+        <!-- JPEG files -->
+        <RegistryValue Root='HKCR' Key='.jpg\OpenWithProgids' Name='PSOC.ImageFile' Value='' Type='string' />
+        <RegistryValue Root='HKCR' Key='.jpeg\OpenWithProgids' Name='PSOC.ImageFile' Value='' Type='string' />
+        
+        <!-- PSOC project files -->
+        <RegistryValue Root='HKCR' Key='.psoc' Value='PSOC.ProjectFile' Type='string' />
+        <RegistryValue Root='HKCR' Key='PSOC.ProjectFile' Value='PSOC Project File' Type='string' />
+        <RegistryValue Root='HKCR' Key='PSOC.ProjectFile\DefaultIcon' Value='[APPLICATIONROOTDIRECTORY]psoc.exe,0' Type='string' />
+        <RegistryValue Root='HKCR' Key='PSOC.ProjectFile\shell\open\command' Value='"[APPLICATIONROOTDIRECTORY]psoc.exe" "%1"' Type='string' />
+      </Component>
+    </DirectoryRef>
+
+    <Feature
+      Id='FileAssociations'
+      Title='File Associations'
+      Description='Associate image files with PSOC Image Editor.'
+      Level='1'
+      AllowAdvertise='no'>
+      <ComponentRef Id='FileAssociations' />
+    </Feature>
+
+    <Icon Id='ProductICO' SourceFile='resources\icons\psoc.ico' />
+    <Property Id='ARPPRODUCTICON' Value='ProductICO' />
+    <Property Id='ARPHELPLINK' Value='https://github.com/YOUR_USERNAME/psoc' />
+    <Property Id='ARPURLINFOABOUT' Value='https://github.com/YOUR_USERNAME/psoc' />
+    <Property Id='ARPNOREPAIR' Value='yes' Secure='yes' />
+    <Property Id='ARPNOMODIFY' Value='yes' Secure='yes' />
+
+    <UI>
+      <UIRef Id='WixUI_FeatureTree' />
+      <Publish Dialog='ExitDialog'
+        Control='Finish'
+        Event='DoAction'
+        Value='LaunchApplication'>WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+    </UI>
+
+    <Property Id='WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT' Value='Launch PSOC Image Editor' />
+
+    <Property Id='WixShellExecTarget' Value='[#exe0]' />
+    <CustomAction Id='LaunchApplication'
+      BinaryKey='WixCA'
+      DllEntry='WixShellExec'
+      Impersonate='yes' />
+
+  </Product>
+</Wix>

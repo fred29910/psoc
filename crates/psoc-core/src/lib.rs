@@ -17,6 +17,7 @@ pub mod math;
 pub mod pixel;
 pub mod rendering;
 pub mod selection;
+pub mod smart_object;
 
 // Re-export commonly used types
 pub use adjustment::*;
@@ -32,6 +33,7 @@ pub use math::*;
 pub use pixel::*;
 pub use rendering::*;
 pub use selection::*;
+pub use smart_object::*;
 
 // Re-export color space from color module to avoid conflicts
 pub use color::ColorSpace as DocumentColorSpace;

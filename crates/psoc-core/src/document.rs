@@ -386,13 +386,13 @@ impl Document {
 
     /// Flatten document to a single image
     pub fn flatten(&self) -> Result<DynamicImage> {
-        self.flatten_with_render_engine(&crate::rendering::RenderEngine::new())
+        self.flatten_with_render_engine(&mut crate::rendering::RenderEngine::new())
     }
 
     /// Flatten document using a specific render engine
     pub fn flatten_with_render_engine(
         &self,
-        render_engine: &crate::rendering::RenderEngine,
+        render_engine: &mut crate::rendering::RenderEngine,
     ) -> Result<DynamicImage> {
         let pixel_data = render_engine.render_document(self)?;
         pixel_data.to_image()

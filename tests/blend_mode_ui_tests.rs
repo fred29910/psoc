@@ -155,7 +155,7 @@ fn test_blend_mode_serialization() {
 fn test_blend_mode_rendering_integration() {
     use psoc::rendering::RenderEngine;
 
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 100, 100);
 
     // Create base layer (red)
@@ -186,7 +186,7 @@ fn test_blend_mode_rendering_integration() {
 fn test_layer_opacity_and_blend_mode_interaction() {
     use psoc::rendering::RenderEngine;
 
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 100, 100);
 
     // Create base layer (white)

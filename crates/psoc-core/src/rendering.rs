@@ -3,9 +3,13 @@
 //! This module provides high-performance rendering capabilities for the PSOC image editor.
 //! It handles layer composition, blend mode application, and optimized rendering pipelines.
 
-use crate::{Document, Layer, PixelData};
+use crate::{
+    adjustment::AdjustmentRegistry, geometry::Size, smart_object::SmartObjectManager, Document,
+    Layer, LayerType, PixelData,
+};
 use anyhow::Result;
 use rayon::prelude::*;
+use std::collections::HashMap;
 use tracing::{debug, instrument, trace};
 
 /// Rendering engine for layer composition and image generation
@@ -15,6 +19,10 @@ pub struct RenderEngine {
     parallel_enabled: bool,
     /// Tile size for parallel processing
     tile_size: u32,
+    /// Adjustment registry for applying adjustment layers
+    adjustment_registry: AdjustmentRegistry,
+    /// Smart object manager for handling embedded content
+    smart_object_manager: SmartObjectManager,
 }
 
 impl Default for RenderEngine {
@@ -26,23 +34,33 @@ impl Default for RenderEngine {
 impl RenderEngine {
     /// Create a new render engine with default settings
     pub fn new() -> Self {
+        let mut adjustment_registry = AdjustmentRegistry::new();
+        adjustment_registry.register_default_adjustments();
+
         Self {
             parallel_enabled: true,
             tile_size: 64,
+            adjustment_registry,
+            smart_object_manager: SmartObjectManager::new(),
         }
     }
 
     /// Create a render engine with custom settings
     pub fn with_settings(parallel_enabled: bool, tile_size: u32) -> Self {
+        let mut adjustment_registry = AdjustmentRegistry::new();
+        adjustment_registry.register_default_adjustments();
+
         Self {
             parallel_enabled,
             tile_size: tile_size.max(16), // Minimum tile size
+            adjustment_registry,
+            smart_object_manager: SmartObjectManager::new(),
         }
     }
 
     /// Render document to a single flattened image
     #[instrument(skip(self, document))]
-    pub fn render_document(&self, document: &Document) -> Result<PixelData> {
+    pub fn render_document(&mut self, document: &Document) -> Result<PixelData> {
         debug!(
             "Rendering document: {}x{} with {} layers",
             document.size.width,
@@ -70,8 +88,37 @@ impl RenderEngine {
                 continue;
             }
 
-            if let Some(layer_data) = &layer.pixel_data {
-                self.composite_layer(&mut result, layer, layer_data)?;
+            match &layer.layer_type {
+                // Handle adjustment layers
+                LayerType::Adjustment {
+                    adjustment_type,
+                    parameters,
+                } => {
+                    self.apply_adjustment_layer(&mut result, layer, adjustment_type, parameters)?;
+                    continue;
+                }
+                // Handle smart object layers
+                LayerType::SmartObject {
+                    content_type,
+                    original_size,
+                    smart_transform,
+                    ..
+                } => {
+                    let smart_object_data = self.render_smart_object_layer(
+                        content_type,
+                        *original_size,
+                        smart_transform,
+                        Some(Size::new(document.size.width, document.size.height)),
+                    )?;
+                    self.composite_layer(&mut result, layer, &smart_object_data)?;
+                    continue;
+                }
+                // Handle other layer types with pixel data
+                _ => {
+                    if let Some(layer_data) = &layer.pixel_data {
+                        self.composite_layer(&mut result, layer, layer_data)?;
+                    }
+                }
             }
         }
 
@@ -160,7 +207,7 @@ impl RenderEngine {
         &self,
         result: &mut PixelData,
         layer: &Layer,
-        layer_data: &PixelData,
+        _layer_data: &PixelData,
         params: &CompositionParams,
     ) -> Result<()> {
         // Create tiles for parallel processing
@@ -194,7 +241,8 @@ impl RenderEngine {
                             continue;
                         }
 
-                        if let Some(layer_pixel) = layer_data.get_pixel(x, y) {
+                        // Get pixel with mask applied
+                        if let Some(layer_pixel) = layer.get_masked_pixel(x, y) {
                             if let Some(base_pixel) = result.get_pixel(doc_x as u32, doc_y as u32) {
                                 let blended = blend_mode.blend(base_pixel, layer_pixel, opacity);
                                 tile_updates.push((doc_x as u32, doc_y as u32, blended));
@@ -303,7 +351,8 @@ impl RenderEngine {
                     continue;
                 }
 
-                if let Some(layer_pixel) = layer_data.get_pixel(layer_x as u32, layer_y as u32) {
+                // Get pixel with mask applied
+                if let Some(layer_pixel) = layer.get_masked_pixel(layer_x as u32, layer_y as u32) {
                     if let Some(base_pixel) = result.get_pixel(x, y) {
                         let blended = layer.blend_mode.blend(
                             base_pixel,
@@ -317,6 +366,111 @@ impl RenderEngine {
         }
 
         Ok(())
+    }
+
+    /// Apply an adjustment layer to the current result
+    #[instrument(skip(self, result, layer, adjustment_type, parameters))]
+    fn apply_adjustment_layer(
+        &self,
+        result: &mut PixelData,
+        layer: &Layer,
+        adjustment_type: &str,
+        parameters: &HashMap<String, f32>,
+    ) -> Result<()> {
+        trace!(
+            "Applying adjustment layer '{}' of type '{}' with opacity {}",
+            layer.name,
+            adjustment_type,
+            layer.effective_opacity()
+        );
+
+        // Create the adjustment from the registry
+        let mut adjustment = self
+            .adjustment_registry
+            .create(adjustment_type)
+            .ok_or_else(|| anyhow::anyhow!("Unknown adjustment type: {}", adjustment_type))?;
+
+        // Convert HashMap<String, f32> to serde_json::Value
+        let params_json = serde_json::to_value(parameters)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize adjustment parameters: {}", e))?;
+
+        // Set the adjustment parameters
+        adjustment.set_parameters(params_json)?;
+
+        // If the adjustment layer has reduced opacity, we need to blend the effect
+        let opacity = layer.effective_opacity();
+        if (opacity - 1.0).abs() < f32::EPSILON {
+            // Full opacity - apply adjustment directly
+            adjustment.apply(result)?;
+        } else {
+            // Reduced opacity - apply to a copy and blend
+            let mut adjusted_copy = result.clone();
+            adjustment.apply(&mut adjusted_copy)?;
+
+            // Blend the adjusted result back with the original
+            self.blend_adjustment_result(result, &adjusted_copy, opacity)?;
+        }
+
+        Ok(())
+    }
+
+    /// Blend an adjustment result with the original image based on opacity
+    fn blend_adjustment_result(
+        &self,
+        original: &mut PixelData,
+        adjusted: &PixelData,
+        opacity: f32,
+    ) -> Result<()> {
+        let (width, height) = original.dimensions();
+
+        for y in 0..height {
+            for x in 0..width {
+                if let (Some(orig_pixel), Some(adj_pixel)) =
+                    (original.get_pixel(x, y), adjusted.get_pixel(x, y))
+                {
+                    // Linear interpolation between original and adjusted
+                    let blended = orig_pixel.lerp(adj_pixel, opacity);
+                    original.set_pixel(x, y, blended)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Render a smart object layer
+    #[instrument(skip(self, content_type, smart_transform))]
+    fn render_smart_object_layer(
+        &mut self,
+        content_type: &crate::layer::SmartObjectContentType,
+        original_size: Size,
+        smart_transform: &crate::layer::SmartTransform,
+        target_size: Option<Size>,
+    ) -> Result<PixelData> {
+        trace!(
+            "Rendering smart object with original size {}x{} and transform scale ({}, {})",
+            original_size.width,
+            original_size.height,
+            smart_transform.scale.0,
+            smart_transform.scale.1
+        );
+
+        self.smart_object_manager.render_smart_object(
+            content_type,
+            original_size,
+            smart_transform,
+            target_size,
+        )
+    }
+
+    /// Get mutable access to smart object manager for cache management
+    pub fn smart_object_manager_mut(&mut self) -> &mut SmartObjectManager {
+        &mut self.smart_object_manager
+    }
+
+    /// Get read-only access to smart object manager
+    pub fn smart_object_manager(&self) -> &SmartObjectManager {
+        &self.smart_object_manager
     }
 }
 
@@ -370,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_render_empty_document() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let document = Document::new("Test".to_string(), 100, 100);
 
         let result = engine.render_document(&document).unwrap();
@@ -382,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_render_document_with_layers() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let mut document = Document::new("Test".to_string(), 100, 100);
 
         let mut layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
@@ -428,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_render_region() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let mut document = Document::new("Test".to_string(), 100, 100);
 
         let mut layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
@@ -447,5 +601,69 @@ mod tests {
         // Check that the green pixel is rendered in the region
         let pixel = result.get_pixel(0, 0).unwrap(); // This should be at document position (20, 20)
         assert_eq!(pixel.g, 255);
+    }
+
+    #[test]
+    fn test_render_with_adjustment_layer() {
+        let mut engine = RenderEngine::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Add a base layer with gray pixels
+        let mut base_layer = Layer::new_pixel("Base Layer".to_string(), 100, 100);
+        base_layer.fill(RgbaPixel::new(128, 128, 128, 255)); // Gray
+        document.add_layer(base_layer);
+
+        // Add a brightness adjustment layer
+        let mut params = std::collections::HashMap::new();
+        params.insert("brightness".to_string(), 0.5); // 50% brighter
+        let adjustment_layer = Layer::new_adjustment(
+            "Brightness Adjustment".to_string(),
+            "brightness".to_string(),
+            params,
+        );
+        document.add_layer(adjustment_layer);
+
+        // Render the document
+        let result = engine.render_document(&document).unwrap();
+        let (width, height) = result.dimensions();
+
+        assert_eq!(width, 100);
+        assert_eq!(height, 100);
+
+        // Check that the pixel is brighter than the original
+        let pixel = result.get_pixel(50, 50).unwrap();
+        assert!(pixel.r > 128); // Should be brighter than original gray
+        assert!(pixel.g > 128);
+        assert!(pixel.b > 128);
+    }
+
+    #[test]
+    fn test_adjustment_layer_opacity() {
+        let mut engine = RenderEngine::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Add a base layer with gray pixels
+        let mut base_layer = Layer::new_pixel("Base Layer".to_string(), 100, 100);
+        base_layer.fill(RgbaPixel::new(128, 128, 128, 255)); // Gray
+        document.add_layer(base_layer);
+
+        // Add a brightness adjustment layer with 50% opacity
+        let mut params = std::collections::HashMap::new();
+        params.insert("brightness".to_string(), 1.0); // 100% brighter
+        let mut adjustment_layer = Layer::new_adjustment(
+            "Brightness Adjustment".to_string(),
+            "brightness".to_string(),
+            params,
+        );
+        adjustment_layer.opacity = 0.5; // 50% opacity
+        document.add_layer(adjustment_layer);
+
+        // Render the document
+        let result = engine.render_document(&document).unwrap();
+
+        // Check that the effect is reduced due to opacity
+        let pixel = result.get_pixel(50, 50).unwrap();
+        assert!(pixel.r > 128); // Should be brighter than original
+        assert!(pixel.r < 255); // But not fully bright due to opacity
     }
 }

@@ -107,6 +107,19 @@ impl RgbaPixel {
             self.a,
         )
     }
+
+    /// Linear interpolation between two pixels
+    pub fn lerp(self, other: Self, t: f32) -> Self {
+        let t = t.clamp(0.0, 1.0);
+        let inv_t = 1.0 - t;
+
+        Self {
+            r: (self.r as f32 * inv_t + other.r as f32 * t) as u8,
+            g: (self.g as f32 * inv_t + other.g as f32 * t) as u8,
+            b: (self.b as f32 * inv_t + other.b as f32 * t) as u8,
+            a: (self.a as f32 * inv_t + other.a as f32 * t) as u8,
+        }
+    }
 }
 
 impl From<Rgba<u8>> for RgbaPixel {
@@ -138,6 +151,12 @@ pub enum PixelData {
 impl PixelData {
     /// Create new RGBA pixel data with given dimensions
     pub fn new_rgba(width: u32, height: u32) -> Self {
+        let array = Array3::zeros((height as usize, width as usize, 4));
+        Self::Rgba(array)
+    }
+
+    /// Create new grayscale pixel data with given dimensions (stored as RGBA for consistency)
+    pub fn new_grayscale(width: u32, height: u32) -> Self {
         let array = Array3::zeros((height as usize, width as usize, 4));
         Self::Rgba(array)
     }

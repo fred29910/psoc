@@ -85,7 +85,17 @@ jobs:
         if: matrix.build == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev imagemagick inkscape
+
+      - name: Install packaging tools (Windows)
+        if: matrix.build == 'windows'
+        run: |
+          cargo install cargo-wix
+
+      - name: Generate application icons
+        run: |
+          chmod +x scripts/generate_icons.sh
+          scripts/generate_icons.sh
 
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
@@ -93,6 +103,17 @@ jobs:
       - name: Strip release binary (linux and macos)
         if: matrix.build == 'linux' || matrix.build == 'macos'
         run: strip "target/${{ matrix.target }}/release/psoc"
+
+      - name: Create packages
+        run: |
+          chmod +x scripts/package.sh
+          if [ "${{ matrix.build }}" = "linux" ]; then
+            scripts/package/linux.sh ${{ needs.create-release.outputs.release_version }} release true
+          elif [ "${{ matrix.build }}" = "macos" ]; then
+            scripts/package/macos.sh ${{ needs.create-release.outputs.release_version }} release true
+          elif [ "${{ matrix.build }}" = "windows" ]; then
+            pwsh scripts/package/windows.ps1 -Version ${{ needs.create-release.outputs.release_version }} -Configuration release -SkipBuild:$true
+          fi
 
       - name: Build archive (linux and macos)
         if: matrix.build == 'linux' || matrix.build == 'macos'
@@ -117,7 +138,19 @@ jobs:
           cd ..
           echo "ASSET=$staging.zip" >> $GITHUB_ENV
 
-      - name: Upload release archive
+      - name: Upload packages
+        run: |
+          # Upload all generated packages
+          for package in packages/${{ matrix.build }}/*; do
+            if [ -f "$package" ]; then
+              echo "Uploading $package"
+              gh release upload ${{ needs.create-release.outputs.release_version }} "$package"
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload legacy archive (for compatibility)
         uses: actions/upload-release-asset@v1.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

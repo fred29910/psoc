@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="brushGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E55555;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="paletteGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4ECDC4;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#45B7B8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3A9B9C;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="url(#bgGradient)" stroke="#2C5282" stroke-width="4"/>
+  
+  <!-- Main canvas/artboard -->
+  <rect x="60" y="60" width="136" height="100" rx="8" ry="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  
+  <!-- Canvas content - abstract image -->
+  <rect x="68" y="68" width="120" height="84" rx="4" ry="4" fill="#F7FAFC"/>
+  
+  <!-- Color swatches on canvas -->
+  <circle cx="85" cy="85" r="8" fill="#FF6B6B"/>
+  <circle cx="105" cy="85" r="8" fill="#4ECDC4"/>
+  <circle cx="125" cy="85" r="8" fill="#45B7B8"/>
+  <circle cx="145" cy="85" r="8" fill="#96CEB4"/>
+  <circle cx="165" cy="85" r="8" fill="#FFEAA7"/>
+  
+  <!-- Abstract shapes on canvas -->
+  <path d="M 75 110 Q 95 100 115 110 T 155 110" stroke="#4A90E2" stroke-width="3" fill="none"/>
+  <rect x="75" y="120" width="25" height="15" rx="2" fill="#FF6B6B" opacity="0.7"/>
+  <circle cx="130" cy="127" r="10" fill="#4ECDC4" opacity="0.7"/>
+  <polygon points="150,120 165,120 157,135" fill="#96CEB4" opacity="0.7"/>
+  
+  <!-- Brush tool -->
+  <g transform="translate(180, 170) rotate(-30)">
+    <rect x="0" y="0" width="6" height="40" rx="3" fill="url(#brushGradient)"/>
+    <rect x="1" y="35" width="4" height="8" rx="2" fill="#8B4513"/>
+    <circle cx="3" cy="45" r="2" fill="#2D3748"/>
+  </g>
+  
+  <!-- Color palette -->
+  <g transform="translate(40, 180)">
+    <ellipse cx="0" cy="0" rx="18" ry="12" fill="url(#paletteGradient)"/>
+    <circle cx="-8" cy="-4" r="3" fill="#FF6B6B"/>
+    <circle cx="0" cy="-4" r="3" fill="#4ECDC4"/>
+    <circle cx="8" cy="-4" r="3" fill="#96CEB4"/>
+    <circle cx="-4" cy="4" r="3" fill="#FFEAA7"/>
+    <circle cx="4" cy="4" r="3" fill="#DDA0DD"/>
+  </g>
+  
+  <!-- Layer indicator -->
+  <g transform="translate(200, 80)">
+    <rect x="0" y="0" width="20" height="15" rx="2" fill="#FFFFFF" stroke="#CBD5E0" stroke-width="1"/>
+    <rect x="3" y="3" width="14" height="9" rx="1" fill="#E2E8F0"/>
+    <rect x="2" y="18" width="20" height="15" rx="2" fill="#FFFFFF" stroke="#CBD5E0" stroke-width="1"/>
+    <rect x="5" y="21" width="14" height="9" rx="1" fill="#F7FAFC"/>
+  </g>
+  
+  <!-- PSOC text -->
+  <text x="128" y="230" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#2D3748">PSOC</text>
+</svg>

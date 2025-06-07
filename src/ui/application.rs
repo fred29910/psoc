@@ -15,10 +15,12 @@ use super::{
         AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage,
         ColorPaletteDialog, ColorPaletteMessage, ColorPickerDialog, ColorPickerMessage,
         GaussianBlurDialog, GaussianBlurMessage, GradientEditor, GradientEditorMessage,
+        PreferencesDialog, PreferencesMessage,
     },
     icons::Icon,
     theme::{spacing, PsocTheme},
 };
+use crate::i18n::{Language, LocalizationManager};
 
 use crate::{
     shortcuts::{
@@ -53,6 +55,8 @@ pub struct PsocApp {
     color_picker_dialog: ColorPickerDialog,
     /// Color Palette dialog
     color_palette_dialog: ColorPaletteDialog,
+    /// Preferences dialog
+    preferences_dialog: PreferencesDialog,
     /// Image canvas for rendering
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
@@ -91,6 +95,14 @@ pub struct AppState {
     pub current_pixel_color: Option<psoc_core::RgbaPixel>,
     /// Color history for recently used colors
     pub color_history: ColorHistory,
+    /// Whether we're currently editing a mask
+    pub mask_editing_mode: bool,
+    /// Index of layer whose mask is being edited
+    pub mask_editing_layer: Option<usize>,
+    /// Current language setting
+    pub current_language: Language,
+    /// Localization manager
+    pub localization_manager: LocalizationManager,
 }
 
 /// Status information for display
@@ -163,6 +175,12 @@ pub enum Message {
     ColorPalette(ColorPaletteMessage),
     /// Show color palette dialog
     ShowColorPalette,
+    /// Preferences dialog messages
+    Preferences(PreferencesMessage),
+    /// Show preferences dialog
+    ShowPreferences,
+    /// Create smart object from file
+    CreateSmartObject,
     /// Layer-related messages
     Layer(LayerMessage),
     /// Undo the last operation
@@ -177,6 +195,8 @@ pub enum Message {
     Shortcut(ShortcutAction),
     /// History panel messages
     History(HistoryMessage),
+    /// Language changed
+    LanguageChanged(Language),
     /// Error occurred
     Error(String),
 }
@@ -197,6 +217,8 @@ pub enum LayerMessage {
     AddEmptyLayer,
     /// Add a layer from file
     AddLayerFromFile,
+    /// Add an adjustment layer
+    AddAdjustmentLayer(String), // adjustment type
     /// Delete layer at index
     DeleteLayer(usize),
     /// Duplicate layer at index
@@ -215,6 +237,26 @@ pub enum LayerMessage {
     MoveLayerDown(usize),
     /// Rename layer
     RenameLayer(usize, String),
+    /// Add mask to layer
+    AddLayerMask(usize),
+    /// Remove mask from layer
+    RemoveLayerMask(usize),
+    /// Toggle mask editing mode
+    ToggleMaskEditing(usize),
+    /// Invert layer mask
+    InvertLayerMask(usize),
+    /// Clear layer mask (fill with black)
+    ClearLayerMask(usize),
+    /// Fill layer mask (fill with white)
+    FillLayerMask(usize),
+    /// Create smart object from image file
+    CreateSmartObjectFromImage(std::path::PathBuf, bool), // path, embed_content
+    /// Replace smart object content
+    ReplaceSmartObjectContent(usize, std::path::PathBuf), // layer_index, new_path
+    /// Update smart object transform
+    UpdateSmartObjectTransform(usize, psoc_core::layer::SmartTransform), // layer_index, transform
+    /// Reset smart object transform
+    ResetSmartObjectTransform(usize), // layer_index
 }
 
 /// Canvas-specific messages
@@ -373,6 +415,7 @@ impl Default for PsocApp {
             gradient_editor: GradientEditor::new(),
             color_picker_dialog: ColorPickerDialog::new(),
             color_palette_dialog: ColorPaletteDialog::new(),
+            preferences_dialog: PreferencesDialog::new(),
             canvas: ImageCanvas::new(),
             tool_manager: ToolManager::new(),
             shortcut_manager: ShortcutManager::new(),
@@ -382,6 +425,12 @@ impl Default for PsocApp {
 
 impl Default for AppState {
     fn default() -> Self {
+        let mut localization_manager = LocalizationManager::new();
+        if let Err(e) = localization_manager.initialize() {
+            tracing::error!("Failed to initialize localization: {}", e);
+        }
+        let current_language = localization_manager.current_language();
+
         Self {
             document_open: false,
             current_document: None,
@@ -396,6 +445,10 @@ impl Default for AppState {
             mouse_position: None,
             current_pixel_color: None,
             color_history: ColorHistory::new(),
+            mask_editing_mode: false,
+            mask_editing_layer: None,
+            current_language,
+            localization_manager,
         }
     }
 }
@@ -433,12 +486,16 @@ impl StatusInfo {
 
         let document_status = if state.document_open {
             if state.current_file_path.is_some() {
-                "Saved".to_string()
+                state
+                    .localization_manager
+                    .translate("status-document-saved")
             } else {
-                "Unsaved".to_string()
+                state
+                    .localization_manager
+                    .translate("status-document-unsaved")
             }
         } else {
-            "No document".to_string()
+            state.localization_manager.translate("status-no-document")
         };
 
         Self {
@@ -478,6 +535,12 @@ impl PsocApp {
     #[allow(dead_code)]
     fn new() -> (Self, Task<Message>) {
         debug!("Initializing PSOC application");
+
+        // Initialize localization
+        if let Err(e) = crate::i18n::init_localization() {
+            error!("Failed to initialize localization: {}", e);
+        }
+
         (
             Self {
                 state: AppState::default(),
@@ -488,6 +551,7 @@ impl PsocApp {
                 gradient_editor: GradientEditor::new(),
                 color_picker_dialog: ColorPickerDialog::new(),
                 color_palette_dialog: ColorPaletteDialog::new(),
+                preferences_dialog: PreferencesDialog::new(),
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
                 shortcut_manager: ShortcutManager::new(),
@@ -497,19 +561,21 @@ impl PsocApp {
     }
 
     fn title(&self) -> String {
-        let base_title = "PSOC Image Editor";
+        let base_title = self.state.localization_manager.translate("app-title");
         if self.state.document_open {
             if let Some(ref path) = self.state.current_file_path {
+                let untitled = self.state.localization_manager.translate("untitled");
                 let filename = path
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .unwrap_or("Untitled");
+                    .unwrap_or(&untitled);
                 format!("{} - {}", base_title, filename)
             } else {
-                format!("{} - Untitled", base_title)
+                let untitled = self.state.localization_manager.translate("untitled");
+                format!("{} - {}", base_title, untitled)
             }
         } else {
-            base_title.to_string()
+            base_title
         }
     }
 
@@ -745,6 +811,46 @@ impl PsocApp {
                 info!("Showing color palette dialog");
                 self.show_color_palette();
             }
+            Message::Preferences(pref_msg) => {
+                debug!("Preferences message: {:?}", pref_msg);
+                self.handle_preferences_message(pref_msg);
+            }
+            Message::ShowPreferences => {
+                info!("Showing preferences dialog");
+                self.show_preferences();
+            }
+            Message::CreateSmartObject => {
+                info!("Creating smart object from file");
+                #[cfg(feature = "gui")]
+                {
+                    return Task::perform(
+                        async {
+                            rfd::AsyncFileDialog::new()
+                                .add_filter(
+                                    "Image Files",
+                                    &["png", "jpg", "jpeg", "bmp", "tiff", "webp"],
+                                )
+                                .pick_file()
+                                .await
+                        },
+                        |file_handle| {
+                            if let Some(file) = file_handle {
+                                // For now, default to embedding the content
+                                Message::Layer(LayerMessage::CreateSmartObjectFromImage(
+                                    file.path().to_path_buf(),
+                                    true, // embed_content
+                                ))
+                            } else {
+                                Message::Error("No file selected".to_string())
+                            }
+                        },
+                    );
+                }
+                #[cfg(not(feature = "gui"))]
+                {
+                    self.error_message = Some("File dialogs require GUI feature".to_string());
+                }
+            }
             Message::Layer(layer_msg) => {
                 debug!("Layer message: {:?}", layer_msg);
                 self.handle_layer_message(layer_msg);
@@ -812,6 +918,10 @@ impl PsocApp {
             Message::History(history_msg) => {
                 debug!("History message: {:?}", history_msg);
                 self.handle_history_message(history_msg);
+            }
+            Message::LanguageChanged(language) => {
+                debug!("Language changed to: {:?}", language);
+                self.handle_language_change(language);
             }
             Message::Error(error) => {
                 error!("Application error: {}", error);
@@ -890,6 +1000,14 @@ impl PsocApp {
                 self.color_palette_dialog
                     .view(std::convert::identity)
                     .map(Message::ColorPalette),
+            );
+        }
+
+        if self.preferences_dialog.visible {
+            layers.push(
+                self.preferences_dialog
+                    .view(&self.state.localization_manager)
+                    .map(Message::Preferences),
             );
         }
 
@@ -1084,7 +1202,7 @@ impl PsocApp {
 
     /// Create the menu bar
     fn menu_bar(&self) -> Element<Message> {
-        components::menu_bar(
+        components::localized_menu_bar(
             Message::NewDocument,
             Message::OpenDocument,
             Message::SaveDocument,
@@ -1102,11 +1220,15 @@ impl PsocApp {
             Message::Adjustment(AdjustmentMessage::ShowAddNoise),
             Message::ShowColorPicker,
             Message::ShowColorPalette,
+            Message::ShowPreferences,
+            Message::CreateSmartObject,
             Message::View(ViewMessage::ToggleRulers),
             Message::View(ViewMessage::ToggleGrid),
             Message::View(ViewMessage::ToggleGuides),
             Message::ShowAbout,
             Message::Exit,
+            Message::LanguageChanged,
+            self.state.current_language,
         )
     }
 
@@ -1147,6 +1269,11 @@ impl PsocApp {
                 Icon::Crop,
                 Message::ToolChanged(ToolType::Crop),
                 self.state.current_tool == ToolType::Crop,
+            ),
+            (
+                Icon::Eyedropper,
+                Message::ToolChanged(ToolType::Eyedropper),
+                self.state.current_tool == ToolType::Eyedropper,
             ),
             // Shape tools
             (
@@ -1220,6 +1347,11 @@ impl PsocApp {
                 Message::ToolChanged(ToolType::Crop),
                 self.state.current_tool == ToolType::Crop,
             ),
+            (
+                Icon::Eyedropper,
+                Message::ToolChanged(ToolType::Eyedropper),
+                self.state.current_tool == ToolType::Eyedropper,
+            ),
             // Shape tools
             (
                 Icon::Rectangle,
@@ -1267,16 +1399,24 @@ impl PsocApp {
         } else {
             container(
                 column![
-                    iced::widget::text("No Document Open")
-                        .size(24.0)
-                        .style(|_theme| iced::widget::text::Style {
-                            color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7))
-                        }),
-                    iced::widget::text("Click 'Open' to load an image")
-                        .size(16.0)
-                        .style(|_theme| iced::widget::text::Style {
-                            color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
-                        }),
+                    iced::widget::text(
+                        self.state
+                            .localization_manager
+                            .translate("canvas-no-document")
+                    )
+                    .size(24.0)
+                    .style(|_theme| iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7))
+                    }),
+                    iced::widget::text(
+                        self.state
+                            .localization_manager
+                            .translate("canvas-click-open")
+                    )
+                    .size(16.0)
+                    .style(|_theme| iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                    }),
                 ]
                 .align_x(iced::alignment::Horizontal::Center)
                 .spacing(spacing::LG),
@@ -1451,6 +1591,7 @@ impl PsocApp {
             ToolType::Ellipse => "Ellipse",
             ToolType::Line => "Line",
             ToolType::Polygon => "Polygon",
+            ToolType::Eyedropper => "Eyedropper",
         };
 
         let options = self.tool_manager.get_active_tool_options();
@@ -1591,6 +1732,34 @@ impl PsocApp {
                         continue;
                     }
                 }
+                ToolOptionType::Choice(ref choice_options) => {
+                    if let Some(ToolOptionValue::Choice(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        let selected_text = choice_options.get(value).cloned().unwrap_or_default();
+                        ToolOptionControl::Dropdown {
+                            label: option.display_name,
+                            options: choice_options.clone(),
+                            selected: selected_text,
+                            on_change: {
+                                let name = option.name.clone();
+                                let options = choice_options.clone();
+                                Box::new(move |v| {
+                                    if let Some(index) = options.iter().position(|opt| opt == &v) {
+                                        Message::ToolOption(ToolOptionMessage::SetOption {
+                                            name: name.clone(),
+                                            value: ToolOptionValue::Choice(index),
+                                        })
+                                    } else {
+                                        Message::Error(format!("Invalid choice: {}", v))
+                                    }
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
             };
             controls.push(control);
         }
@@ -1614,6 +1783,8 @@ impl PsocApp {
                 bool,
                 f32,
                 psoc_core::BlendMode,
+                Option<String>,
+                bool,
                 Message,
                 Message,
                 Message,
@@ -1625,12 +1796,21 @@ impl PsocApp {
                 .rev() // Display in reverse order (top to bottom in UI)
                 .map(|(index, layer)| {
                     let is_selected = document.active_layer_index == Some(index);
+                    let layer_type = match &layer.layer_type {
+                        psoc_core::LayerType::Adjustment {
+                            adjustment_type, ..
+                        } => Some(adjustment_type.clone()),
+                        psoc_core::LayerType::SmartObject { .. } => Some("SmartObject".to_string()),
+                        _ => None,
+                    };
                     (
                         layer.name.clone(),
                         layer.visible,
                         is_selected,
                         layer.opacity,
                         layer.blend_mode,
+                        layer_type,
+                        layer.has_mask(),
                         Message::Layer(LayerMessage::ToggleLayerVisibility(index)),
                         Message::Layer(LayerMessage::SelectLayer(index)),
                         Message::Layer(LayerMessage::ChangeLayerOpacity(index, layer.opacity)),
@@ -1692,6 +1872,30 @@ impl PsocApp {
                 Message::Error("No document open".to_string()),
             )
         }
+    }
+
+    /// Handle language change
+    fn handle_language_change(&mut self, language: Language) {
+        info!("Changing language to: {:?}", language);
+
+        // Update the localization manager
+        if let Err(e) = self.state.localization_manager.set_language(language) {
+            error!("Failed to set language: {}", e);
+            self.error_message = Some(format!("Failed to change language: {}", e));
+            return;
+        }
+
+        // Update the current language in state
+        self.state.current_language = language;
+
+        // Update global localization manager if available
+        if let Some(global_manager) = crate::i18n::localization_manager_mut() {
+            if let Err(e) = global_manager.set_language(language) {
+                error!("Failed to update global localization manager: {}", e);
+            }
+        }
+
+        info!("Language successfully changed to: {:?}", language);
     }
 
     /// Handle history-specific messages
@@ -1758,6 +1962,52 @@ impl PsocApp {
                 info!("Adding layer from file");
                 // TODO: Implement file dialog for layer import
                 self.error_message = Some("Layer import from file not yet implemented".to_string());
+            }
+            LayerMessage::AddAdjustmentLayer(adjustment_type) => {
+                info!("Adding adjustment layer of type: {}", adjustment_type);
+
+                // Create default parameters for the adjustment type
+                let parameters = match adjustment_type.as_str() {
+                    "brightness" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("brightness".to_string(), 0.0);
+                        params
+                    }
+                    "contrast" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("contrast".to_string(), 0.0);
+                        params
+                    }
+                    "hsl" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("hue".to_string(), 0.0);
+                        params.insert("saturation".to_string(), 0.0);
+                        params.insert("lightness".to_string(), 0.0);
+                        params
+                    }
+                    "grayscale" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("method".to_string(), 0.0); // 0 = Average
+                        params
+                    }
+                    _ => {
+                        self.error_message =
+                            Some(format!("Unknown adjustment type: {}", adjustment_type));
+                        return;
+                    }
+                };
+
+                let layer_name = format!("{} Adjustment", adjustment_type.to_uppercase());
+                let layer = Layer::new_adjustment(layer_name, adjustment_type, parameters);
+                document.add_layer(layer);
+
+                // Set the new layer as active
+                if let Err(e) = document.set_active_layer(document.layer_count() - 1) {
+                    self.error_message = Some(format!("Failed to set active layer: {}", e));
+                }
+
+                // Update canvas with new document state
+                self.canvas.set_document(document.clone());
             }
             LayerMessage::DeleteLayer(index) => {
                 info!("Deleting layer at index: {}", index);
@@ -1882,6 +2132,133 @@ impl PsocApp {
                 } else {
                     self.error_message = Some("Layer index out of bounds".to_string());
                 }
+            }
+            LayerMessage::AddLayerMask(index) => {
+                info!("Adding mask to layer at index: {}", index);
+                // Get dimensions first to avoid borrowing conflicts
+                let (width, height) = document.dimensions();
+
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if layer.has_mask() {
+                        self.error_message = Some("Layer already has a mask".to_string());
+                    } else {
+                        if let Err(e) = layer.create_mask(width, height) {
+                            self.error_message = Some(format!("Failed to create mask: {}", e));
+                        } else {
+                            document.mark_dirty();
+                            self.canvas.set_document(document.clone());
+                            self.error_message = None;
+                        }
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::RemoveLayerMask(index) => {
+                info!("Removing mask from layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if layer.has_mask() {
+                        layer.remove_mask();
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        // Exit mask editing mode if we were editing this layer's mask
+                        if self.state.mask_editing_layer == Some(index) {
+                            self.state.mask_editing_mode = false;
+                            self.state.mask_editing_layer = None;
+                        }
+                        self.error_message = None;
+                    } else {
+                        self.error_message = Some("Layer has no mask to remove".to_string());
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::ToggleMaskEditing(index) => {
+                debug!("Toggling mask editing for layer at index: {}", index);
+                if let Some(layer) = document.layers.get(index) {
+                    if layer.has_mask() {
+                        if self.state.mask_editing_layer == Some(index) {
+                            // Exit mask editing mode
+                            self.state.mask_editing_mode = false;
+                            self.state.mask_editing_layer = None;
+                            info!("Exited mask editing mode");
+                        } else {
+                            // Enter mask editing mode
+                            self.state.mask_editing_mode = true;
+                            self.state.mask_editing_layer = Some(index);
+                            info!("Entered mask editing mode for layer {}", index);
+                        }
+                    } else {
+                        self.error_message = Some("Layer has no mask to edit".to_string());
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::InvertLayerMask(index) => {
+                info!("Inverting mask for layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if let Err(e) = layer.invert_mask() {
+                        self.error_message = Some(format!("Failed to invert mask: {}", e));
+                    } else {
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::ClearLayerMask(index) => {
+                info!("Clearing mask for layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if let Err(e) = layer.clear_mask() {
+                        self.error_message = Some(format!("Failed to clear mask: {}", e));
+                    } else {
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::FillLayerMask(index) => {
+                info!("Filling mask for layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if let Err(e) = layer.fill_mask(psoc_core::RgbaPixel::white()) {
+                        self.error_message = Some(format!("Failed to fill mask: {}", e));
+                    } else {
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::CreateSmartObjectFromImage(path, embed_content) => {
+                info!(
+                    "Creating smart object from image: {:?}, embed: {}",
+                    path, embed_content
+                );
+                self.handle_create_smart_object_from_image(path, embed_content);
+            }
+            LayerMessage::ReplaceSmartObjectContent(layer_index, new_path) => {
+                info!(
+                    "Replacing smart object content for layer {}: {:?}",
+                    layer_index, new_path
+                );
+                self.handle_replace_smart_object_content(layer_index, new_path);
+            }
+            LayerMessage::UpdateSmartObjectTransform(layer_index, transform) => {
+                info!("Updating smart object transform for layer {}", layer_index);
+                self.handle_update_smart_object_transform(layer_index, transform);
+            }
+            LayerMessage::ResetSmartObjectTransform(layer_index) => {
+                info!("Resetting smart object transform for layer {}", layer_index);
+                self.handle_reset_smart_object_transform(layer_index);
             }
         }
     }
@@ -2601,8 +2978,17 @@ impl PsocApp {
     /// Handle tool events
     fn handle_tool_event(&mut self, event: crate::tools::ToolEvent) {
         if let Some(ref mut document) = self.state.current_document {
-            if let Err(e) = self.tool_manager.handle_event(event, document) {
+            // Use mask-aware event handling
+            if let Err(e) = self.tool_manager.handle_event_with_mask_mode(
+                event,
+                document,
+                self.state.mask_editing_mode,
+                self.state.mask_editing_layer,
+            ) {
                 self.error_message = Some(format!("Tool error: {}", e));
+            } else {
+                // Update canvas after successful tool operation
+                self.canvas.set_document(document.clone());
             }
         }
     }
@@ -2882,6 +3268,80 @@ impl PsocApp {
     /// Show color palette dialog
     pub fn show_color_palette(&mut self) {
         self.color_palette_dialog.show();
+    }
+
+    /// Show preferences dialog
+    pub fn show_preferences(&mut self) {
+        // Get current preferences from application state
+        let preferences = self.get_current_preferences();
+        self.preferences_dialog.show(preferences);
+    }
+
+    /// Get current preferences from application state
+    fn get_current_preferences(&self) -> crate::ui::dialogs::preferences::UserPreferences {
+        use crate::ui::dialogs::preferences::*;
+
+        UserPreferences {
+            interface: InterfacePreferences {
+                theme: self.state.theme,
+                language: self.state.current_language,
+                ui_scale: 1.0,         // TODO: Get from actual UI scale
+                font_size: 12,         // TODO: Get from actual font size
+                show_tooltips: true,   // TODO: Get from actual setting
+                show_rulers: true,     // TODO: Get from actual setting
+                show_grid: false,      // TODO: Get from actual setting
+                show_status_bar: true, // TODO: Get from actual setting
+            },
+            performance: PerformancePreferences::default(),
+            defaults: DefaultPreferences::default(),
+            advanced: AdvancedPreferences {
+                debug_mode: self.state.debug_mode,
+                log_level: "Info".to_string(), // TODO: Get from actual log level
+                experimental_features: false,
+                plugin_directory: None,
+                crash_reporting: true,
+                telemetry: false,
+            },
+        }
+    }
+
+    /// Handle preferences dialog messages
+    fn handle_preferences_message(&mut self, message: PreferencesMessage) {
+        use crate::ui::dialogs::preferences::PreferencesMessage;
+
+        self.preferences_dialog.update(message.clone());
+
+        match message {
+            PreferencesMessage::Apply => {
+                // Apply preferences to application state
+                self.apply_preferences(self.preferences_dialog.preferences().clone());
+            }
+            PreferencesMessage::Hide | PreferencesMessage::Cancel => {
+                // Dialog is already hidden by the dialog's update method
+            }
+            _ => {
+                // Other messages are handled by the dialog itself
+            }
+        }
+    }
+
+    /// Apply preferences to application state
+    fn apply_preferences(&mut self, preferences: crate::ui::dialogs::preferences::UserPreferences) {
+        // Apply interface preferences
+        self.state.theme = preferences.interface.theme;
+
+        // Apply language change if different
+        if self.state.current_language != preferences.interface.language {
+            self.handle_language_change(preferences.interface.language);
+        }
+
+        // Apply debug mode
+        self.state.debug_mode = preferences.advanced.debug_mode;
+
+        // TODO: Apply other preferences like performance settings, defaults, etc.
+        // This would involve updating various subsystems
+
+        info!("Applied preferences to application state");
     }
 
     /// Handle view-related messages (rulers, grid, guides)
@@ -3175,6 +3635,183 @@ impl PsocApp {
             GradientEditorMessage::Reset => {
                 self.gradient_editor.update(message);
             }
+        }
+    }
+
+    /// Handle creating a smart object from an image file
+    fn handle_create_smart_object_from_image(
+        &mut self,
+        path: std::path::PathBuf,
+        embed_content: bool,
+    ) {
+        if let Some(document) = &mut self.state.current_document {
+            // Load the image to get its dimensions
+            match image::open(&path) {
+                Ok(img) => {
+                    let original_size =
+                        psoc_core::geometry::Size::new(img.width() as f32, img.height() as f32);
+                    let position = psoc_core::geometry::Point::new(0.0, 0.0);
+
+                    let content_type = if embed_content {
+                        // Read and embed the image data
+                        match std::fs::read(&path) {
+                            Ok(image_data) => {
+                                let format = path
+                                    .extension()
+                                    .and_then(|ext| ext.to_str())
+                                    .unwrap_or("png")
+                                    .to_lowercase();
+
+                                psoc_core::layer::SmartObjectContentType::EmbeddedImage {
+                                    original_path: Some(path.clone()),
+                                    image_data,
+                                    format,
+                                }
+                            }
+                            Err(e) => {
+                                self.error_message =
+                                    Some(format!("Failed to read image file: {}", e));
+                                return;
+                            }
+                        }
+                    } else {
+                        // Create a linked smart object
+                        psoc_core::layer::SmartObjectContentType::LinkedImage {
+                            file_path: path.clone(),
+                            last_modified: std::fs::metadata(&path)
+                                .ok()
+                                .and_then(|m| m.modified().ok()),
+                        }
+                    };
+
+                    let layer_name = path
+                        .file_stem()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("Smart Object")
+                        .to_string();
+
+                    let smart_object_layer = psoc_core::Layer::new_smart_object(
+                        layer_name,
+                        content_type,
+                        original_size,
+                        position,
+                    );
+
+                    document.add_layer(smart_object_layer);
+
+                    // Set the new layer as active
+                    if let Err(e) = document.set_active_layer(document.layer_count() - 1) {
+                        self.error_message = Some(format!("Failed to set active layer: {}", e));
+                    } else {
+                        // Update canvas with new document state
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to load image: {}", e));
+                }
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Handle replacing smart object content
+    fn handle_replace_smart_object_content(
+        &mut self,
+        layer_index: usize,
+        new_path: std::path::PathBuf,
+    ) {
+        if let Some(document) = &mut self.state.current_document {
+            if let Some(layer) = document.layers.get_mut(layer_index) {
+                if layer.is_smart_object() {
+                    // Load the new image to get its dimensions
+                    match image::open(&new_path) {
+                        Ok(img) => {
+                            let new_original_size = psoc_core::geometry::Size::new(
+                                img.width() as f32,
+                                img.height() as f32,
+                            );
+
+                            // Create new content type (always linked for replacement)
+                            let new_content_type =
+                                psoc_core::layer::SmartObjectContentType::LinkedImage {
+                                    file_path: new_path.clone(),
+                                    last_modified: std::fs::metadata(&new_path)
+                                        .ok()
+                                        .and_then(|m| m.modified().ok()),
+                                };
+
+                            // Update the smart object
+                            if let psoc_core::LayerType::SmartObject {
+                                content_type,
+                                original_size,
+                                ..
+                            } = &mut layer.layer_type
+                            {
+                                *content_type = new_content_type;
+                                *original_size = new_original_size;
+                                layer.mark_smart_object_for_update();
+                                document.mark_dirty();
+                                self.canvas.set_document(document.clone());
+                                self.error_message = None;
+                            }
+                        }
+                        Err(e) => {
+                            self.error_message = Some(format!("Failed to load new image: {}", e));
+                        }
+                    }
+                } else {
+                    self.error_message = Some("Layer is not a smart object".to_string());
+                }
+            } else {
+                self.error_message = Some("Layer index out of bounds".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Handle updating smart object transform
+    fn handle_update_smart_object_transform(
+        &mut self,
+        layer_index: usize,
+        transform: psoc_core::layer::SmartTransform,
+    ) {
+        if let Some(document) = &mut self.state.current_document {
+            if let Some(layer) = document.layers.get_mut(layer_index) {
+                if let Err(e) = layer.update_smart_object_transform(transform) {
+                    self.error_message = Some(format!("Failed to update transform: {}", e));
+                } else {
+                    document.mark_dirty();
+                    self.canvas.set_document(document.clone());
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("Layer index out of bounds".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Handle resetting smart object transform
+    fn handle_reset_smart_object_transform(&mut self, layer_index: usize) {
+        if let Some(document) = &mut self.state.current_document {
+            if let Some(layer) = document.layers.get_mut(layer_index) {
+                if let Err(e) = layer.reset_smart_object_transform() {
+                    self.error_message = Some(format!("Failed to reset transform: {}", e));
+                } else {
+                    document.mark_dirty();
+                    self.canvas.set_document(document.clone());
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("Layer index out of bounds".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
         }
     }
 }

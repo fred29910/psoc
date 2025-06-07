@@ -6,6 +6,7 @@ use iced::{
 };
 
 use super::icons::{icon_button, simple_icon_button, tool_button, Icon};
+use crate::i18n::{t, Language};
 use psoc_core::{HistoryEntry, RgbaPixel};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -73,6 +74,7 @@ pub fn menu_bar<Message: Clone + 'static>(
     add_noise: Message,
     show_color_picker: Message,
     show_color_palette: Message,
+    create_smart_object: Message,
     toggle_rulers: Message,
     toggle_grid: Message,
     toggle_guides: Message,
@@ -192,6 +194,18 @@ pub fn menu_bar<Message: Clone + 'static>(
                     .on_press(show_color_palette)
                     .padding([4.0, 8.0]),
                 ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Layer menu section
+            container(
+                row![button(text("Smart Object").size(12.0).style(|_theme| {
+                    iced::widget::text::Style {
+                        color: Some(iced::Color::WHITE),
+                    }
+                }))
+                .on_press(create_smart_object)
+                .padding([4.0, 8.0]),]
                 .spacing(8.0)
             )
             .padding(8.0),
@@ -562,6 +576,8 @@ pub fn layer_item_simple<Message: Clone + 'static>(
     is_selected: bool,
     opacity: f32,
     blend_mode: psoc_core::BlendMode,
+    layer_type: Option<String>, // For adjustment layers, show the adjustment type
+    has_mask: bool,
     toggle_visibility: Message,
     select_layer: Message,
 ) -> Element<'static, Message> {
@@ -571,14 +587,32 @@ pub fn layer_item_simple<Message: Clone + 'static>(
         Icon::LayerHidden
     };
 
+    // Create layer name with type indicator for adjustment layers, smart objects, and mask indicator
+    let display_name = if let Some(layer_type_str) = layer_type {
+        let type_indicator = match layer_type_str.as_str() {
+            "SmartObject" => "📦",                 // Box emoji for smart objects
+            _ => &format!("[{}]", layer_type_str), // Adjustment layers
+        };
+
+        if has_mask {
+            format!("{} {} 🎭", name, type_indicator)
+        } else {
+            format!("{} {}", name, type_indicator)
+        }
+    } else if has_mask {
+        format!("{} 🎭", name)
+    } else {
+        name
+    };
+
     // Create layer item with selection highlighting
     let layer_button = if is_selected {
-        button(text(name).size(12.0))
+        button(text(display_name).size(12.0))
             .on_press(select_layer)
             .width(Length::Fill)
             .style(button::primary)
     } else {
-        button(text(name).size(12.0))
+        button(text(display_name).size(12.0))
             .on_press(select_layer)
             .width(Length::Fill)
     };
@@ -650,11 +684,13 @@ pub fn layer_panel<Message: Clone + 'static>(
         bool,
         f32,
         psoc_core::BlendMode,
+        Option<String>,
+        bool,
         Message,
         Message,
         Message,
         Message,
-    )>, // (name, visible, selected, opacity, blend_mode, toggle_vis, select, opacity_change, blend_change)
+    )>, // (name, visible, selected, opacity, blend_mode, layer_type, has_mask, toggle_vis, select, opacity_change, blend_change)
     add_layer: Message,
     delete_layer: Option<Message>,
     duplicate_layer: Option<Message>,
@@ -666,8 +702,12 @@ pub fn layer_panel<Message: Clone + 'static>(
     // Layer controls
     let controls = row![
         button(text("Add").size(10.0))
-            .on_press(add_layer)
+            .on_press(add_layer.clone())
             .padding([4.0, 8.0]),
+        button(text("Adj").size(10.0))
+            .on_press(add_layer) // For now, use the same as Add - will be enhanced later
+            .padding([4.0, 8.0])
+            .style(button::secondary),
         button(text("Del").size(10.0))
             .on_press_maybe(delete_layer)
             .padding([4.0, 8.0]),
@@ -711,6 +751,8 @@ pub fn layer_panel<Message: Clone + 'static>(
                 is_selected,
                 opacity,
                 blend_mode,
+                layer_type,
+                has_mask,
                 toggle_visibility,
                 select_layer,
                 _opacity_change,
@@ -726,6 +768,8 @@ pub fn layer_panel<Message: Clone + 'static>(
                 is_selected,
                 opacity,
                 blend_mode,
+                layer_type,
+                has_mask,
                 toggle_visibility,
                 select_layer,
             ));
@@ -1165,4 +1209,284 @@ impl ColorHistory {
             }
         }
     }
+}
+
+/// Create a language selector component
+pub fn language_selector<Message: Clone + 'static>(
+    current_language: Language,
+    on_language_change: impl Fn(Language) -> Message + 'static,
+) -> Element<'static, Message> {
+    use iced::widget::pick_list;
+
+    let languages = Language::all();
+
+    container(
+        column![
+            text(t("language-selector-title"))
+                .size(14.0)
+                .style(|_theme| iced::widget::text::Style {
+                    color: Some(iced::Color::WHITE)
+                }),
+            pick_list(languages, Some(current_language), move |language| {
+                on_language_change(language)
+            })
+            .placeholder(t("language-selector-placeholder"))
+            .width(Length::Fixed(150.0))
+        ]
+        .spacing(8.0),
+    )
+    .padding(8.0)
+    .into()
+}
+
+/// Create a localized menu bar with translation support
+#[allow(clippy::too_many_arguments)]
+pub fn localized_menu_bar<Message: Clone + 'static>(
+    new_doc: Message,
+    open_doc: Message,
+    save_doc: Message,
+    save_as_doc: Message,
+    undo: Message,
+    redo: Message,
+    brightness_contrast: Message,
+    hsl: Message,
+    grayscale: Message,
+    color_balance: Message,
+    curves: Message,
+    levels: Message,
+    gaussian_blur: Message,
+    unsharp_mask: Message,
+    add_noise: Message,
+    show_color_picker: Message,
+    show_color_palette: Message,
+    show_preferences: Message,
+    create_smart_object: Message,
+    toggle_rulers: Message,
+    toggle_grid: Message,
+    toggle_guides: Message,
+    show_about: Message,
+    exit_app: Message,
+    language_change: impl Fn(Language) -> Message + 'static,
+    current_language: Language,
+) -> Element<'static, Message> {
+    container(
+        row![
+            // File menu section
+            container(
+                row![
+                    icon_button(Icon::New, new_doc),
+                    icon_button(Icon::Open, open_doc),
+                    icon_button(Icon::Save, save_doc),
+                    icon_button(Icon::SaveAs, save_as_doc),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Edit menu section
+            container(
+                row![icon_button(Icon::Undo, undo), icon_button(Icon::Redo, redo),].spacing(8.0)
+            )
+            .padding(8.0),
+            // Image menu section
+            container(
+                row![
+                    button(
+                        text(t("menu-image-brightness-contrast"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(brightness_contrast)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-hsl")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(hsl)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-grayscale")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(grayscale)
+                    .padding([4.0, 8.0]),
+                    button(
+                        text(t("menu-image-color-balance"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(color_balance)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-curves")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(curves)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-levels")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(levels)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Filter menu section
+            container(
+                row![
+                    button(
+                        text(t("menu-filter-gaussian-blur"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(gaussian_blur)
+                    .padding([4.0, 8.0]),
+                    button(
+                        text(t("menu-filter-unsharp-mask"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(unsharp_mask)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-filter-add-noise")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(add_noise)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Color menu section
+            container(
+                row![
+                    button(
+                        text(t("menu-tools-color-picker"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(show_color_picker)
+                    .padding([4.0, 8.0]),
+                    button(
+                        text(t("menu-tools-color-palette"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(show_color_palette)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Layer menu section
+            container(
+                row![button(text("Smart Object").size(12.0).style(|_theme| {
+                    iced::widget::text::Style {
+                        color: Some(iced::Color::WHITE),
+                    }
+                }))
+                .on_press(create_smart_object)
+                .padding([4.0, 8.0]),]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // View menu section
+            container(
+                row![
+                    button(text(t("menu-view-rulers")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_rulers)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-view-grid")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_grid)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-view-guides")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_guides)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Language selector
+            language_selector(current_language, language_change),
+            // Spacer
+            Space::new(Length::Fill, Length::Shrink),
+            // Settings menu section
+            container(
+                row![
+                    button(text(t("menu-edit-preferences")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_preferences)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Help menu section
+            container(
+                row![
+                    button(text(t("menu-help-about")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_about)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // App controls
+            container(simple_icon_button(Icon::Close, exit_app)).padding(8.0),
+        ]
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(16.0)
+    .width(Length::Fill)
+    .into()
 }

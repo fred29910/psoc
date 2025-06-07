@@ -299,7 +299,7 @@ impl FileIO {
         debug!("Exporting flattened document to: {}", path.display());
 
         // Render the document to a single image
-        let render_engine = RenderEngine::new();
+        let mut render_engine = RenderEngine::new();
         let pixel_data = render_engine.render_document(document)?;
 
         // Convert to DynamicImage

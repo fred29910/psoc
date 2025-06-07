@@ -1,0 +1,37 @@
+(
+    interface: (
+        theme: Light,
+        language: English,
+        ui_scale: 1.0,
+        font_size: 12,
+        show_tooltips: true,
+        show_rulers: true,
+        show_grid: false,
+        show_status_bar: true,
+    ),
+    performance: (
+        memory_limit: 4096,
+        cache_size: 512,
+        worker_threads: 8,
+        gpu_acceleration: true,
+        multithreaded_rendering: true,
+        tile_size: 256,
+    ),
+    defaults: (
+        default_tool: "Select",
+        auto_save_interval: 5,
+        max_undo_history: 100,
+        default_image_format: "PNG",
+        default_canvas_color: (1.0, 1.0, 1.0, 1.0),
+        confirm_close_unsaved: true,
+        remember_window_state: true,
+    ),
+    advanced: (
+        debug_mode: true,
+        log_level: "Info",
+        experimental_features: false,
+        plugin_directory: None,
+        crash_reporting: true,
+        telemetry: false,
+    ),
+)

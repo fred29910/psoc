@@ -251,6 +251,19 @@ impl AdjustmentRegistry {
             .map(|adj| (adj.id(), adj.name(), adj.description()))
             .collect()
     }
+
+    /// Register all default adjustments
+    pub fn register_default_adjustments(&mut self) {
+        use crate::adjustments::*;
+
+        self.register(Box::new(BrightnessAdjustment::new(0.0)));
+        self.register(Box::new(ContrastAdjustment::new(0.0)));
+        self.register(Box::new(HslAdjustment::new(0.0, 0.0, 0.0)));
+        self.register(Box::new(GrayscaleAdjustment::new()));
+        self.register(Box::new(ColorBalanceAdjustment::new()));
+        self.register(Box::new(CurvesAdjustment::new()));
+        self.register(Box::new(LevelsAdjustment::new()));
+    }
 }
 
 /// Apply an adjustment to a document
