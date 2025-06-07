@@ -63,6 +63,11 @@ pub fn menu_bar<Message: Clone + 'static>(
     hsl: Message,
     grayscale: Message,
     color_balance: Message,
+    curves: Message,
+    levels: Message,
+    gaussian_blur: Message,
+    unsharp_mask: Message,
+    add_noise: Message,
     show_about: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
@@ -114,6 +119,48 @@ pub fn menu_bar<Message: Clone + 'static>(
                         }
                     }))
                     .on_press(color_balance)
+                    .padding([4.0, 8.0]),
+                    button(text("Curves").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(curves)
+                    .padding([4.0, 8.0]),
+                    button(text("Levels").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(levels)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Filter menu section
+            container(
+                row![
+                    button(text("Gaussian Blur").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(gaussian_blur)
+                    .padding([4.0, 8.0]),
+                    button(text("Unsharp Mask").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(unsharp_mask)
+                    .padding([4.0, 8.0]),
+                    button(text("Add Noise").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(add_noise)
                     .padding([4.0, 8.0]),
                 ]
                 .spacing(8.0)

@@ -280,6 +280,18 @@ fn get_global_adjustment_registry() -> psoc_core::adjustment::AdjustmentRegistry
     registry.register(Box::new(psoc_core::GrayscaleAdjustment::new()));
     registry.register(Box::new(psoc_core::ColorBalanceAdjustment::new()));
 
+    // Register P4.4 advanced adjustments
+    registry.register(Box::new(psoc_core::CurvesAdjustment::identity()));
+    registry.register(Box::new(psoc_core::LevelsAdjustment::identity()));
+
+    // Register filters
+    registry.register(Box::new(psoc_core::GaussianBlurFilter::identity()));
+    registry.register(Box::new(psoc_core::MotionBlurFilter::identity()));
+    registry.register(Box::new(psoc_core::UnsharpMaskFilter::identity()));
+    registry.register(Box::new(psoc_core::SharpenFilter::identity()));
+    registry.register(Box::new(psoc_core::AddNoiseFilter::identity()));
+    registry.register(Box::new(psoc_core::ReduceNoiseFilter::identity()));
+
     registry
 }
 

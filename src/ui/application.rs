@@ -188,6 +188,63 @@ pub enum AdjustmentMessage {
     },
     /// Show color balance dialog
     ShowColorBalance,
+    /// Apply curves adjustment
+    ApplyCurves {
+        rgb_curve_points: Vec<(f32, f32)>,
+        red_curve_points: Vec<(f32, f32)>,
+        green_curve_points: Vec<(f32, f32)>,
+        blue_curve_points: Vec<(f32, f32)>,
+        use_individual_curves: bool,
+    },
+    /// Show curves dialog
+    ShowCurves,
+    /// Apply levels adjustment
+    ApplyLevels {
+        input_black: u8,
+        input_white: u8,
+        gamma: f32,
+        output_black: u8,
+        output_white: u8,
+        per_channel: bool,
+    },
+    /// Show levels dialog
+    ShowLevels,
+    /// Apply Gaussian blur filter
+    ApplyGaussianBlur { radius: f32, quality: f32 },
+    /// Show Gaussian blur dialog
+    ShowGaussianBlur,
+    /// Apply motion blur filter
+    ApplyMotionBlur { distance: f32, angle: f32 },
+    /// Show motion blur dialog
+    ShowMotionBlur,
+    /// Apply unsharp mask filter
+    ApplyUnsharpMask {
+        amount: f32,
+        radius: f32,
+        threshold: u8,
+    },
+    /// Show unsharp mask dialog
+    ShowUnsharpMask,
+    /// Apply sharpen filter
+    ApplySharpen { strength: f32 },
+    /// Show sharpen dialog
+    ShowSharpen,
+    /// Apply add noise filter
+    ApplyAddNoise {
+        noise_type: String,
+        amount: f32,
+        monochromatic: bool,
+        seed: u32,
+    },
+    /// Show add noise dialog
+    ShowAddNoise,
+    /// Apply reduce noise filter
+    ApplyReduceNoise {
+        strength: u8,
+        preserve_details: f32,
+    },
+    /// Show reduce noise dialog
+    ShowReduceNoise,
 }
 
 impl Default for AppState {
@@ -651,6 +708,11 @@ impl PsocApp {
             Message::Adjustment(AdjustmentMessage::ShowHsl),
             Message::Adjustment(AdjustmentMessage::ShowGrayscale),
             Message::Adjustment(AdjustmentMessage::ShowColorBalance),
+            Message::Adjustment(AdjustmentMessage::ShowCurves),
+            Message::Adjustment(AdjustmentMessage::ShowLevels),
+            Message::Adjustment(AdjustmentMessage::ShowGaussianBlur),
+            Message::Adjustment(AdjustmentMessage::ShowUnsharpMask),
+            Message::Adjustment(AdjustmentMessage::ShowAddNoise),
             Message::ShowAbout,
             Message::Exit,
         )
@@ -1079,6 +1141,117 @@ impl PsocApp {
                 // TODO: Implement color balance dialog
                 self.error_message = Some("Color balance dialog not yet implemented".to_string());
             }
+            AdjustmentMessage::ApplyCurves {
+                rgb_curve_points,
+                red_curve_points,
+                green_curve_points,
+                blue_curve_points,
+                use_individual_curves,
+            } => {
+                info!("Applying curves adjustment");
+                self.apply_curves_adjustment(
+                    rgb_curve_points,
+                    red_curve_points,
+                    green_curve_points,
+                    blue_curve_points,
+                    use_individual_curves,
+                );
+            }
+            AdjustmentMessage::ShowCurves => {
+                info!("Showing curves dialog");
+                // TODO: Implement curves dialog
+                self.error_message = Some("Curves dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyLevels {
+                input_black,
+                input_white,
+                gamma,
+                output_black,
+                output_white,
+                per_channel,
+            } => {
+                info!("Applying levels adjustment");
+                self.apply_levels_adjustment(
+                    input_black,
+                    input_white,
+                    gamma,
+                    output_black,
+                    output_white,
+                    per_channel,
+                );
+            }
+            AdjustmentMessage::ShowLevels => {
+                info!("Showing levels dialog");
+                // TODO: Implement levels dialog
+                self.error_message = Some("Levels dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyGaussianBlur { radius, quality } => {
+                info!("Applying Gaussian blur: radius={}, quality={}", radius, quality);
+                self.apply_gaussian_blur_filter(radius, quality);
+            }
+            AdjustmentMessage::ShowGaussianBlur => {
+                info!("Showing Gaussian blur dialog");
+                // TODO: Implement Gaussian blur dialog
+                self.error_message = Some("Gaussian blur dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyMotionBlur { distance, angle } => {
+                info!("Applying motion blur: distance={}, angle={}", distance, angle);
+                self.apply_motion_blur_filter(distance, angle);
+            }
+            AdjustmentMessage::ShowMotionBlur => {
+                info!("Showing motion blur dialog");
+                // TODO: Implement motion blur dialog
+                self.error_message = Some("Motion blur dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyUnsharpMask {
+                amount,
+                radius,
+                threshold,
+            } => {
+                info!("Applying unsharp mask: amount={}, radius={}, threshold={}", amount, radius, threshold);
+                self.apply_unsharp_mask_filter(amount, radius, threshold);
+            }
+            AdjustmentMessage::ShowUnsharpMask => {
+                info!("Showing unsharp mask dialog");
+                // TODO: Implement unsharp mask dialog
+                self.error_message = Some("Unsharp mask dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplySharpen { strength } => {
+                info!("Applying sharpen filter: strength={}", strength);
+                self.apply_sharpen_filter(strength);
+            }
+            AdjustmentMessage::ShowSharpen => {
+                info!("Showing sharpen dialog");
+                // TODO: Implement sharpen dialog
+                self.error_message = Some("Sharpen dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyAddNoise {
+                noise_type,
+                amount,
+                monochromatic,
+                seed,
+            } => {
+                info!("Applying add noise filter: type={}, amount={}, mono={}, seed={}",
+                      noise_type, amount, monochromatic, seed);
+                self.apply_add_noise_filter(noise_type, amount, monochromatic, seed);
+            }
+            AdjustmentMessage::ShowAddNoise => {
+                info!("Showing add noise dialog");
+                // TODO: Implement add noise dialog
+                self.error_message = Some("Add noise dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyReduceNoise {
+                strength,
+                preserve_details,
+            } => {
+                info!("Applying reduce noise filter: strength={}, preserve={}", strength, preserve_details);
+                self.apply_reduce_noise_filter(strength, preserve_details);
+            }
+            AdjustmentMessage::ShowReduceNoise => {
+                info!("Showing reduce noise dialog");
+                // TODO: Implement reduce noise dialog
+                self.error_message = Some("Reduce noise dialog not yet implemented".to_string());
+            }
         }
     }
 
@@ -1262,6 +1435,320 @@ impl PsocApp {
                         Some(format!("Failed to apply color balance adjustment: {}", e));
                 } else {
                     // Update canvas with the modified document
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply curves adjustment to the current document
+    #[allow(clippy::too_many_arguments)]
+    fn apply_curves_adjustment(
+        &mut self,
+        rgb_curve_points: Vec<(f32, f32)>,
+        red_curve_points: Vec<(f32, f32)>,
+        green_curve_points: Vec<(f32, f32)>,
+        blue_curve_points: Vec<(f32, f32)>,
+        use_individual_curves: bool,
+    ) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "rgb_curve": {
+                        "points": rgb_curve_points.iter().map(|(input, output)| {
+                            serde_json::json!({"input": input, "output": output})
+                        }).collect::<Vec<_>>()
+                    },
+                    "red_curve": {
+                        "points": red_curve_points.iter().map(|(input, output)| {
+                            serde_json::json!({"input": input, "output": output})
+                        }).collect::<Vec<_>>()
+                    },
+                    "green_curve": {
+                        "points": green_curve_points.iter().map(|(input, output)| {
+                            serde_json::json!({"input": input, "output": output})
+                        }).collect::<Vec<_>>()
+                    },
+                    "blue_curve": {
+                        "points": blue_curve_points.iter().map(|(input, output)| {
+                            serde_json::json!({"input": input, "output": output})
+                        }).collect::<Vec<_>>()
+                    },
+                    "use_individual_curves": use_individual_curves
+                });
+                let application = AdjustmentApplication::new(
+                    "curves".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply curves adjustment: {}", e));
+                } else {
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply levels adjustment to the current document
+    #[allow(clippy::too_many_arguments)]
+    fn apply_levels_adjustment(
+        &mut self,
+        input_black: u8,
+        input_white: u8,
+        gamma: f32,
+        output_black: u8,
+        output_white: u8,
+        per_channel: bool,
+    ) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "input_black": input_black,
+                    "input_white": input_white,
+                    "gamma": gamma,
+                    "output_black": output_black,
+                    "output_white": output_white,
+                    "per_channel": per_channel
+                });
+                let application = AdjustmentApplication::new(
+                    "levels".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply levels adjustment: {}", e));
+                } else {
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply Gaussian blur filter to the current document
+    fn apply_gaussian_blur_filter(&mut self, radius: f32, quality: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "radius": radius,
+                    "quality": quality
+                });
+                let application = AdjustmentApplication::new(
+                    "gaussian_blur".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply Gaussian blur: {}", e));
+                } else {
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply motion blur filter to the current document
+    fn apply_motion_blur_filter(&mut self, distance: f32, angle: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "distance": distance,
+                    "angle": angle
+                });
+                let application = AdjustmentApplication::new(
+                    "motion_blur".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply motion blur: {}", e));
+                } else {
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply unsharp mask filter to the current document
+    fn apply_unsharp_mask_filter(&mut self, amount: f32, radius: f32, threshold: u8) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "amount": amount,
+                    "radius": radius,
+                    "threshold": threshold
+                });
+                let application = AdjustmentApplication::new(
+                    "unsharp_mask".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply unsharp mask: {}", e));
+                } else {
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply sharpen filter to the current document
+    fn apply_sharpen_filter(&mut self, strength: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "strength": strength
+                });
+                let application = AdjustmentApplication::new(
+                    "sharpen".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply sharpen filter: {}", e));
+                } else {
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply add noise filter to the current document
+    fn apply_add_noise_filter(&mut self, noise_type: String, amount: f32, monochromatic: bool, seed: u32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "noise_type": noise_type,
+                    "amount": amount,
+                    "monochromatic": monochromatic,
+                    "seed": seed
+                });
+                let application = AdjustmentApplication::new(
+                    "add_noise".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply add noise filter: {}", e));
+                } else {
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply reduce noise filter to the current document
+    fn apply_reduce_noise_filter(&mut self, strength: u8, preserve_details: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "strength": strength,
+                    "preserve_details": preserve_details
+                });
+                let application = AdjustmentApplication::new(
+                    "reduce_noise".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply reduce noise filter: {}", e));
+                } else {
                     self.canvas.set_document(document.clone());
                     self.sync_canvas_state();
                     self.error_message = None;
