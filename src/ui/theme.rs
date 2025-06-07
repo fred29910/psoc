@@ -3,7 +3,7 @@
 use iced::{Color, Theme};
 
 /// PSOC custom theme
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PsocTheme {
     /// Dark theme (default)
     Dark,
@@ -16,6 +16,16 @@ pub enum PsocTheme {
 impl Default for PsocTheme {
     fn default() -> Self {
         Self::Dark
+    }
+}
+
+impl std::fmt::Display for PsocTheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PsocTheme::Dark => write!(f, "Dark"),
+            PsocTheme::Light => write!(f, "Light"),
+            PsocTheme::HighContrast => write!(f, "High Contrast"),
+        }
     }
 }
 

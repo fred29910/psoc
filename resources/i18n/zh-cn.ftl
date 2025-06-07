@@ -25,6 +25,7 @@ menu-edit-paste = 粘贴
 menu-edit-delete = 删除
 menu-edit-select-all = 全选
 menu-edit-deselect = 取消选择
+menu-edit-preferences = 首选项
 
 # 视图菜单
 menu-view = 视图
@@ -272,6 +273,61 @@ file-type-all-files = 所有文件
 # 语言选择器
 language-selector-title = 语言
 language-selector-placeholder = 选择语言
+
+# 首选项对话框
+preferences-title = 首选项
+preferences-categories = 分类
+preferences-category-interface = 界面
+preferences-category-performance = 性能
+preferences-category-defaults = 默认设置
+preferences-category-advanced = 高级
+
+# 界面首选项
+preferences-interface-title = 界面设置
+preferences-theme = 主题
+preferences-language = 语言
+preferences-ui-scale = 界面缩放
+preferences-font-size = 字体大小
+preferences-font-size-placeholder = 12
+preferences-show-tooltips = 显示工具提示
+preferences-show-rulers = 显示标尺
+preferences-show-grid = 显示网格
+preferences-show-status-bar = 显示状态栏
+
+# 性能首选项
+preferences-performance-title = 性能设置
+preferences-memory-limit = 内存限制
+preferences-cache-size = 缓存大小
+preferences-worker-threads = 工作线程数
+preferences-tile-size = 瓦片大小
+preferences-gpu-acceleration = GPU 加速
+preferences-multithreaded-rendering = 多线程渲染
+
+# 默认首选项
+preferences-defaults-title = 默认设置
+preferences-default-tool = 默认工具
+preferences-default-format = 默认图像格式
+preferences-auto-save = 自动保存间隔
+preferences-max-undo = 最大撤销历史
+preferences-confirm-close = 关闭未保存文档前确认
+preferences-remember-window = 记住窗口状态
+preferences-disabled = 已禁用
+
+# 高级首选项
+preferences-advanced-title = 高级设置
+preferences-debug-mode = 调试模式
+preferences-log-level = 日志级别
+preferences-experimental = 实验性功能
+preferences-plugin-dir = 插件目录
+preferences-plugin-dir-placeholder = /插件/路径
+preferences-no-plugin-dir = 未设置插件目录
+preferences-crash-reporting = 崩溃报告
+preferences-telemetry = 遥测
+
+# 首选项对话框按钮
+preferences-apply = 应用
+preferences-cancel = 取消
+preferences-reset = 重置为默认值
 
 # 常用术语
 untitled = 未命名

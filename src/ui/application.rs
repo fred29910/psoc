@@ -15,6 +15,7 @@ use super::{
         AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage,
         ColorPaletteDialog, ColorPaletteMessage, ColorPickerDialog, ColorPickerMessage,
         GaussianBlurDialog, GaussianBlurMessage, GradientEditor, GradientEditorMessage,
+        PreferencesDialog, PreferencesMessage,
     },
     icons::Icon,
     theme::{spacing, PsocTheme},
@@ -54,6 +55,8 @@ pub struct PsocApp {
     color_picker_dialog: ColorPickerDialog,
     /// Color Palette dialog
     color_palette_dialog: ColorPaletteDialog,
+    /// Preferences dialog
+    preferences_dialog: PreferencesDialog,
     /// Image canvas for rendering
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
@@ -172,6 +175,10 @@ pub enum Message {
     ColorPalette(ColorPaletteMessage),
     /// Show color palette dialog
     ShowColorPalette,
+    /// Preferences dialog messages
+    Preferences(PreferencesMessage),
+    /// Show preferences dialog
+    ShowPreferences,
     /// Create smart object from file
     CreateSmartObject,
     /// Layer-related messages
@@ -408,6 +415,7 @@ impl Default for PsocApp {
             gradient_editor: GradientEditor::new(),
             color_picker_dialog: ColorPickerDialog::new(),
             color_palette_dialog: ColorPaletteDialog::new(),
+            preferences_dialog: PreferencesDialog::new(),
             canvas: ImageCanvas::new(),
             tool_manager: ToolManager::new(),
             shortcut_manager: ShortcutManager::new(),
@@ -543,6 +551,7 @@ impl PsocApp {
                 gradient_editor: GradientEditor::new(),
                 color_picker_dialog: ColorPickerDialog::new(),
                 color_palette_dialog: ColorPaletteDialog::new(),
+                preferences_dialog: PreferencesDialog::new(),
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
                 shortcut_manager: ShortcutManager::new(),
@@ -802,6 +811,14 @@ impl PsocApp {
                 info!("Showing color palette dialog");
                 self.show_color_palette();
             }
+            Message::Preferences(pref_msg) => {
+                debug!("Preferences message: {:?}", pref_msg);
+                self.handle_preferences_message(pref_msg);
+            }
+            Message::ShowPreferences => {
+                info!("Showing preferences dialog");
+                self.show_preferences();
+            }
             Message::CreateSmartObject => {
                 info!("Creating smart object from file");
                 #[cfg(feature = "gui")]
@@ -983,6 +1000,14 @@ impl PsocApp {
                 self.color_palette_dialog
                     .view(std::convert::identity)
                     .map(Message::ColorPalette),
+            );
+        }
+
+        if self.preferences_dialog.visible {
+            layers.push(
+                self.preferences_dialog
+                    .view(&self.state.localization_manager)
+                    .map(Message::Preferences),
             );
         }
 
@@ -1195,6 +1220,7 @@ impl PsocApp {
             Message::Adjustment(AdjustmentMessage::ShowAddNoise),
             Message::ShowColorPicker,
             Message::ShowColorPalette,
+            Message::ShowPreferences,
             Message::CreateSmartObject,
             Message::View(ViewMessage::ToggleRulers),
             Message::View(ViewMessage::ToggleGrid),
@@ -3242,6 +3268,80 @@ impl PsocApp {
     /// Show color palette dialog
     pub fn show_color_palette(&mut self) {
         self.color_palette_dialog.show();
+    }
+
+    /// Show preferences dialog
+    pub fn show_preferences(&mut self) {
+        // Get current preferences from application state
+        let preferences = self.get_current_preferences();
+        self.preferences_dialog.show(preferences);
+    }
+
+    /// Get current preferences from application state
+    fn get_current_preferences(&self) -> crate::ui::dialogs::preferences::UserPreferences {
+        use crate::ui::dialogs::preferences::*;
+
+        UserPreferences {
+            interface: InterfacePreferences {
+                theme: self.state.theme,
+                language: self.state.current_language,
+                ui_scale: 1.0,         // TODO: Get from actual UI scale
+                font_size: 12,         // TODO: Get from actual font size
+                show_tooltips: true,   // TODO: Get from actual setting
+                show_rulers: true,     // TODO: Get from actual setting
+                show_grid: false,      // TODO: Get from actual setting
+                show_status_bar: true, // TODO: Get from actual setting
+            },
+            performance: PerformancePreferences::default(),
+            defaults: DefaultPreferences::default(),
+            advanced: AdvancedPreferences {
+                debug_mode: self.state.debug_mode,
+                log_level: "Info".to_string(), // TODO: Get from actual log level
+                experimental_features: false,
+                plugin_directory: None,
+                crash_reporting: true,
+                telemetry: false,
+            },
+        }
+    }
+
+    /// Handle preferences dialog messages
+    fn handle_preferences_message(&mut self, message: PreferencesMessage) {
+        use crate::ui::dialogs::preferences::PreferencesMessage;
+
+        self.preferences_dialog.update(message.clone());
+
+        match message {
+            PreferencesMessage::Apply => {
+                // Apply preferences to application state
+                self.apply_preferences(self.preferences_dialog.preferences().clone());
+            }
+            PreferencesMessage::Hide | PreferencesMessage::Cancel => {
+                // Dialog is already hidden by the dialog's update method
+            }
+            _ => {
+                // Other messages are handled by the dialog itself
+            }
+        }
+    }
+
+    /// Apply preferences to application state
+    fn apply_preferences(&mut self, preferences: crate::ui::dialogs::preferences::UserPreferences) {
+        // Apply interface preferences
+        self.state.theme = preferences.interface.theme;
+
+        // Apply language change if different
+        if self.state.current_language != preferences.interface.language {
+            self.handle_language_change(preferences.interface.language);
+        }
+
+        // Apply debug mode
+        self.state.debug_mode = preferences.advanced.debug_mode;
+
+        // TODO: Apply other preferences like performance settings, defaults, etc.
+        // This would involve updating various subsystems
+
+        info!("Applied preferences to application state");
     }
 
     /// Handle view-related messages (rulers, grid, guides)

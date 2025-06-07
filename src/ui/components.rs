@@ -1259,6 +1259,7 @@ pub fn localized_menu_bar<Message: Clone + 'static>(
     add_noise: Message,
     show_color_picker: Message,
     show_color_palette: Message,
+    show_preferences: Message,
     create_smart_object: Message,
     toggle_rulers: Message,
     toggle_grid: Message,
@@ -1452,6 +1453,20 @@ pub fn localized_menu_bar<Message: Clone + 'static>(
             language_selector(current_language, language_change),
             // Spacer
             Space::new(Length::Fill, Length::Shrink),
+            // Settings menu section
+            container(
+                row![
+                    button(text(t("menu-edit-preferences")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_preferences)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
             // Help menu section
             container(
                 row![

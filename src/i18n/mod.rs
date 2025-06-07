@@ -12,7 +12,7 @@ use tracing::{debug, error, info, warn};
 use unic_langid::{langid, LanguageIdentifier};
 
 /// Supported languages in PSOC
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Language {
     /// English (default)
     English,

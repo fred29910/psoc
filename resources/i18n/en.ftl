@@ -25,6 +25,7 @@ menu-edit-paste = Paste
 menu-edit-delete = Delete
 menu-edit-select-all = Select All
 menu-edit-deselect = Deselect
+menu-edit-preferences = Preferences
 
 # View Menu
 menu-view = View
@@ -272,6 +273,61 @@ file-type-all-files = All Files
 # Language Selector
 language-selector-title = Language
 language-selector-placeholder = Select Language
+
+# Preferences Dialog
+preferences-title = Preferences
+preferences-categories = Categories
+preferences-category-interface = Interface
+preferences-category-performance = Performance
+preferences-category-defaults = Defaults
+preferences-category-advanced = Advanced
+
+# Interface Preferences
+preferences-interface-title = Interface Settings
+preferences-theme = Theme
+preferences-language = Language
+preferences-ui-scale = UI Scale
+preferences-font-size = Font Size
+preferences-font-size-placeholder = 12
+preferences-show-tooltips = Show Tooltips
+preferences-show-rulers = Show Rulers
+preferences-show-grid = Show Grid
+preferences-show-status-bar = Show Status Bar
+
+# Performance Preferences
+preferences-performance-title = Performance Settings
+preferences-memory-limit = Memory Limit
+preferences-cache-size = Cache Size
+preferences-worker-threads = Worker Threads
+preferences-tile-size = Tile Size
+preferences-gpu-acceleration = GPU Acceleration
+preferences-multithreaded-rendering = Multithreaded Rendering
+
+# Default Preferences
+preferences-defaults-title = Default Settings
+preferences-default-tool = Default Tool
+preferences-default-format = Default Image Format
+preferences-auto-save = Auto-save Interval
+preferences-max-undo = Max Undo History
+preferences-confirm-close = Confirm Before Closing Unsaved Documents
+preferences-remember-window = Remember Window State
+preferences-disabled = Disabled
+
+# Advanced Preferences
+preferences-advanced-title = Advanced Settings
+preferences-debug-mode = Debug Mode
+preferences-log-level = Log Level
+preferences-experimental = Experimental Features
+preferences-plugin-dir = Plugin Directory
+preferences-plugin-dir-placeholder = /path/to/plugins
+preferences-no-plugin-dir = No plugin directory set
+preferences-crash-reporting = Crash Reporting
+preferences-telemetry = Telemetry
+
+# Preferences Dialog Buttons
+preferences-apply = Apply
+preferences-cancel = Cancel
+preferences-reset = Reset to Defaults
 
 # Common Terms
 untitled = Untitled

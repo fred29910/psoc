@@ -12,6 +12,8 @@ pub mod color_picker;
 pub mod gaussian_blur;
 #[cfg(feature = "gui")]
 pub mod gradient_editor;
+#[cfg(feature = "gui")]
+pub mod preferences;
 
 #[cfg(feature = "gui")]
 pub use about::{AboutDialog, AboutMessage};
@@ -25,3 +27,5 @@ pub use color_picker::{ColorPickerDialog, ColorPickerMessage};
 pub use gaussian_blur::{GaussianBlurDialog, GaussianBlurMessage};
 #[cfg(feature = "gui")]
 pub use gradient_editor::{GradientEditor, GradientEditorMessage};
+#[cfg(feature = "gui")]
+pub use preferences::{PreferencesDialog, PreferencesMessage};

@@ -9,6 +9,7 @@ pub mod core;
 pub mod file_io;
 pub mod i18n;
 pub mod image_processing;
+pub mod preferences;
 pub mod rendering;
 pub mod shortcuts;
 pub mod tools;

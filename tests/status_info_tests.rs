@@ -1,11 +1,24 @@
 //! Tests for status information and enhanced status bar functionality
 
+use psoc::i18n::Language;
 use psoc::ui::application::{AppState, StatusInfo};
 use psoc_core::{Document, RgbaPixel};
 
+/// Helper function to create an AppState with English language
+fn create_english_app_state() -> AppState {
+    let mut app_state = AppState::default();
+    // Ensure the localization manager is set to English
+    app_state
+        .localization_manager
+        .set_language(Language::English)
+        .unwrap();
+    app_state.current_language = Language::English;
+    app_state
+}
+
 #[test]
 fn test_status_info_creation_empty_state() {
-    let app_state = AppState::default();
+    let app_state = create_english_app_state();
     let status_info = StatusInfo::from_app_state(&app_state);
 
     assert_eq!(status_info.document_status, "No document");
@@ -18,7 +31,7 @@ fn test_status_info_creation_empty_state() {
 
 #[test]
 fn test_status_info_with_document() {
-    let mut app_state = AppState::default();
+    let mut app_state = create_english_app_state();
     let document = Document::new("Test Document".to_string(), 800, 600);
 
     app_state.current_document = Some(document);
@@ -35,7 +48,7 @@ fn test_status_info_with_document() {
 
 #[test]
 fn test_status_info_with_saved_document() {
-    let mut app_state = AppState::default();
+    let mut app_state = create_english_app_state();
     let document = Document::new("Test Document".to_string(), 1024, 768);
 
     app_state.current_document = Some(document);
@@ -50,7 +63,7 @@ fn test_status_info_with_saved_document() {
 
 #[test]
 fn test_status_info_with_mouse_position() {
-    let mut app_state = AppState::default();
+    let mut app_state = create_english_app_state();
     app_state.mouse_position = Some((150.5, 200.3));
 
     let status_info = StatusInfo::from_app_state(&app_state);
@@ -60,7 +73,7 @@ fn test_status_info_with_mouse_position() {
 
 #[test]
 fn test_status_info_with_pixel_color() {
-    let mut app_state = AppState::default();
+    let mut app_state = create_english_app_state();
     let pixel_color = RgbaPixel::new(255, 128, 64, 200);
     app_state.current_pixel_color = Some(pixel_color);
 
@@ -71,7 +84,7 @@ fn test_status_info_with_pixel_color() {
 
 #[test]
 fn test_status_info_with_image() {
-    let mut app_state = AppState::default();
+    let mut app_state = create_english_app_state();
 
     // Create a simple test image
     let test_image = image::DynamicImage::new_rgb8(640, 480);
@@ -87,7 +100,7 @@ fn test_status_info_with_image() {
 
 #[test]
 fn test_status_info_zoom_levels() {
-    let mut app_state = AppState::default();
+    let mut app_state = create_english_app_state();
 
     // Test different zoom levels
     let zoom_levels = [0.25, 0.5, 1.0, 1.5, 2.0, 4.0];
@@ -101,7 +114,7 @@ fn test_status_info_zoom_levels() {
 
 #[test]
 fn test_status_info_complete_state() {
-    let mut app_state = AppState::default();
+    let mut app_state = create_english_app_state();
     let document = Document::new("Complete Test".to_string(), 1920, 1080);
     let pixel_color = RgbaPixel::new(100, 150, 200, 255);
 
