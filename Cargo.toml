@@ -1,6 +1,6 @@
 [package]
 name = "psoc"
-version = "0.8.1"
+version = "0.8.6"
 edition = "2021"
 authors = ["PSOC Development Team <dev@psoc.project>"]
 description = "A Photoshop-like image editor built with Rust"
@@ -11,6 +11,7 @@ documentation = "https://docs.rs/psoc"
 readme = "README.md"
 keywords = ["image", "editor", "graphics", "photoshop", "gui"]
 categories = ["graphics", "multimedia::images", "gui"]
+build = "build.rs"
 
 [workspace]
 members = [
@@ -82,10 +83,15 @@ proptest = "1.6.0"
 tempfile = "3.20.0"
 tokio-test = "0.4.4"
 
+[build-dependencies]
+# For embedding resources and building platform-specific assets
+winres = { version = "0.1.12", optional = true }
+
 [features]
 default = ["gui"]
 gui = ["dep:iced", "dep:rfd"]
 plugins = ["psoc-plugins", "dep:mlua", "dep:wasmtime"]
+windows-resources = ["dep:winres"]
 
 [profile.dev]
 opt-level = 0
