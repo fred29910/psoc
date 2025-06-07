@@ -29,7 +29,10 @@ fn setup_windows_resources() {
 
         // Set version information
         res.set("ProductName", "PSOC Image Editor");
-        res.set("FileDescription", "Professional Simple Open-source image editor");
+        res.set(
+            "FileDescription",
+            "Professional Simple Open-source image editor",
+        );
         res.set("CompanyName", "PSOC Development Team");
         res.set("LegalCopyright", "Copyright © 2024 PSOC Development Team");
         res.set("ProductVersion", env!("CARGO_PKG_VERSION"));
@@ -52,17 +55,26 @@ fn setup_app_metadata() {
     // Set environment variables for the application
     println!("cargo:rustc-env=PSOC_VERSION={}", env!("CARGO_PKG_VERSION"));
     println!("cargo:rustc-env=PSOC_NAME={}", env!("CARGO_PKG_NAME"));
-    println!("cargo:rustc-env=PSOC_DESCRIPTION={}", env!("CARGO_PKG_DESCRIPTION"));
+    println!(
+        "cargo:rustc-env=PSOC_DESCRIPTION={}",
+        env!("CARGO_PKG_DESCRIPTION")
+    );
     println!("cargo:rustc-env=PSOC_AUTHORS={}", env!("CARGO_PKG_AUTHORS"));
-    
+
     // Set build timestamp
     let build_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
     println!("cargo:rustc-env=PSOC_BUILD_TIME={}", build_time);
-    
+
     // Set target information
-    println!("cargo:rustc-env=PSOC_TARGET_OS={}", env::var("CARGO_CFG_TARGET_OS").unwrap_or_default());
-    println!("cargo:rustc-env=PSOC_TARGET_ARCH={}", env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default());
+    println!(
+        "cargo:rustc-env=PSOC_TARGET_OS={}",
+        env::var("CARGO_CFG_TARGET_OS").unwrap_or_default()
+    );
+    println!(
+        "cargo:rustc-env=PSOC_TARGET_ARCH={}",
+        env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default()
+    );
 }
