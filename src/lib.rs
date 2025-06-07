@@ -9,6 +9,7 @@ pub mod core;
 pub mod file_io;
 pub mod image_processing;
 pub mod rendering;
+pub mod shortcuts;
 pub mod tools;
 #[cfg(feature = "gui")]
 pub mod ui;

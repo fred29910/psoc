@@ -2,8 +2,9 @@
 
 #[cfg(feature = "gui")]
 use iced::{
+    keyboard,
     widget::{column, container},
-    Element, Length, Settings, Task, Theme,
+    Element, Length, Settings, Subscription, Task, Theme,
 };
 use tracing::{debug, error, info};
 
@@ -20,6 +21,10 @@ use super::{
 };
 
 use crate::{
+    shortcuts::{
+        iced_key_to_shortcut_key, iced_modifiers_to_shortcut_modifiers, ShortcutAction,
+        ShortcutManager,
+    },
     tools::{
         tool_trait::{ToolOptionType, ToolOptionValue},
         ToolManager, ToolType,
@@ -30,7 +35,7 @@ use crate::{
 use psoc_core::{Command, Document, Layer};
 
 /// Main GUI application
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PsocApp {
     /// Current application state
     state: AppState,
@@ -50,6 +55,8 @@ pub struct PsocApp {
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
     tool_manager: ToolManager,
+    /// Shortcut manager for keyboard shortcuts
+    shortcut_manager: ShortcutManager,
 }
 
 /// Application state
@@ -161,6 +168,8 @@ pub enum Message {
     Adjustment(AdjustmentMessage),
     /// View-related messages
     View(ViewMessage),
+    /// Keyboard shortcut triggered
+    Shortcut(ShortcutAction),
     /// Error occurred
     Error(String),
 }
@@ -335,6 +344,23 @@ pub enum ViewMessage {
     ClearGuides,
 }
 
+impl Default for PsocApp {
+    fn default() -> Self {
+        Self {
+            state: AppState::default(),
+            error_message: None,
+            about_dialog: AboutDialog::new(),
+            brightness_contrast_dialog: BrightnessContrastDialog::new(),
+            gaussian_blur_dialog: GaussianBlurDialog::new(),
+            color_picker_dialog: ColorPickerDialog::new(),
+            color_palette_dialog: ColorPaletteDialog::new(),
+            canvas: ImageCanvas::new(),
+            tool_manager: ToolManager::new(),
+            shortcut_manager: ShortcutManager::new(),
+        }
+    }
+}
+
 impl Default for AppState {
     fn default() -> Self {
         Self {
@@ -419,10 +445,13 @@ impl PsocApp {
 
         let _settings = Settings::default();
 
-        iced::run(PsocApp::title, PsocApp::update, PsocApp::view).map_err(|e| {
-            error!("Failed to run GUI application: {}", e);
-            PsocError::gui(format!("GUI application error: {}", e))
-        })
+        iced::application(PsocApp::title, PsocApp::update, PsocApp::view)
+            .subscription(PsocApp::subscription)
+            .run_with(|| PsocApp::new())
+            .map_err(|e| {
+                error!("Failed to run GUI application: {}", e);
+                PsocError::gui(format!("GUI application error: {}", e))
+            })
     }
 }
 
@@ -441,6 +470,7 @@ impl PsocApp {
                 color_palette_dialog: ColorPaletteDialog::new(),
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
+                shortcut_manager: ShortcutManager::new(),
             },
             Task::none(),
         )
@@ -751,6 +781,10 @@ impl PsocApp {
                 debug!("View message: {:?}", view_msg);
                 self.handle_view_message(view_msg);
             }
+            Message::Shortcut(action) => {
+                debug!("Shortcut triggered: {:?}", action);
+                self.handle_shortcut_action(action);
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
@@ -758,6 +792,22 @@ impl PsocApp {
         }
 
         Task::none()
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        keyboard::on_key_press(|key, modifiers| {
+            // Convert iced key and modifiers to our types
+            if let Some(shortcut_key) = iced_key_to_shortcut_key(&key) {
+                let shortcut_modifiers = iced_modifiers_to_shortcut_modifiers(modifiers);
+
+                // Create a temporary shortcut manager to check for common shortcuts
+                let temp_manager = ShortcutManager::new();
+                if let Some(action) = temp_manager.find_action(shortcut_key, &shortcut_modifiers) {
+                    return Some(Message::Shortcut(action));
+                }
+            }
+            None
+        })
     }
 
     fn view(&self) -> Element<Message> {
@@ -2691,6 +2741,197 @@ impl PsocApp {
             ViewMessage::ClearGuides => {
                 self.canvas.clear_guides();
                 debug!("Cleared all guides");
+            }
+        }
+    }
+
+    /// Handle shortcut actions
+    fn handle_shortcut_action(&mut self, action: ShortcutAction) {
+        debug!("Handling shortcut action: {:?}", action);
+
+        match action {
+            // File operations
+            ShortcutAction::NewDocument => {
+                // Create a new document with default dimensions
+                let document = Document::new("Untitled".to_string(), 800, 600);
+                self.state.current_document = Some(document);
+                self.state.document_open = true;
+                self.state.zoom_level = 1.0;
+                self.state.pan_offset = (0.0, 0.0);
+                self.error_message = None;
+            }
+            ShortcutAction::OpenDocument => {
+                // Trigger file dialog - this will be handled by the update method
+                // For now, just log that it was triggered
+                info!("Open document shortcut triggered");
+            }
+            ShortcutAction::SaveDocument => {
+                // Handle save logic directly
+                info!("Save document shortcut triggered");
+            }
+            ShortcutAction::SaveAsDocument => {
+                // Handle save as logic directly
+                info!("Save as document shortcut triggered");
+            }
+
+            // Edit operations
+            ShortcutAction::Undo => {
+                if let Some(ref mut document) = self.state.current_document {
+                    match document.undo() {
+                        Ok(true) => {
+                            info!("Undo operation successful");
+                            self.canvas.set_document(document.clone());
+                            self.sync_canvas_state();
+                            self.error_message = None;
+                        }
+                        Ok(false) => {
+                            debug!("No operations to undo");
+                            self.error_message = Some("Nothing to undo".to_string());
+                        }
+                        Err(e) => {
+                            error!("Undo operation failed: {}", e);
+                            self.error_message = Some(format!("Undo failed: {}", e));
+                        }
+                    }
+                } else {
+                    self.error_message = Some("No document open".to_string());
+                }
+            }
+            ShortcutAction::Redo => {
+                if let Some(ref mut document) = self.state.current_document {
+                    match document.redo() {
+                        Ok(true) => {
+                            info!("Redo operation successful");
+                            self.canvas.set_document(document.clone());
+                            self.sync_canvas_state();
+                            self.error_message = None;
+                        }
+                        Ok(false) => {
+                            debug!("No operations to redo");
+                            self.error_message = Some("Nothing to redo".to_string());
+                        }
+                        Err(e) => {
+                            error!("Redo operation failed: {}", e);
+                            self.error_message = Some(format!("Redo failed: {}", e));
+                        }
+                    }
+                } else {
+                    self.error_message = Some("No document open".to_string());
+                }
+            }
+            ShortcutAction::SelectAll => {
+                // TODO: Implement select all
+                debug!("Select All not yet implemented");
+            }
+            ShortcutAction::DeselectAll => {
+                // TODO: Implement deselect all
+                debug!("Deselect All not yet implemented");
+            }
+
+            // Tool operations
+            ShortcutAction::SelectTool => {
+                self.state.current_tool = ToolType::Select;
+                if let Err(e) = self.tool_manager.set_active_tool(ToolType::Select) {
+                    self.error_message = Some(format!("Failed to switch tool: {}", e));
+                } else {
+                    self.error_message = None;
+                }
+            }
+            ShortcutAction::BrushTool => {
+                self.state.current_tool = ToolType::Brush;
+                if let Err(e) = self.tool_manager.set_active_tool(ToolType::Brush) {
+                    self.error_message = Some(format!("Failed to switch tool: {}", e));
+                } else {
+                    self.error_message = None;
+                }
+            }
+            ShortcutAction::EraserTool => {
+                self.state.current_tool = ToolType::Eraser;
+                if let Err(e) = self.tool_manager.set_active_tool(ToolType::Eraser) {
+                    self.error_message = Some(format!("Failed to switch tool: {}", e));
+                } else {
+                    self.error_message = None;
+                }
+            }
+            ShortcutAction::MoveTool => {
+                self.state.current_tool = ToolType::Move;
+                if let Err(e) = self.tool_manager.set_active_tool(ToolType::Move) {
+                    self.error_message = Some(format!("Failed to switch tool: {}", e));
+                } else {
+                    self.error_message = None;
+                }
+            }
+            ShortcutAction::TransformTool => {
+                self.state.current_tool = ToolType::Transform;
+                if let Err(e) = self.tool_manager.set_active_tool(ToolType::Transform) {
+                    self.error_message = Some(format!("Failed to switch tool: {}", e));
+                } else {
+                    self.error_message = None;
+                }
+            }
+
+            // View operations
+            ShortcutAction::ZoomIn => {
+                let new_zoom = (self.state.zoom_level * 1.2).min(10.0);
+                debug!("Zooming in: {} -> {}", self.state.zoom_level, new_zoom);
+                self.state.zoom_level = new_zoom;
+                self.sync_canvas_state();
+            }
+            ShortcutAction::ZoomOut => {
+                let new_zoom = (self.state.zoom_level / 1.2).max(0.1);
+                debug!("Zooming out: {} -> {}", self.state.zoom_level, new_zoom);
+                self.state.zoom_level = new_zoom;
+                self.sync_canvas_state();
+            }
+            ShortcutAction::ZoomReset => {
+                debug!("Resetting zoom to 100%");
+                self.state.zoom_level = 1.0;
+                self.sync_canvas_state();
+            }
+            ShortcutAction::ToggleRulers => {
+                self.canvas.toggle_rulers();
+                debug!("Toggled rulers");
+            }
+            ShortcutAction::ToggleGrid => {
+                self.canvas.toggle_grid();
+                debug!("Toggled grid");
+            }
+            ShortcutAction::ToggleGuides => {
+                self.canvas.toggle_guides();
+                debug!("Toggled guides");
+            }
+
+            // Adjustment operations
+            ShortcutAction::BrightnessContrast => {
+                self.brightness_contrast_dialog.show();
+                info!("Showing brightness/contrast dialog");
+            }
+            ShortcutAction::HueSaturation => {
+                // TODO: Implement HSL dialog shortcut
+                debug!("HSL dialog shortcut not yet implemented");
+            }
+            ShortcutAction::Levels => {
+                // TODO: Implement levels dialog shortcut
+                debug!("Levels dialog shortcut not yet implemented");
+            }
+            ShortcutAction::Curves => {
+                // TODO: Implement curves dialog shortcut
+                debug!("Curves dialog shortcut not yet implemented");
+            }
+
+            // Application operations
+            ShortcutAction::ShowAbout => {
+                self.about_dialog.show();
+                info!("Showing about dialog");
+            }
+            ShortcutAction::Exit => {
+                // TODO: Implement proper exit handling
+                debug!("Exit shortcut triggered");
+            }
+
+            // Layer operations and other actions
+            _ => {
+                debug!("Shortcut action not yet implemented: {:?}", action);
             }
         }
     }
