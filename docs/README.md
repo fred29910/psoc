@@ -301,10 +301,11 @@ PSOC 项目已成功完成 MVP 目标！用户现在可以：
 
 **阶段 8: 扩展性、优化与发布准备**
 
-*   **P8.1: 性能分析与优化**
-    *   [ ] 使用分析工具 (e.g., `perf`, `flamegraph`) 找出性能瓶颈。
-    *   [ ] 优化渲染、图像处理算法 (利用 `rayon` 进行并行化, SIMD)。
-    *   [ ] 优化内存使用。
+*   **P8.1: 性能分析与优化** (进行中)
+    *   [~] 使用分析工具 (e.g., `perf`, `flamegraph`) 找出性能瓶颈。(已通过代码审查和模拟分析完成初步瓶颈识别，详见 `P8.1-performance-report.md`)
+    *   [~] 优化渲染、图像处理算法 (利用 `rayon` 进行并行化, SIMD)。(已使用 `rayon` 初步并行化 `CurvesAdjustment::apply()`，并添加了相应基准测试。更多算法如 `GaussianBlurFilter` 等待优化。详见 `P8.1-performance-report.md`)
+    *   [ ] 优化内存使用。(已识别潜在问题如 `PixelData` 克隆，具体优化待实施。详见 `P8.1-performance-report.md`)
+    *   [x] 新增 `P8.1-performance-report.md` 文档记录分析与优化过程。
 *   **P8.2: 插件/脚本系统架构设计 (非常高级)**
     *   [ ] 考虑使用 `mlua` (Lua) 或 WASM (via `wasmtime`/`wasmer`) 实现插件。
     *   [ ] 定义插件API。

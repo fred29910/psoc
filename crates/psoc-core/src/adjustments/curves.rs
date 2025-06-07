@@ -1,6 +1,8 @@
 //! Curves adjustment implementation
 
 use anyhow::Result;
+use ndarray::Axis; // Added for parallel iteration
+use rayon::prelude::*; // Added for parallel iteration
 use serde::{Deserialize, Serialize};
 
 use crate::{adjustment::Adjustment, PixelData, RgbaPixel};
@@ -324,16 +326,55 @@ impl Adjustment for CurvesAdjustment {
             return Ok(());
         }
 
-        let (width, height) = pixel_data.dimensions();
-
-        for y in 0..height {
-            for x in 0..width {
-                let pixel = pixel_data
-                    .get_pixel(x, y)
-                    .ok_or_else(|| anyhow::anyhow!("Failed to get pixel at ({}, {})", x, y))?;
-
-                let adjusted_pixel = self.apply_to_pixel_internal(pixel);
-                pixel_data.set_pixel(x, y, adjusted_pixel)?;
+        match pixel_data {
+            PixelData::Rgba(ref mut array) => {
+                // Iterate over rows in parallel
+                array
+                    .axis_iter_mut(Axis(0))
+                    .into_par_iter()
+                    .for_each(|mut row| {
+                        // Each row is a 2D array (width x channels)
+                        // Iterate over pixels in this row
+                        row.axis_iter_mut(Axis(0)).for_each(|mut pixel_slice| {
+                            // pixel_slice is a 1D view of [R, G, B, A]
+                            if pixel_slice.len() == 4 {
+                                let current_pixel = RgbaPixel::new(
+                                    pixel_slice[0],
+                                    pixel_slice[1],
+                                    pixel_slice[2],
+                                    pixel_slice[3],
+                                );
+                                let adjusted_pixel = self.apply_to_pixel_internal(current_pixel);
+                                pixel_slice[0] = adjusted_pixel.r;
+                                pixel_slice[1] = adjusted_pixel.g;
+                                pixel_slice[2] = adjusted_pixel.b;
+                                // Alpha is not modified by apply_to_pixel_internal for Curves
+                            }
+                        });
+                    });
+            }
+            PixelData::Raw(ref mut _raw_data, width, height) => {
+                // TODO: Parallelize this path if necessary.
+                // For now, using the sequential approach.
+                // This requires careful handling of strides if we want to parallelize.
+                for y in 0..*height {
+                    for x in 0..*width {
+                        // This part of get_pixel/set_pixel for Raw needs to be efficient
+                        // or the parallelization benefit will be lost.
+                        // The current PixelData::get_pixel and ::set_pixel for Raw might be slow in a loop.
+                        // For true raw parallelization, we'd likely work directly with slices of raw_data.
+                        if let Some(pixel) = pixel_data.get_pixel(x, y) {
+                            let adjusted_pixel = self.apply_to_pixel_internal(pixel);
+                            pixel_data.set_pixel(x, y, adjusted_pixel)?;
+                        } else {
+                            return Err(anyhow::anyhow!(
+                                "Failed to get pixel at ({}, {}) for Raw data",
+                                x,
+                                y
+                            ));
+                        }
+                    }
+                }
             }
         }
 
