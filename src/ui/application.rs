@@ -19,7 +19,10 @@ use super::{
 };
 
 use crate::{
-    tools::{ToolManager, ToolType},
+    tools::{
+        tool_trait::{ToolOption, ToolOptionType, ToolOptionValue},
+        ToolManager, ToolType,
+    },
     PsocError, Result,
 };
 
@@ -94,6 +97,8 @@ pub enum Message {
     Exit,
     /// Change the current tool
     ToolChanged(ToolType),
+    /// Tool option changed
+    ToolOption(ToolOptionMessage),
     /// Zoom in
     ZoomIn,
     /// Zoom out
@@ -158,6 +163,18 @@ pub enum CanvasMessage {
     MouseReleased { x: f32, y: f32 },
     /// Canvas scrolled (for zoom/pan)
     Scrolled { delta_x: f32, delta_y: f32 },
+}
+
+/// Tool option-specific messages
+#[derive(Debug, Clone)]
+pub enum ToolOptionMessage {
+    /// Set a tool option value
+    SetOption {
+        name: String,
+        value: ToolOptionValue,
+    },
+    /// Reset tool options to defaults
+    ResetOptions,
 }
 
 /// Adjustment-specific messages
@@ -492,6 +509,10 @@ impl PsocApp {
                 } else {
                     self.error_message = None;
                 }
+            }
+            Message::ToolOption(tool_option_msg) => {
+                debug!("Tool option message: {:?}", tool_option_msg);
+                self.handle_tool_option_message(tool_option_msg);
             }
             Message::ZoomIn => {
                 let new_zoom = (self.state.zoom_level * 1.2).min(10.0);
@@ -846,18 +867,10 @@ impl PsocApp {
         }
     }
 
-    /// Create the right panel (properties)
+    /// Create the right panel (properties and tool options)
     fn right_panel(&self) -> Element<Message> {
-        let properties_content = vec![
-            components::section_header("Tool Properties".to_string()),
-            components::property_row(
-                "Current Tool".to_string(),
-                self.state.current_tool.to_string(),
-            ),
-            components::property_row(
-                "Zoom".to_string(),
-                format!("{:.0}%", self.state.zoom_level * 100.0),
-            ),
+        let content = vec![
+            self.create_tool_options_panel(),
             components::section_header("Document".to_string()),
             components::property_row(
                 "Status".to_string(),
@@ -866,6 +879,10 @@ impl PsocApp {
                 } else {
                     "None".to_string()
                 },
+            ),
+            components::property_row(
+                "Zoom".to_string(),
+                format!("{:.0}%", self.state.zoom_level * 100.0),
             ),
             components::property_row(
                 "Theme".to_string(),
@@ -877,7 +894,164 @@ impl PsocApp {
             ),
         ];
 
-        components::side_panel("Properties".to_string(), properties_content, 250.0)
+        components::side_panel("Properties".to_string(), content, 250.0)
+    }
+
+    /// Create the tool options panel
+    fn create_tool_options_panel(&self) -> Element<'static, Message> {
+        use components::ToolOptionControl;
+
+        let tool_name = match self.state.current_tool {
+            ToolType::Select => "Selection",
+            ToolType::Brush => "Brush",
+            ToolType::Eraser => "Eraser",
+            ToolType::Move => "Move",
+            ToolType::Transform => "Transform",
+        };
+
+        let options = self.tool_manager.get_active_tool_options();
+        let mut controls = Vec::new();
+
+        for option in options {
+            let control = match option.option_type {
+                ToolOptionType::Float { min, max } => {
+                    if let Some(ToolOptionValue::Float(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        ToolOptionControl::FloatSlider {
+                            label: option.display_name,
+                            value,
+                            min,
+                            max,
+                            step: (max - min) / 100.0,
+                            on_change: {
+                                let name = option.name.clone();
+                                Box::new(move |v| {
+                                    Message::ToolOption(ToolOptionMessage::SetOption {
+                                        name: name.clone(),
+                                        value: ToolOptionValue::Float(v),
+                                    })
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                ToolOptionType::Int { min, max } => {
+                    if let Some(ToolOptionValue::Int(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        ToolOptionControl::IntSlider {
+                            label: option.display_name,
+                            value,
+                            min,
+                            max,
+                            on_change: {
+                                let name = option.name.clone();
+                                Box::new(move |v| {
+                                    Message::ToolOption(ToolOptionMessage::SetOption {
+                                        name: name.clone(),
+                                        value: ToolOptionValue::Int(v),
+                                    })
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                ToolOptionType::Color => {
+                    if let Some(ToolOptionValue::Color(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        ToolOptionControl::ColorPicker {
+                            label: option.display_name,
+                            value,
+                            on_change: {
+                                let name = option.name.clone();
+                                Box::new(move |v| {
+                                    Message::ToolOption(ToolOptionMessage::SetOption {
+                                        name: name.clone(),
+                                        value: ToolOptionValue::Color(v),
+                                    })
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                ToolOptionType::Bool => {
+                    if let Some(ToolOptionValue::Bool(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        ToolOptionControl::Checkbox {
+                            label: option.display_name,
+                            value,
+                            on_change: {
+                                let name = option.name.clone();
+                                Box::new(move |v| {
+                                    Message::ToolOption(ToolOptionMessage::SetOption {
+                                        name: name.clone(),
+                                        value: ToolOptionValue::Bool(v),
+                                    })
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                ToolOptionType::String => {
+                    if let Some(ToolOptionValue::String(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        ToolOptionControl::TextInput {
+                            label: option.display_name,
+                            value,
+                            placeholder: option.description,
+                            on_change: {
+                                let name = option.name.clone();
+                                Box::new(move |v| {
+                                    Message::ToolOption(ToolOptionMessage::SetOption {
+                                        name: name.clone(),
+                                        value: ToolOptionValue::String(v),
+                                    })
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                ToolOptionType::Enum(ref enum_options) => {
+                    if let Some(ToolOptionValue::String(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        ToolOptionControl::Dropdown {
+                            label: option.display_name,
+                            options: enum_options.clone(),
+                            selected: value,
+                            on_change: {
+                                let name = option.name.clone();
+                                Box::new(move |v| {
+                                    Message::ToolOption(ToolOptionMessage::SetOption {
+                                        name: name.clone(),
+                                        value: ToolOptionValue::String(v),
+                                    })
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            };
+            controls.push(control);
+        }
+
+        components::tool_options_panel(tool_name.to_string(), controls)
     }
 
     /// Create the status bar
@@ -1809,6 +1983,28 @@ impl PsocApp {
         if let Some(ref mut document) = self.state.current_document {
             if let Err(e) = self.tool_manager.handle_event(event, document) {
                 self.error_message = Some(format!("Tool error: {}", e));
+            }
+        }
+    }
+
+    /// Handle tool option messages
+    fn handle_tool_option_message(&mut self, message: ToolOptionMessage) {
+        match message {
+            ToolOptionMessage::SetOption { name, value } => {
+                debug!("Setting tool option: {} = {:?}", name, value);
+                if let Err(e) = self.tool_manager.set_tool_option(&name, value) {
+                    self.error_message = Some(format!("Failed to set tool option: {}", e));
+                } else {
+                    self.error_message = None;
+                }
+            }
+            ToolOptionMessage::ResetOptions => {
+                debug!("Resetting tool options to defaults");
+                if let Err(e) = self.tool_manager.reset_tool_options() {
+                    self.error_message = Some(format!("Failed to reset tool options: {}", e));
+                } else {
+                    self.error_message = None;
+                }
             }
         }
     }

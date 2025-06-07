@@ -1,7 +1,7 @@
 //! Modern UI components for PSOC Image Editor
 
 use iced::{
-    widget::{button, column, container, row, text, Space},
+    widget::{button, checkbox, column, container, row, slider, text, text_input, Space},
     Element, Length,
 };
 
@@ -439,4 +439,206 @@ pub fn canvas_placeholder<Message: 'static>(
     .center_x(Length::Fill)
     .center_y(Length::Fill)
     .into()
+}
+
+/// Create a tool options panel
+pub fn tool_options_panel<Message: Clone + 'static>(
+    tool_name: String,
+    options: Vec<ToolOptionControl<Message>>,
+) -> Element<'static, Message> {
+    let mut content = vec![section_header(format!("{} Options", tool_name))];
+
+    if options.is_empty() {
+        content.push(
+            container(text("No options available").size(12.0).style(|_theme| {
+                iced::widget::text::Style {
+                    color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                }
+            }))
+            .padding(16.0)
+            .center_x(Length::Fill)
+            .into(),
+        );
+    } else {
+        for option in options {
+            content.push(option.into_element());
+        }
+    }
+
+    side_panel("Tool Options".to_string(), content, 250.0)
+}
+
+/// Tool option control types
+pub enum ToolOptionControl<Message> {
+    FloatSlider {
+        label: String,
+        value: f32,
+        min: f32,
+        max: f32,
+        step: f32,
+        on_change: Box<dyn Fn(f32) -> Message + 'static>,
+    },
+    IntSlider {
+        label: String,
+        value: i32,
+        min: i32,
+        max: i32,
+        on_change: Box<dyn Fn(i32) -> Message + 'static>,
+    },
+    ColorPicker {
+        label: String,
+        value: [u8; 4], // RGBA
+        on_change: Box<dyn Fn([u8; 4]) -> Message + 'static>,
+    },
+    Checkbox {
+        label: String,
+        value: bool,
+        on_change: Box<dyn Fn(bool) -> Message + 'static>,
+    },
+    TextInput {
+        label: String,
+        value: String,
+        placeholder: String,
+        on_change: Box<dyn Fn(String) -> Message + 'static>,
+    },
+    Dropdown {
+        label: String,
+        options: Vec<String>,
+        selected: String,
+        on_change: Box<dyn Fn(String) -> Message + 'static>,
+    },
+}
+
+impl<Message: Clone + 'static> ToolOptionControl<Message> {
+    /// Convert the control to an iced Element
+    pub fn into_element(self) -> Element<'static, Message> {
+        match self {
+            ToolOptionControl::FloatSlider {
+                label,
+                value,
+                min,
+                max,
+                step,
+                on_change,
+            } => {
+                let slider = slider(min..=max, value, move |v| on_change(v)).step(step);
+
+                column![
+                    row![
+                        text(label.clone()).size(12.0),
+                        Space::new(Length::Fill, Length::Shrink),
+                        text(format!("{:.2}", value)).size(12.0),
+                    ]
+                    .align_y(iced::alignment::Vertical::Center),
+                    slider,
+                ]
+                .spacing(4.0)
+                .padding(8.0)
+                .into()
+            }
+            ToolOptionControl::IntSlider {
+                label,
+                value,
+                min,
+                max,
+                on_change,
+            } => {
+                let slider = slider(min..=max, value, move |v| on_change(v));
+
+                column![
+                    row![
+                        text(label.clone()).size(12.0),
+                        Space::new(Length::Fill, Length::Shrink),
+                        text(value.to_string()).size(12.0),
+                    ]
+                    .align_y(iced::alignment::Vertical::Center),
+                    slider,
+                ]
+                .spacing(4.0)
+                .padding(8.0)
+                .into()
+            }
+            ToolOptionControl::ColorPicker {
+                label,
+                value,
+                on_change: _,
+            } => {
+                // Simple color display for now - full color picker would be more complex
+                let color_display = container(Space::new(Length::Fixed(20.0), Length::Fixed(20.0)))
+                    .style(move |_theme| container::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba8(
+                            value[0],
+                            value[1],
+                            value[2],
+                            value[3] as f32 / 255.0,
+                        ))),
+                        border: iced::Border {
+                            color: iced::Color::BLACK,
+                            width: 1.0,
+                            radius: 2.0.into(),
+                        },
+                        ..Default::default()
+                    });
+
+                row![
+                    text(label.clone()).size(12.0),
+                    Space::new(Length::Fill, Length::Shrink),
+                    color_display,
+                ]
+                .align_y(iced::alignment::Vertical::Center)
+                .padding(8.0)
+                .into()
+            }
+            ToolOptionControl::Checkbox {
+                label,
+                value,
+                on_change,
+            } => row![checkbox(label.clone(), value).on_toggle(on_change),]
+                .align_y(iced::alignment::Vertical::Center)
+                .padding(8.0)
+                .into(),
+            ToolOptionControl::TextInput {
+                label,
+                value,
+                placeholder,
+                on_change,
+            } => column![
+                text(label.clone()).size(12.0),
+                text_input(&placeholder, &value).on_input(on_change),
+            ]
+            .spacing(4.0)
+            .padding(8.0)
+            .into(),
+            ToolOptionControl::Dropdown {
+                label,
+                options: _,
+                selected,
+                on_change: _,
+            } => {
+                // For now, create a simple text display since iced doesn't have a built-in dropdown
+                // In a real implementation, you'd use a pick_list or custom dropdown
+                column![
+                    text(label.clone()).size(12.0),
+                    row![
+                        text("Current: ").size(10.0),
+                        text(selected.clone()).size(10.0).style(|_theme| {
+                            iced::widget::text::Style {
+                                color: Some(iced::Color::from_rgb(0.3, 0.6, 1.0)),
+                            }
+                        }),
+                    ]
+                    .align_y(iced::alignment::Vertical::Center),
+                    // TODO: Replace with actual dropdown/pick_list when available
+                    text("(Use keyboard shortcuts to change)")
+                        .size(8.0)
+                        .style(|_theme| iced::widget::text::Style {
+                            color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                        }),
+                ]
+                .spacing(4.0)
+                .padding(8.0)
+                .into()
+            }
+        }
+    }
 }

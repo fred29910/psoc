@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use tracing::{debug, info, warn};
 
-use super::tool_trait::{Tool, ToolEvent, ToolResult, ToolState};
+use super::tool_trait::{Tool, ToolEvent, ToolOption, ToolOptionValue, ToolResult, ToolState};
 use super::tools::ToolType;
 use crate::PsocError;
 use psoc_core::Document;
@@ -184,6 +184,95 @@ impl ToolManager {
     /// Clear tool history
     pub fn clear_history(&mut self) {
         self.tool_history.clear();
+    }
+
+    /// Create a new instance of a tool (for getting default values)
+    fn create_tool(&self, tool_type: ToolType) -> ToolResult<Box<dyn Tool>> {
+        use super::tools::*;
+
+        let tool: Box<dyn Tool> = match tool_type {
+            ToolType::Select => Box::new(SelectTool::new()),
+            ToolType::Brush => Box::new(BrushTool::new()),
+            ToolType::Eraser => Box::new(EraserTool::new()),
+            ToolType::Move => Box::new(MoveTool::new()),
+            ToolType::Transform => Box::new(TransformTool::new()),
+        };
+
+        Ok(tool)
+    }
+
+    /// Set a tool option for the currently active tool
+    pub fn set_tool_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        if let Some(tool_type) = self.active_tool_type {
+            if let Some(tool) = self.tools.get_mut(&tool_type) {
+                debug!("Setting option '{}' for tool '{}'", name, tool.name());
+                tool.set_option(name, value)?;
+                Ok(())
+            } else {
+                Err(ToolManagerError::ToolNotFound {
+                    tool_type: format!("{:?}", tool_type),
+                }
+                .into())
+            }
+        } else {
+            Err(ToolManagerError::General {
+                message: "No active tool".to_string(),
+            }
+            .into())
+        }
+    }
+
+    /// Get a tool option from the currently active tool
+    pub fn get_tool_option(&self, name: &str) -> Option<ToolOptionValue> {
+        if let Some(tool_type) = self.active_tool_type {
+            if let Some(tool) = self.tools.get(&tool_type) {
+                tool.get_option(name)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get all options for the currently active tool
+    pub fn get_active_tool_options(&self) -> Vec<ToolOption> {
+        if let Some(tool_type) = self.active_tool_type {
+            if let Some(tool) = self.tools.get(&tool_type) {
+                tool.options()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Reset tool options to defaults for the currently active tool
+    pub fn reset_tool_options(&mut self) -> ToolResult<()> {
+        if let Some(tool_type) = self.active_tool_type {
+            // Create a new instance of the tool to get true defaults
+            let new_tool = self.create_tool(tool_type)?;
+            let default_options = new_tool.options();
+
+            if let Some(tool) = self.tools.get_mut(&tool_type) {
+                debug!("Resetting options for tool '{}'", tool.name());
+                for option in default_options {
+                    tool.set_option(&option.name, option.default_value)?;
+                }
+                Ok(())
+            } else {
+                Err(ToolManagerError::ToolNotFound {
+                    tool_type: format!("{:?}", tool_type),
+                }
+                .into())
+            }
+        } else {
+            Err(ToolManagerError::General {
+                message: "No active tool".to_string(),
+            }
+            .into())
+        }
     }
 }
 

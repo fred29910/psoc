@@ -38,6 +38,8 @@ impl std::fmt::Display for ToolType {
 pub struct SelectTool {
     selection_start: Option<Point>,
     is_selecting: bool,
+    feather_radius: f32,
+    anti_alias: bool,
 }
 
 impl SelectTool {
@@ -45,6 +47,8 @@ impl SelectTool {
         Self {
             selection_start: None,
             is_selecting: false,
+            feather_radius: 0.0,
+            anti_alias: true,
         }
     }
 }
@@ -117,6 +121,53 @@ impl Tool for SelectTool {
             _ => {}
         }
         Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "feather".to_string(),
+                display_name: "Feather Radius".to_string(),
+                description: "Softness of selection edges in pixels".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 0.0,
+                    max: 50.0,
+                },
+                default_value: ToolOptionValue::Float(self.feather_radius),
+            },
+            ToolOption {
+                name: "anti_alias".to_string(),
+                display_name: "Anti-alias".to_string(),
+                description: "Smooth selection edges".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.anti_alias),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "feather" => {
+                if let ToolOptionValue::Float(radius) = value {
+                    self.feather_radius = radius.clamp(0.0, 50.0);
+                }
+            }
+            "anti_alias" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.anti_alias = enabled;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "feather" => Some(ToolOptionValue::Float(self.feather_radius)),
+            "anti_alias" => Some(ToolOptionValue::Bool(self.anti_alias)),
+            _ => None,
+        }
     }
 }
 
@@ -760,6 +811,8 @@ impl EraserTool {
 pub struct MoveTool {
     is_moving: bool,
     move_start: Option<Point>,
+    snap_to_grid: bool,
+    grid_size: f32,
 }
 
 impl MoveTool {
@@ -767,6 +820,8 @@ impl MoveTool {
         Self {
             is_moving: false,
             move_start: None,
+            snap_to_grid: false,
+            grid_size: 10.0,
         }
     }
 }
@@ -838,15 +893,50 @@ impl Tool for MoveTool {
     }
 
     fn options(&self) -> Vec<ToolOption> {
-        vec![]
+        vec![
+            ToolOption {
+                name: "snap_to_grid".to_string(),
+                display_name: "Snap to Grid".to_string(),
+                description: "Snap movement to grid points".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.snap_to_grid),
+            },
+            ToolOption {
+                name: "grid_size".to_string(),
+                display_name: "Grid Size".to_string(),
+                description: "Size of grid cells in pixels".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 1.0,
+                    max: 100.0,
+                },
+                default_value: ToolOptionValue::Float(self.grid_size),
+            },
+        ]
     }
 
-    fn set_option(&mut self, _name: &str, _value: ToolOptionValue) -> ToolResult<()> {
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "snap_to_grid" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.snap_to_grid = enabled;
+                }
+            }
+            "grid_size" => {
+                if let ToolOptionValue::Float(size) = value {
+                    self.grid_size = size.clamp(1.0, 100.0);
+                }
+            }
+            _ => {}
+        }
         Ok(())
     }
 
-    fn get_option(&self, _name: &str) -> Option<ToolOptionValue> {
-        None
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "snap_to_grid" => Some(ToolOptionValue::Bool(self.snap_to_grid)),
+            "grid_size" => Some(ToolOptionValue::Float(self.grid_size)),
+            _ => None,
+        }
     }
 }
 
@@ -1423,7 +1513,7 @@ mod tests {
         assert_eq!(move_tool.name(), "Move Tool");
         assert_eq!(move_tool.description(), "Move layers and selections");
         assert_eq!(move_tool.cursor(), ToolCursor::Move);
-        assert_eq!(move_tool.options().len(), 0);
+        assert_eq!(move_tool.options().len(), 2);
     }
 
     #[test]
