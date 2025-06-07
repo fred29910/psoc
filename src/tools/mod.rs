@@ -15,6 +15,6 @@ pub mod tools;
 pub use tool_manager::{ToolManager, ToolManagerError};
 pub use tool_trait::{Tool, ToolEvent, ToolResult, ToolState};
 pub use tools::{
-    BrushTool, EllipseTool, EraserTool, LassoTool, MagicWandTool, MoveTool, SelectTool, ToolType,
-    TransformTool,
+    BrushTool, EllipseTool, EraserTool, LassoTool, MagicWandTool, MoveTool, SelectTool, TextTool,
+    ToolType, TransformTool,
 };

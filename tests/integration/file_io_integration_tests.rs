@@ -78,10 +78,10 @@ async fn test_basic_export_import() {
 
 #[test]
 fn test_file_manager_creation() {
-    let file_manager = FileManager::new();
+    let _file_manager = FileManager::new();
     // Just test that we can create a file manager
-    // FileManager is likely a zero-sized type, so check the type size instead
-    assert!(std::mem::size_of::<FileManager>() >= 0);
+    // FileManager is a zero-sized type, which is perfectly valid
+    assert_eq!(std::mem::size_of::<FileManager>(), 0);
 }
 
 #[tokio::test]

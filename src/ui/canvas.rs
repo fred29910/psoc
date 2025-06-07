@@ -1091,7 +1091,13 @@ impl ImageCanvas {
     }
 
     /// Draw ellipse selection
-    fn draw_ellipse_selection(&self, frame: &mut Frame, doc_x: f32, doc_y: f32, ellipse: &psoc_core::EllipseSelection) {
+    fn draw_ellipse_selection(
+        &self,
+        frame: &mut Frame,
+        doc_x: f32,
+        doc_y: f32,
+        ellipse: &psoc_core::EllipseSelection,
+    ) {
         // Transform ellipse coordinates to canvas coordinates
         let center_x = doc_x + ellipse.center.x * self.state.zoom;
         let center_y = doc_y + ellipse.center.y * self.state.zoom;
@@ -1119,17 +1125,13 @@ impl ImageCanvas {
         // Draw outer border (white)
         frame.stroke(
             &ellipse_path,
-            Stroke::default()
-                .with_width(3.0)
-                .with_color(Color::WHITE),
+            Stroke::default().with_width(3.0).with_color(Color::WHITE),
         );
 
         // Draw inner border (black)
         frame.stroke(
             &ellipse_path,
-            Stroke::default()
-                .with_width(1.0)
-                .with_color(Color::BLACK),
+            Stroke::default().with_width(1.0).with_color(Color::BLACK),
         );
 
         // Draw bounding box handles
@@ -1141,7 +1143,13 @@ impl ImageCanvas {
     }
 
     /// Draw lasso selection
-    fn draw_lasso_selection(&self, frame: &mut Frame, doc_x: f32, doc_y: f32, lasso: &psoc_core::LassoSelection) {
+    fn draw_lasso_selection(
+        &self,
+        frame: &mut Frame,
+        doc_x: f32,
+        doc_y: f32,
+        lasso: &psoc_core::LassoSelection,
+    ) {
         if lasso.points.len() < 2 {
             return;
         }
@@ -1167,17 +1175,13 @@ impl ImageCanvas {
         // Draw outer border (white)
         frame.stroke(
             &lasso_path,
-            Stroke::default()
-                .with_width(3.0)
-                .with_color(Color::WHITE),
+            Stroke::default().with_width(3.0).with_color(Color::WHITE),
         );
 
         // Draw inner border (black)
         frame.stroke(
             &lasso_path,
-            Stroke::default()
-                .with_width(1.0)
-                .with_color(Color::BLACK),
+            Stroke::default().with_width(1.0).with_color(Color::BLACK),
         );
 
         // Draw bounding box handles

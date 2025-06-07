@@ -42,7 +42,9 @@ impl Selection {
 
     /// Create a new elliptical selection
     pub fn ellipse(center_x: f32, center_y: f32, radius_x: f32, radius_y: f32) -> Self {
-        Selection::Ellipse(EllipseSelection::new(center_x, center_y, radius_x, radius_y))
+        Selection::Ellipse(EllipseSelection::new(
+            center_x, center_y, radius_x, radius_y,
+        ))
     }
 
     /// Create an elliptical selection from two points (bounding box)
@@ -52,7 +54,9 @@ impl Selection {
         let radius_x = (end.x - start.x).abs() / 2.0;
         let radius_y = (end.y - start.y).abs() / 2.0;
 
-        Selection::Ellipse(EllipseSelection::new(center_x, center_y, radius_x, radius_y))
+        Selection::Ellipse(EllipseSelection::new(
+            center_x, center_y, radius_x, radius_y,
+        ))
     }
 
     /// Create a new lasso selection from a path
@@ -308,8 +312,8 @@ impl EllipseSelection {
         let dy = point.y - self.center.y;
 
         // Ellipse equation: (x/a)² + (y/b)² <= 1
-        let normalized = (dx * dx) / (self.radius_x * self.radius_x) +
-                        (dy * dy) / (self.radius_y * self.radius_y);
+        let normalized = (dx * dx) / (self.radius_x * self.radius_x)
+            + (dy * dy) / (self.radius_y * self.radius_y);
 
         let inside_ellipse = normalized <= 1.0;
 
@@ -438,8 +442,9 @@ impl LassoSelection {
             let pi = &self.points[i];
             let pj = &self.points[j];
 
-            if ((pi.y > point.y) != (pj.y > point.y)) &&
-               (point.x < (pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y) + pi.x) {
+            if ((pi.y > point.y) != (pj.y > point.y))
+                && (point.x < (pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y) + pi.x)
+            {
                 inside = !inside;
             }
             j = i;
@@ -593,8 +598,11 @@ impl MaskSelection {
         let local_x = point.x - self.offset.x;
         let local_y = point.y - self.offset.y;
 
-        if local_x < 0.0 || local_y < 0.0 ||
-           local_x >= self.width as f32 || local_y >= self.height as f32 {
+        if local_x < 0.0
+            || local_y < 0.0
+            || local_x >= self.width as f32
+            || local_y >= self.height as f32
+        {
             return self.inverted; // Outside mask bounds
         }
 
@@ -641,9 +649,7 @@ impl MaskSelection {
             return f32::INFINITY;
         }
 
-        let selected_pixels = self.mask_data.iter()
-            .filter(|&&value| value > 127)
-            .count();
+        let selected_pixels = self.mask_data.iter().filter(|&&value| value > 127).count();
 
         selected_pixels as f32
     }
@@ -957,8 +963,8 @@ mod tests {
         ]);
 
         let bounds = lasso.bounds();
-        assert_eq!(bounds.x, 5.0);   // min x
-        assert_eq!(bounds.y, 10.0);  // min y
+        assert_eq!(bounds.x, 5.0); // min x
+        assert_eq!(bounds.y, 10.0); // min y
         assert_eq!(bounds.width, 45.0); // max_x - min_x = 50 - 5
         assert_eq!(bounds.height, 50.0); // max_y - min_y = 60 - 10
     }

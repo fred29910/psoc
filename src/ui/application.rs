@@ -1361,6 +1361,7 @@ impl PsocApp {
             ToolType::Eraser => "Eraser",
             ToolType::Move => "Move",
             ToolType::Transform => "Transform",
+            ToolType::Text => "Text",
         };
 
         let options = self.tool_manager.get_active_tool_options();

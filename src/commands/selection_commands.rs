@@ -250,7 +250,10 @@ impl Command for InvertSelectionCommand {
                 };
                 document.set_selection(Selection::Rectangle(full_rect));
             }
-            Selection::Rectangle(_) | Selection::Ellipse(_) | Selection::Lasso(_) | Selection::Mask(_) => {
+            Selection::Rectangle(_)
+            | Selection::Ellipse(_)
+            | Selection::Lasso(_)
+            | Selection::Mask(_) => {
                 // If there's a selection, clear it (simplified inversion)
                 document.set_selection(Selection::None);
             }

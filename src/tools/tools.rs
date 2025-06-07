@@ -22,6 +22,7 @@ pub enum ToolType {
     Eraser,
     Move,
     Transform,
+    Text,
 }
 
 impl std::fmt::Display for ToolType {
@@ -35,6 +36,7 @@ impl std::fmt::Display for ToolType {
             ToolType::Eraser => write!(f, "Eraser"),
             ToolType::Move => write!(f, "Move"),
             ToolType::Transform => write!(f, "Transform"),
+            ToolType::Text => write!(f, "Text"),
         }
     }
 }
@@ -1015,7 +1017,8 @@ impl Tool for LassoTool {
                     // Add point to path if it's far enough from the last point
                     if let Some(last_point) = self.current_path.last() {
                         let distance = last_point.distance_to(&position);
-                        if distance > 2.0 { // Minimum distance to avoid too many points
+                        if distance > 2.0 {
+                            // Minimum distance to avoid too many points
                             self.current_path.push(position);
                         }
                     } else {
@@ -1493,7 +1496,9 @@ impl MagicWandTool {
         }
 
         // Get the target color at the clicked position
-        let target_color = layer.get_pixel(x, y).unwrap_or(psoc_core::RgbaPixel::transparent());
+        let target_color = layer
+            .get_pixel(x, y)
+            .unwrap_or(psoc_core::RgbaPixel::transparent());
         debug!("Magic wand target color: {:?}", target_color);
 
         // Create a mask for the selection
@@ -1539,7 +1544,9 @@ impl MagicWandTool {
                 continue; // Already processed
             }
 
-            let pixel = layer.get_pixel(x, y).unwrap_or(psoc_core::RgbaPixel::transparent());
+            let pixel = layer
+                .get_pixel(x, y)
+                .unwrap_or(psoc_core::RgbaPixel::transparent());
             if !self.colors_similar(pixel, target_color) {
                 continue;
             }
@@ -1576,7 +1583,9 @@ impl MagicWandTool {
     ) -> ToolResult<()> {
         for y in 0..height {
             for x in 0..width {
-                let pixel = layer.get_pixel(x, y).unwrap_or(psoc_core::RgbaPixel::transparent());
+                let pixel = layer
+                    .get_pixel(x, y)
+                    .unwrap_or(psoc_core::RgbaPixel::transparent());
                 if self.colors_similar(pixel, target_color) {
                     let index = (y * width + x) as usize;
                     if index < mask_data.len() {
@@ -2847,7 +2856,8 @@ mod new_selection_tools_tests {
             button: MouseButton::Left,
             modifiers: KeyModifiers::default(),
         };
-        tool.handle_event(press_event, &mut document, &mut state).unwrap();
+        tool.handle_event(press_event, &mut document, &mut state)
+            .unwrap();
         assert!(tool.is_selecting);
         assert!(state.is_active);
 
@@ -2857,7 +2867,8 @@ mod new_selection_tools_tests {
             button: MouseButton::Left,
             modifiers: KeyModifiers::default(),
         };
-        tool.handle_event(drag_event, &mut document, &mut state).unwrap();
+        tool.handle_event(drag_event, &mut document, &mut state)
+            .unwrap();
         assert!(tool.is_selecting);
 
         // Test mouse release
@@ -2866,7 +2877,8 @@ mod new_selection_tools_tests {
             button: MouseButton::Left,
             modifiers: KeyModifiers::default(),
         };
-        tool.handle_event(release_event, &mut document, &mut state).unwrap();
+        tool.handle_event(release_event, &mut document, &mut state)
+            .unwrap();
         assert!(!tool.is_selecting);
         assert!(!state.is_active);
 
@@ -2920,7 +2932,8 @@ mod new_selection_tools_tests {
             button: MouseButton::Left,
             modifiers: KeyModifiers::default(),
         };
-        tool.handle_event(press_event, &mut document, &mut state).unwrap();
+        tool.handle_event(press_event, &mut document, &mut state)
+            .unwrap();
         assert!(tool.is_selecting);
         assert!(state.is_active);
         assert_eq!(tool.current_path.len(), 1);
@@ -2931,7 +2944,8 @@ mod new_selection_tools_tests {
             button: MouseButton::Left,
             modifiers: KeyModifiers::default(),
         };
-        tool.handle_event(drag_event1, &mut document, &mut state).unwrap();
+        tool.handle_event(drag_event1, &mut document, &mut state)
+            .unwrap();
         assert_eq!(tool.current_path.len(), 2);
 
         let drag_event2 = ToolEvent::MouseDragged {
@@ -2939,7 +2953,8 @@ mod new_selection_tools_tests {
             button: MouseButton::Left,
             modifiers: KeyModifiers::default(),
         };
-        tool.handle_event(drag_event2, &mut document, &mut state).unwrap();
+        tool.handle_event(drag_event2, &mut document, &mut state)
+            .unwrap();
         assert_eq!(tool.current_path.len(), 3);
 
         // Test mouse release
@@ -2948,7 +2963,8 @@ mod new_selection_tools_tests {
             button: MouseButton::Left,
             modifiers: KeyModifiers::default(),
         };
-        tool.handle_event(release_event, &mut document, &mut state).unwrap();
+        tool.handle_event(release_event, &mut document, &mut state)
+            .unwrap();
         assert!(!tool.is_selecting);
         assert!(!state.is_active);
         assert!(tool.current_path.is_empty()); // Path should be cleared after completion
@@ -3001,19 +3017,23 @@ mod new_selection_tools_tests {
         let mut tool = MagicWandTool::new();
 
         // Test tolerance setting
-        tool.set_option("tolerance", ToolOptionValue::Float(50.0)).unwrap();
+        tool.set_option("tolerance", ToolOptionValue::Float(50.0))
+            .unwrap();
         assert_eq!(tool.tolerance, 50.0);
 
         // Test contiguous setting
-        tool.set_option("contiguous", ToolOptionValue::Bool(false)).unwrap();
+        tool.set_option("contiguous", ToolOptionValue::Bool(false))
+            .unwrap();
         assert!(!tool.contiguous);
 
         // Test anti_alias setting
-        tool.set_option("anti_alias", ToolOptionValue::Bool(false)).unwrap();
+        tool.set_option("anti_alias", ToolOptionValue::Bool(false))
+            .unwrap();
         assert!(!tool.anti_alias);
 
         // Test sample_merged setting
-        tool.set_option("sample_merged", ToolOptionValue::Bool(true)).unwrap();
+        tool.set_option("sample_merged", ToolOptionValue::Bool(true))
+            .unwrap();
         assert!(tool.sample_merged);
     }
 
@@ -3021,10 +3041,22 @@ mod new_selection_tools_tests {
     fn test_magic_wand_tool_get_options() {
         let tool = MagicWandTool::new();
 
-        assert_eq!(tool.get_option("tolerance"), Some(ToolOptionValue::Float(32.0)));
-        assert_eq!(tool.get_option("contiguous"), Some(ToolOptionValue::Bool(true)));
-        assert_eq!(tool.get_option("anti_alias"), Some(ToolOptionValue::Bool(true)));
-        assert_eq!(tool.get_option("sample_merged"), Some(ToolOptionValue::Bool(false)));
+        assert_eq!(
+            tool.get_option("tolerance"),
+            Some(ToolOptionValue::Float(32.0))
+        );
+        assert_eq!(
+            tool.get_option("contiguous"),
+            Some(ToolOptionValue::Bool(true))
+        );
+        assert_eq!(
+            tool.get_option("anti_alias"),
+            Some(ToolOptionValue::Bool(true))
+        );
+        assert_eq!(
+            tool.get_option("sample_merged"),
+            Some(ToolOptionValue::Bool(false))
+        );
         assert_eq!(tool.get_option("nonexistent"), None);
     }
 
@@ -3044,5 +3076,578 @@ mod new_selection_tools_tests {
 
         // Same color
         assert!(tool.colors_similar(color1, color1));
+    }
+
+    // Text Tool Tests
+    #[test]
+    fn test_text_tool_creation() {
+        let text_tool = TextTool::new();
+
+        assert_eq!(text_tool.font_family, "Arial");
+        assert_eq!(text_tool.font_size, 24.0);
+        assert_eq!(text_tool.text_color, RgbaPixel::new(0, 0, 0, 255));
+        assert_eq!(text_tool.text_alignment, TextAlignment::Left);
+        assert!(!text_tool.is_editing);
+        assert!(text_tool.current_text.is_empty());
+        assert!(text_tool.text_position.is_none());
+    }
+
+    #[test]
+    fn test_text_tool_properties() {
+        let text_tool = TextTool::new();
+
+        assert_eq!(text_tool.id(), "text");
+        assert_eq!(text_tool.name(), "Text Tool");
+        assert_eq!(text_tool.description(), "Add and edit text layers");
+        assert_eq!(text_tool.cursor(), ToolCursor::Crosshair);
+    }
+
+    #[test]
+    fn test_text_tool_options() {
+        let text_tool = TextTool::new();
+        let options = text_tool.options();
+
+        assert_eq!(options.len(), 4);
+
+        // Check font family option
+        assert_eq!(options[0].name, "font_family");
+        assert_eq!(options[0].display_name, "Font Family");
+
+        // Check font size option
+        assert_eq!(options[1].name, "font_size");
+        assert_eq!(options[1].display_name, "Font Size");
+        assert_eq!(options[1].default_value, ToolOptionValue::Float(24.0));
+
+        // Check text color option
+        assert_eq!(options[2].name, "text_color");
+        assert_eq!(options[2].display_name, "Text Color");
+
+        // Check alignment option
+        assert_eq!(options[3].name, "alignment");
+        assert_eq!(options[3].display_name, "Text Alignment");
+    }
+
+    #[test]
+    fn test_text_tool_set_options() {
+        let mut text_tool = TextTool::new();
+
+        // Test font family option
+        text_tool
+            .set_option(
+                "font_family",
+                ToolOptionValue::String("Times New Roman".to_string()),
+            )
+            .unwrap();
+        assert_eq!(text_tool.font_family, "Times New Roman");
+
+        // Test font size option
+        text_tool
+            .set_option("font_size", ToolOptionValue::Float(36.0))
+            .unwrap();
+        assert_eq!(text_tool.font_size, 36.0);
+
+        // Test text color option
+        text_tool
+            .set_option("text_color", ToolOptionValue::Color([255, 0, 0, 255]))
+            .unwrap();
+        assert_eq!(text_tool.text_color, RgbaPixel::new(255, 0, 0, 255));
+
+        // Test alignment option
+        text_tool
+            .set_option("alignment", ToolOptionValue::String("Center".to_string()))
+            .unwrap();
+        assert_eq!(text_tool.text_alignment, TextAlignment::Center);
+
+        // Test font size clamping
+        text_tool
+            .set_option("font_size", ToolOptionValue::Float(300.0))
+            .unwrap();
+        assert_eq!(text_tool.font_size, 200.0); // Should be clamped to max
+
+        text_tool
+            .set_option("font_size", ToolOptionValue::Float(5.0))
+            .unwrap();
+        assert_eq!(text_tool.font_size, 8.0); // Should be clamped to min
+    }
+
+    #[test]
+    fn test_text_tool_get_options() {
+        let mut text_tool = TextTool::new();
+        text_tool.font_family = "Helvetica".to_string();
+        text_tool.font_size = 18.0;
+        text_tool.text_color = RgbaPixel::new(100, 150, 200, 255);
+        text_tool.text_alignment = TextAlignment::Right;
+
+        assert_eq!(
+            text_tool.get_option("font_family"),
+            Some(ToolOptionValue::String("Helvetica".to_string()))
+        );
+        assert_eq!(
+            text_tool.get_option("font_size"),
+            Some(ToolOptionValue::Float(18.0))
+        );
+        assert_eq!(
+            text_tool.get_option("text_color"),
+            Some(ToolOptionValue::Color([100, 150, 200, 255]))
+        );
+        assert_eq!(
+            text_tool.get_option("alignment"),
+            Some(ToolOptionValue::String("Right".to_string()))
+        );
+        assert_eq!(text_tool.get_option("invalid"), None);
+    }
+
+    #[test]
+    fn test_text_tool_editing_workflow() {
+        let mut text_tool = TextTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Start text editing
+        let position = Point::new(50.0, 50.0);
+        text_tool.start_text_editing(position);
+
+        assert!(text_tool.is_editing);
+        assert_eq!(text_tool.text_position, Some(position));
+        assert!(text_tool.current_text.is_empty());
+        assert_eq!(text_tool.cursor(), ToolCursor::Text);
+
+        // Add some characters
+        text_tool.add_character('H');
+        text_tool.add_character('e');
+        text_tool.add_character('l');
+        text_tool.add_character('l');
+        text_tool.add_character('o');
+
+        assert_eq!(text_tool.current_text, "Hello");
+
+        // Remove a character
+        text_tool.remove_character();
+        assert_eq!(text_tool.current_text, "Hell");
+
+        // Finish editing
+        let initial_layer_count = document.layer_count();
+        text_tool.finish_text_editing(&mut document).unwrap();
+
+        assert!(!text_tool.is_editing);
+        assert!(text_tool.current_text.is_empty());
+        assert!(text_tool.text_position.is_none());
+        assert_eq!(document.layer_count(), initial_layer_count + 1);
+        assert!(document.is_dirty);
+    }
+
+    #[test]
+    fn test_text_tool_cancel_editing() {
+        let mut text_tool = TextTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+
+        // Start text editing and add some text
+        text_tool.start_text_editing(Point::new(25.0, 25.0));
+        text_tool.add_character('T');
+        text_tool.add_character('e');
+        text_tool.add_character('s');
+        text_tool.add_character('t');
+
+        assert!(text_tool.is_editing);
+        assert_eq!(text_tool.current_text, "Test");
+
+        // Cancel editing
+        let initial_layer_count = document.layer_count();
+        text_tool.cancel_text_editing();
+
+        assert!(!text_tool.is_editing);
+        assert!(text_tool.current_text.is_empty());
+        assert!(text_tool.text_position.is_none());
+        assert_eq!(document.layer_count(), initial_layer_count); // No layer should be added
+    }
+
+    #[test]
+    fn test_text_tool_event_handling() {
+        use super::super::tool_trait::{KeyModifiers, MouseButton, ToolEvent, ToolState};
+
+        let mut text_tool = TextTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Test mouse pressed event (start editing)
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(30.0, 40.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        text_tool
+            .handle_event(press_event, &mut document, &mut state)
+            .unwrap();
+        assert!(text_tool.is_editing);
+        assert!(state.is_active);
+        assert_eq!(text_tool.text_position, Some(Point::new(30.0, 40.0)));
+
+        // Test character input
+        let char_event = ToolEvent::KeyPressed {
+            key: super::super::tool_trait::Key::Character('A'),
+            modifiers: KeyModifiers::default(),
+        };
+
+        text_tool
+            .handle_event(char_event, &mut document, &mut state)
+            .unwrap();
+        assert_eq!(text_tool.current_text, "A");
+
+        // Test backspace
+        let backspace_event = ToolEvent::KeyPressed {
+            key: super::super::tool_trait::Key::Backspace,
+            modifiers: KeyModifiers::default(),
+        };
+
+        text_tool
+            .handle_event(backspace_event, &mut document, &mut state)
+            .unwrap();
+        assert!(text_tool.current_text.is_empty());
+
+        // Add text again
+        text_tool.add_character('H');
+        text_tool.add_character('i');
+
+        // Test Enter key (finish editing)
+        let enter_event = ToolEvent::KeyPressed {
+            key: super::super::tool_trait::Key::Enter,
+            modifiers: KeyModifiers::default(),
+        };
+
+        let initial_layer_count = document.layer_count();
+        text_tool
+            .handle_event(enter_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!text_tool.is_editing);
+        assert!(!state.is_active);
+        assert_eq!(document.layer_count(), initial_layer_count + 1);
+    }
+
+    #[test]
+    fn test_text_tool_escape_cancel() {
+        use super::super::tool_trait::{KeyModifiers, ToolEvent, ToolState};
+
+        let mut text_tool = TextTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Start editing and add text
+        text_tool.start_text_editing(Point::new(10.0, 20.0));
+        text_tool.add_character('T');
+        text_tool.add_character('e');
+        text_tool.add_character('s');
+        text_tool.add_character('t');
+        state.is_active = true;
+
+        assert!(text_tool.is_editing);
+        assert_eq!(text_tool.current_text, "Test");
+
+        // Test Escape key (cancel editing)
+        let escape_event = ToolEvent::KeyPressed {
+            key: super::super::tool_trait::Key::Escape,
+            modifiers: KeyModifiers::default(),
+        };
+
+        let initial_layer_count = document.layer_count();
+        text_tool
+            .handle_event(escape_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!text_tool.is_editing);
+        assert!(!state.is_active);
+        assert!(text_tool.current_text.is_empty());
+        assert_eq!(document.layer_count(), initial_layer_count); // No layer added
+    }
+}
+
+/// Text tool for adding and editing text layers
+#[derive(Debug)]
+pub struct TextTool {
+    /// Current font family
+    font_family: String,
+    /// Current font size
+    font_size: f32,
+    /// Current text color
+    text_color: RgbaPixel,
+    /// Text alignment
+    text_alignment: TextAlignment,
+    /// Whether we're currently editing text
+    is_editing: bool,
+    /// Current text content being edited
+    current_text: String,
+    /// Position where text will be placed
+    text_position: Option<Point>,
+}
+
+/// Text alignment options
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextAlignment {
+    Left,
+    Center,
+    Right,
+}
+
+impl TextTool {
+    pub fn new() -> Self {
+        Self {
+            font_family: "Arial".to_string(),
+            font_size: 24.0,
+            text_color: RgbaPixel::new(0, 0, 0, 255), // Black
+            text_alignment: TextAlignment::Left,
+            is_editing: false,
+            current_text: String::new(),
+            text_position: None,
+        }
+    }
+
+    /// Start text editing at the given position
+    fn start_text_editing(&mut self, position: Point) {
+        self.text_position = Some(position);
+        self.is_editing = true;
+        self.current_text.clear();
+        debug!("Started text editing at position: {:?}", position);
+    }
+
+    /// Add character to current text
+    fn add_character(&mut self, ch: char) {
+        if self.is_editing {
+            self.current_text.push(ch);
+            debug!("Added character '{}' to text: '{}'", ch, self.current_text);
+        }
+    }
+
+    /// Remove last character from current text
+    fn remove_character(&mut self) {
+        if self.is_editing && !self.current_text.is_empty() {
+            self.current_text.pop();
+            debug!("Removed character, text now: '{}'", self.current_text);
+        }
+    }
+
+    /// Finish text editing and create text layer
+    fn finish_text_editing(&mut self, document: &mut Document) -> ToolResult<()> {
+        if !self.is_editing || self.current_text.is_empty() {
+            self.cancel_text_editing();
+            return Ok(());
+        }
+
+        if let Some(position) = self.text_position {
+            // Create a new text layer
+            let layer_name = format!(
+                "Text: {}",
+                if self.current_text.len() > 20 {
+                    format!("{}...", &self.current_text[..17])
+                } else {
+                    self.current_text.clone()
+                }
+            );
+
+            let text_layer = psoc_core::Layer::new_text(
+                layer_name,
+                self.current_text.clone(),
+                self.font_family.clone(),
+                self.font_size,
+                self.text_color,
+                position,
+            );
+
+            document.add_layer(text_layer);
+            document.mark_dirty();
+
+            debug!("Created text layer with content: '{}'", self.current_text);
+        }
+
+        self.cancel_text_editing();
+        Ok(())
+    }
+
+    /// Cancel text editing without creating layer
+    fn cancel_text_editing(&mut self) {
+        self.is_editing = false;
+        self.current_text.clear();
+        self.text_position = None;
+        debug!("Cancelled text editing");
+    }
+}
+
+impl Default for TextTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for TextTool {
+    fn id(&self) -> &'static str {
+        "text"
+    }
+
+    fn name(&self) -> &'static str {
+        "Text Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Add and edit text layers"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        if self.is_editing {
+            ToolCursor::Text
+        } else {
+            ToolCursor::Crosshair
+        }
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed { position, .. } => {
+                debug!("Text tool mouse pressed at: {:?}", position);
+
+                if self.is_editing {
+                    // Finish current text editing
+                    self.finish_text_editing(document)?;
+                }
+
+                // Start new text editing at clicked position
+                self.start_text_editing(position);
+                state.is_active = true;
+                state.last_position = Some(position);
+            }
+            ToolEvent::KeyPressed { key, .. } => {
+                if self.is_editing {
+                    match key {
+                        super::tool_trait::Key::Enter => {
+                            // Finish text editing
+                            self.finish_text_editing(document)?;
+                            state.is_active = false;
+                        }
+                        super::tool_trait::Key::Escape => {
+                            // Cancel text editing
+                            self.cancel_text_editing();
+                            state.is_active = false;
+                        }
+                        super::tool_trait::Key::Backspace => {
+                            // Remove last character
+                            self.remove_character();
+                        }
+                        super::tool_trait::Key::Character(ch) => {
+                            // Add character to text
+                            self.add_character(ch);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "font_family".to_string(),
+                display_name: "Font Family".to_string(),
+                description: "Font family for text".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Arial".to_string(),
+                    "Times New Roman".to_string(),
+                    "Helvetica".to_string(),
+                    "Courier New".to_string(),
+                    "Georgia".to_string(),
+                    "Verdana".to_string(),
+                ]),
+                default_value: ToolOptionValue::String(self.font_family.clone()),
+            },
+            ToolOption {
+                name: "font_size".to_string(),
+                display_name: "Font Size".to_string(),
+                description: "Size of the text in points".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 8.0,
+                    max: 200.0,
+                },
+                default_value: ToolOptionValue::Float(self.font_size),
+            },
+            ToolOption {
+                name: "text_color".to_string(),
+                display_name: "Text Color".to_string(),
+                description: "Color of the text".to_string(),
+                option_type: ToolOptionType::Color,
+                default_value: ToolOptionValue::Color([
+                    self.text_color.r,
+                    self.text_color.g,
+                    self.text_color.b,
+                    self.text_color.a,
+                ]),
+            },
+            ToolOption {
+                name: "alignment".to_string(),
+                display_name: "Text Alignment".to_string(),
+                description: "Text alignment".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Left".to_string(),
+                    "Center".to_string(),
+                    "Right".to_string(),
+                ]),
+                default_value: ToolOptionValue::String("Left".to_string()),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "font_family" => {
+                if let ToolOptionValue::String(family) = value {
+                    self.font_family = family;
+                }
+            }
+            "font_size" => {
+                if let ToolOptionValue::Float(size) = value {
+                    self.font_size = size.clamp(8.0, 200.0);
+                }
+            }
+            "text_color" => {
+                if let ToolOptionValue::Color([r, g, b, a]) = value {
+                    self.text_color = RgbaPixel::new(r, g, b, a);
+                }
+            }
+            "alignment" => {
+                if let ToolOptionValue::String(align) = value {
+                    self.text_alignment = match align.as_str() {
+                        "Center" => TextAlignment::Center,
+                        "Right" => TextAlignment::Right,
+                        _ => TextAlignment::Left,
+                    };
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "font_family" => Some(ToolOptionValue::String(self.font_family.clone())),
+            "font_size" => Some(ToolOptionValue::Float(self.font_size)),
+            "text_color" => Some(ToolOptionValue::Color([
+                self.text_color.r,
+                self.text_color.g,
+                self.text_color.b,
+                self.text_color.a,
+            ])),
+            "alignment" => {
+                let align_str = match self.text_alignment {
+                    TextAlignment::Left => "Left",
+                    TextAlignment::Center => "Center",
+                    TextAlignment::Right => "Right",
+                };
+                Some(ToolOptionValue::String(align_str.to_string()))
+            }
+            _ => None,
+        }
     }
 }
