@@ -14,7 +14,7 @@ use super::{
     dialogs::{
         AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage,
         ColorPaletteDialog, ColorPaletteMessage, ColorPickerDialog, ColorPickerMessage,
-        GaussianBlurDialog, GaussianBlurMessage,
+        GaussianBlurDialog, GaussianBlurMessage, GradientEditor, GradientEditorMessage,
     },
     icons::Icon,
     theme::{spacing, PsocTheme},
@@ -47,6 +47,8 @@ pub struct PsocApp {
     brightness_contrast_dialog: BrightnessContrastDialog,
     /// Gaussian Blur filter dialog
     gaussian_blur_dialog: GaussianBlurDialog,
+    /// Gradient editor dialog
+    gradient_editor: GradientEditor,
     /// Color Picker dialog
     color_picker_dialog: ColorPickerDialog,
     /// Color Palette dialog
@@ -150,6 +152,8 @@ pub enum Message {
     BrightnessContrast(BrightnessContrastMessage),
     /// Gaussian Blur dialog messages
     GaussianBlur(GaussianBlurMessage),
+    /// Gradient editor messages
+    GradientEditor(GradientEditorMessage),
     /// Color Picker dialog messages
     ColorPicker(ColorPickerMessage),
     /// Show color picker dialog
@@ -363,6 +367,7 @@ impl Default for PsocApp {
             about_dialog: AboutDialog::new(),
             brightness_contrast_dialog: BrightnessContrastDialog::new(),
             gaussian_blur_dialog: GaussianBlurDialog::new(),
+            gradient_editor: GradientEditor::new(),
             color_picker_dialog: ColorPickerDialog::new(),
             color_palette_dialog: ColorPaletteDialog::new(),
             canvas: ImageCanvas::new(),
@@ -477,6 +482,7 @@ impl PsocApp {
                 about_dialog: AboutDialog::new(),
                 brightness_contrast_dialog: BrightnessContrastDialog::new(),
                 gaussian_blur_dialog: GaussianBlurDialog::new(),
+                gradient_editor: GradientEditor::new(),
                 color_picker_dialog: ColorPickerDialog::new(),
                 color_palette_dialog: ColorPaletteDialog::new(),
                 canvas: ImageCanvas::new(),
@@ -716,6 +722,10 @@ impl PsocApp {
                 debug!("Gaussian Blur dialog message: {:?}", gb_msg);
                 self.handle_gaussian_blur_message(gb_msg);
             }
+            Message::GradientEditor(ge_msg) => {
+                debug!("Gradient Editor dialog message: {:?}", ge_msg);
+                self.handle_gradient_editor_message(ge_msg);
+            }
             Message::ColorPicker(cp_msg) => {
                 debug!("Color Picker dialog message: {:?}", cp_msg);
                 self.handle_color_picker_message(cp_msg);
@@ -854,6 +864,14 @@ impl PsocApp {
 
         if self.gaussian_blur_dialog.visible {
             layers.push(self.gaussian_blur_dialog.view(Message::GaussianBlur));
+        }
+
+        if self.gradient_editor.visible {
+            layers.push(
+                self.gradient_editor
+                    .view(|msg| msg)
+                    .map(Message::GradientEditor),
+            );
         }
 
         if self.color_picker_dialog.is_visible() {
@@ -1117,6 +1135,11 @@ impl PsocApp {
                 Message::ToolChanged(ToolType::Transform),
                 self.state.current_tool == ToolType::Transform,
             ),
+            (
+                Icon::Gradient,
+                Message::ToolChanged(ToolType::Gradient),
+                self.state.current_tool == ToolType::Gradient,
+            ),
         ];
 
         components::toolbar(tools, Message::ZoomIn, Message::ZoomOut, Message::ZoomReset)
@@ -1157,6 +1180,11 @@ impl PsocApp {
                 Icon::Transform,
                 Message::ToolChanged(ToolType::Transform),
                 self.state.current_tool == ToolType::Transform,
+            ),
+            (
+                Icon::Gradient,
+                Message::ToolChanged(ToolType::Gradient),
+                self.state.current_tool == ToolType::Gradient,
             ),
         ];
 
@@ -1362,6 +1390,7 @@ impl PsocApp {
             ToolType::Move => "Move",
             ToolType::Transform => "Transform",
             ToolType::Text => "Text",
+            ToolType::Gradient => "Gradient",
         };
 
         let options = self.tool_manager.get_active_tool_options();
@@ -3006,6 +3035,55 @@ impl PsocApp {
             // Layer operations and other actions
             _ => {
                 debug!("Shortcut action not yet implemented: {:?}", action);
+            }
+        }
+    }
+
+    /// Handle gradient editor dialog messages
+    fn handle_gradient_editor_message(&mut self, message: GradientEditorMessage) {
+        match message {
+            GradientEditorMessage::Show => {
+                self.gradient_editor.show();
+            }
+            GradientEditorMessage::Hide => {
+                self.gradient_editor.hide();
+            }
+            GradientEditorMessage::SetGradientType(_) => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::SetInterpolationMethod(_) => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::ToggleRepeat(_) => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::AddColorStop => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::RemoveColorStop(_) => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::UpdateColorStopPosition(_, _) => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::UpdateColorStopColor(_, _) => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::SelectColorStop(_) => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::Apply => {
+                if let Some(gradient) = self.gradient_editor.update(message) {
+                    // Apply gradient to current tool if it's a gradient tool
+                    // TODO: Implement gradient application to tool
+                    info!("Applied gradient: {}", gradient.name);
+                }
+            }
+            GradientEditorMessage::Cancel => {
+                self.gradient_editor.update(message);
+            }
+            GradientEditorMessage::Reset => {
+                self.gradient_editor.update(message);
             }
         }
     }

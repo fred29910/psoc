@@ -23,6 +23,7 @@ pub enum ToolType {
     Move,
     Transform,
     Text,
+    Gradient,
 }
 
 impl std::fmt::Display for ToolType {
@@ -37,6 +38,7 @@ impl std::fmt::Display for ToolType {
             ToolType::Move => write!(f, "Move"),
             ToolType::Transform => write!(f, "Transform"),
             ToolType::Text => write!(f, "Text"),
+            ToolType::Gradient => write!(f, "Gradient"),
         }
     }
 }
@@ -3238,7 +3240,7 @@ mod new_selection_tools_tests {
     #[test]
     fn test_text_tool_cancel_editing() {
         let mut text_tool = TextTool::new();
-        let mut document = Document::new("Test".to_string(), 100, 100);
+        let document = Document::new("Test".to_string(), 100, 100);
 
         // Start text editing and add some text
         text_tool.start_text_editing(Point::new(25.0, 25.0));
@@ -3649,5 +3651,640 @@ impl Tool for TextTool {
             }
             _ => None,
         }
+    }
+}
+
+/// Gradient tool for creating and applying gradients
+#[derive(Debug)]
+pub struct GradientTool {
+    /// Current gradient being edited
+    current_gradient: psoc_core::Gradient,
+    /// Whether we're currently creating a gradient
+    is_creating: bool,
+    /// Start point of gradient creation
+    gradient_start: Option<Point>,
+    /// End point of gradient creation
+    gradient_end: Option<Point>,
+    /// Gradient manager for storing gradients
+    gradient_manager: psoc_core::GradientManager,
+    /// Whether to apply gradient to selection only
+    apply_to_selection: bool,
+}
+
+impl GradientTool {
+    pub fn new() -> Self {
+        Self {
+            current_gradient: psoc_core::Gradient::default(),
+            is_creating: false,
+            gradient_start: None,
+            gradient_end: None,
+            gradient_manager: psoc_core::GradientManager::new(),
+            apply_to_selection: false,
+        }
+    }
+
+    /// Set the current gradient
+    pub fn set_gradient(&mut self, gradient: psoc_core::Gradient) {
+        self.current_gradient = gradient;
+    }
+
+    /// Get the current gradient
+    pub fn current_gradient(&self) -> &psoc_core::Gradient {
+        &self.current_gradient
+    }
+
+    /// Get mutable reference to current gradient
+    pub fn current_gradient_mut(&mut self) -> &mut psoc_core::Gradient {
+        &mut self.current_gradient
+    }
+
+    /// Get the gradient manager
+    pub fn gradient_manager(&self) -> &psoc_core::GradientManager {
+        &self.gradient_manager
+    }
+
+    /// Get mutable gradient manager
+    pub fn gradient_manager_mut(&mut self) -> &mut psoc_core::GradientManager {
+        &mut self.gradient_manager
+    }
+
+    /// Start creating a gradient
+    fn start_gradient_creation(&mut self, start_point: Point) {
+        self.is_creating = true;
+        self.gradient_start = Some(start_point);
+        self.gradient_end = None;
+
+        // Set gradient start point
+        self.current_gradient.start_point = start_point;
+    }
+
+    /// Update gradient creation
+    fn update_gradient_creation(&mut self, end_point: Point) {
+        if self.is_creating {
+            self.gradient_end = Some(end_point);
+            self.current_gradient.end_point = end_point;
+        }
+    }
+
+    /// Finish gradient creation and apply to document
+    fn finish_gradient_creation(&mut self, document: &mut Document) -> ToolResult<()> {
+        if !self.is_creating {
+            return Ok(());
+        }
+
+        if let (Some(start), Some(end)) = (self.gradient_start, self.gradient_end) {
+            // Update gradient geometry
+            match self.current_gradient.gradient_type {
+                psoc_core::GradientType::Linear => {
+                    self.current_gradient.set_linear_geometry(start, end);
+                }
+                psoc_core::GradientType::Radial => {
+                    let radius = ((end.x - start.x).powi(2) + (end.y - start.y).powi(2)).sqrt();
+                    self.current_gradient.set_radial_geometry(start, radius);
+                }
+                _ => {
+                    self.current_gradient.set_linear_geometry(start, end);
+                }
+            }
+
+            // Apply gradient to document
+            self.apply_gradient_to_document(document)?;
+        }
+
+        self.is_creating = false;
+        self.gradient_start = None;
+        self.gradient_end = None;
+
+        Ok(())
+    }
+
+    /// Apply gradient to the document
+    fn apply_gradient_to_document(&self, document: &mut Document) -> ToolResult<()> {
+        // First, determine the region to apply gradient to
+        let apply_region = if self.apply_to_selection && document.has_selection() {
+            // Apply to selection bounds
+            match &document.selection {
+                psoc_core::Selection::Rectangle(rect_sel) => rect_sel.bounds(),
+                psoc_core::Selection::Ellipse(ellipse_sel) => ellipse_sel.bounds(),
+                psoc_core::Selection::Lasso(lasso_sel) => lasso_sel.bounds(),
+                _ => {
+                    // Get layer bounds without borrowing mutably
+                    if let Some(layer) = document.active_layer() {
+                        layer.bounds
+                    } else {
+                        debug!("No active layer to apply gradient to");
+                        return Ok(());
+                    }
+                }
+            }
+        } else {
+            // Apply to entire layer
+            if let Some(layer) = document.active_layer() {
+                layer.bounds
+            } else {
+                debug!("No active layer to apply gradient to");
+                return Ok(());
+            }
+        };
+
+        // Now get mutable access to the layer
+        let active_layer = document.active_layer_mut();
+        if active_layer.is_none() {
+            debug!("No active layer to apply gradient to");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        // Render gradient to the region
+        let gradient_pixels = self
+            .current_gradient
+            .render_to_region(apply_region)
+            .map_err(|e| crate::PsocError::Tool {
+                message: format!("Failed to render gradient: {}", e),
+            })?;
+
+        // Apply gradient pixels to layer
+        let mut pixel_index = 0;
+        for y in 0..(apply_region.height as u32) {
+            for x in 0..(apply_region.width as u32) {
+                let layer_x = apply_region.x as u32 + x;
+                let layer_y = apply_region.y as u32 + y;
+
+                if pixel_index < gradient_pixels.len() {
+                    let gradient_pixel = gradient_pixels[pixel_index];
+
+                    // Blend gradient pixel with existing layer pixel
+                    if let Some(existing_pixel) = layer.get_pixel(layer_x, layer_y) {
+                        let blended = self.blend_gradient_pixel(existing_pixel, gradient_pixel);
+                        layer.set_pixel(layer_x, layer_y, blended)?;
+                    }
+
+                    pixel_index += 1;
+                }
+            }
+        }
+
+        document.mark_dirty();
+        Ok(())
+    }
+
+    /// Blend gradient pixel with existing pixel
+    fn blend_gradient_pixel(&self, base: RgbaPixel, gradient: RgbaPixel) -> RgbaPixel {
+        // Alpha blending formula: result = src * src_alpha + dst * (1 - src_alpha)
+        let src_alpha = gradient.a as f32 / 255.0;
+        let dst_alpha = base.a as f32 / 255.0;
+        let inv_src_alpha = 1.0 - src_alpha;
+
+        // Calculate final alpha
+        let final_alpha = src_alpha + dst_alpha * inv_src_alpha;
+
+        if final_alpha == 0.0 {
+            return RgbaPixel::transparent();
+        }
+
+        // Calculate color components
+        let r = (gradient.r as f32 * src_alpha + base.r as f32 * dst_alpha * inv_src_alpha)
+            / final_alpha;
+        let g = (gradient.g as f32 * src_alpha + base.g as f32 * dst_alpha * inv_src_alpha)
+            / final_alpha;
+        let b = (gradient.b as f32 * src_alpha + base.b as f32 * dst_alpha * inv_src_alpha)
+            / final_alpha;
+
+        RgbaPixel::new(
+            r.clamp(0.0, 255.0) as u8,
+            g.clamp(0.0, 255.0) as u8,
+            b.clamp(0.0, 255.0) as u8,
+            (final_alpha * 255.0).clamp(0.0, 255.0) as u8,
+        )
+    }
+
+    /// Cancel gradient creation
+    fn cancel_gradient_creation(&mut self) {
+        self.is_creating = false;
+        self.gradient_start = None;
+        self.gradient_end = None;
+    }
+}
+
+impl Default for GradientTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for GradientTool {
+    fn id(&self) -> &'static str {
+        "gradient"
+    }
+
+    fn name(&self) -> &'static str {
+        "Gradient Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Create and apply linear and radial gradients"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        if self.is_creating {
+            ToolCursor::Crosshair
+        } else {
+            ToolCursor::Default
+        }
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed {
+                position, button, ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left {
+                    debug!("Gradient tool mouse pressed at: {:?}", position);
+                    self.start_gradient_creation(position);
+                    state.is_active = true;
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseDragged {
+                position, button, ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_creating {
+                    debug!("Gradient tool dragging to: {:?}", position);
+                    self.update_gradient_creation(position);
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseReleased {
+                position, button, ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left && self.is_creating {
+                    debug!("Gradient tool mouse released at: {:?}", position);
+                    self.update_gradient_creation(position);
+                    self.finish_gradient_creation(document)?;
+                    state.is_active = false;
+                }
+            }
+            ToolEvent::KeyPressed { key, .. } => match key {
+                super::tool_trait::Key::Escape => {
+                    if self.is_creating {
+                        debug!("Cancelling gradient creation");
+                        self.cancel_gradient_creation();
+                        state.is_active = false;
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "gradient_type".to_string(),
+                display_name: "Gradient Type".to_string(),
+                description: "Type of gradient to create".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Linear".to_string(),
+                    "Radial".to_string(),
+                    "Angular".to_string(),
+                    "Diamond".to_string(),
+                ]),
+                default_value: ToolOptionValue::String("Linear".to_string()),
+            },
+            ToolOption {
+                name: "interpolation".to_string(),
+                display_name: "Interpolation".to_string(),
+                description: "Color interpolation method".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Linear".to_string(),
+                    "HSL".to_string(),
+                    "HSV".to_string(),
+                    "Smooth".to_string(),
+                ]),
+                default_value: ToolOptionValue::String("Linear".to_string()),
+            },
+            ToolOption {
+                name: "repeat".to_string(),
+                display_name: "Repeat".to_string(),
+                description: "Whether the gradient repeats".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(false),
+            },
+            ToolOption {
+                name: "apply_to_selection".to_string(),
+                display_name: "Apply to Selection".to_string(),
+                description: "Apply gradient only to selected area".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(false),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "gradient_type" => {
+                if let ToolOptionValue::String(type_str) = value {
+                    self.current_gradient.gradient_type = match type_str.as_str() {
+                        "Radial" => psoc_core::GradientType::Radial,
+                        "Angular" => psoc_core::GradientType::Angular,
+                        "Diamond" => psoc_core::GradientType::Diamond,
+                        _ => psoc_core::GradientType::Linear,
+                    };
+                }
+            }
+            "interpolation" => {
+                if let ToolOptionValue::String(interp_str) = value {
+                    self.current_gradient.interpolation = match interp_str.as_str() {
+                        "HSL" => psoc_core::InterpolationMethod::Hsl,
+                        "HSV" => psoc_core::InterpolationMethod::Hsv,
+                        "Smooth" => psoc_core::InterpolationMethod::Smooth,
+                        _ => psoc_core::InterpolationMethod::Linear,
+                    };
+                }
+            }
+            "repeat" => {
+                if let ToolOptionValue::Bool(repeat) = value {
+                    self.current_gradient.repeat = repeat;
+                }
+            }
+            "apply_to_selection" => {
+                if let ToolOptionValue::Bool(apply) = value {
+                    self.apply_to_selection = apply;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "gradient_type" => {
+                let type_str = match self.current_gradient.gradient_type {
+                    psoc_core::GradientType::Linear => "Linear",
+                    psoc_core::GradientType::Radial => "Radial",
+                    psoc_core::GradientType::Angular => "Angular",
+                    psoc_core::GradientType::Diamond => "Diamond",
+                };
+                Some(ToolOptionValue::String(type_str.to_string()))
+            }
+            "interpolation" => {
+                let interp_str = match self.current_gradient.interpolation {
+                    psoc_core::InterpolationMethod::Linear => "Linear",
+                    psoc_core::InterpolationMethod::Hsl => "HSL",
+                    psoc_core::InterpolationMethod::Hsv => "HSV",
+                    psoc_core::InterpolationMethod::Smooth => "Smooth",
+                };
+                Some(ToolOptionValue::String(interp_str.to_string()))
+            }
+            "repeat" => Some(ToolOptionValue::Bool(self.current_gradient.repeat)),
+            "apply_to_selection" => Some(ToolOptionValue::Bool(self.apply_to_selection)),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod gradient_tool_tests {
+    use super::*;
+    use crate::tools::tool_trait::{KeyModifiers, MouseButton, ToolEvent, ToolState};
+    use psoc_core::{Document, Layer, Point, RgbaPixel};
+
+    #[test]
+    fn test_gradient_tool_creation() {
+        let tool = GradientTool::new();
+        assert_eq!(tool.id(), "gradient");
+        assert_eq!(tool.name(), "Gradient Tool");
+        assert_eq!(
+            tool.description(),
+            "Create and apply linear and radial gradients"
+        );
+        assert!(!tool.is_creating);
+        assert!(tool.gradient_start.is_none());
+        assert!(tool.gradient_end.is_none());
+        assert!(!tool.apply_to_selection);
+    }
+
+    #[test]
+    fn test_gradient_tool_options() {
+        let tool = GradientTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 4);
+
+        let gradient_type_option = &options[0];
+        assert_eq!(gradient_type_option.name, "gradient_type");
+        assert_eq!(gradient_type_option.display_name, "Gradient Type");
+
+        let interpolation_option = &options[1];
+        assert_eq!(interpolation_option.name, "interpolation");
+        assert_eq!(interpolation_option.display_name, "Interpolation");
+
+        let repeat_option = &options[2];
+        assert_eq!(repeat_option.name, "repeat");
+        assert_eq!(repeat_option.display_name, "Repeat");
+
+        let apply_to_selection_option = &options[3];
+        assert_eq!(apply_to_selection_option.name, "apply_to_selection");
+        assert_eq!(apply_to_selection_option.display_name, "Apply to Selection");
+    }
+
+    #[test]
+    fn test_gradient_tool_set_options() {
+        let mut tool = GradientTool::new();
+
+        // Test gradient type option
+        tool.set_option(
+            "gradient_type",
+            ToolOptionValue::String("Radial".to_string()),
+        )
+        .unwrap();
+        assert_eq!(
+            tool.current_gradient.gradient_type,
+            psoc_core::GradientType::Radial
+        );
+
+        // Test interpolation option
+        tool.set_option("interpolation", ToolOptionValue::String("HSL".to_string()))
+            .unwrap();
+        assert_eq!(
+            tool.current_gradient.interpolation,
+            psoc_core::InterpolationMethod::Hsl
+        );
+
+        // Test repeat option
+        tool.set_option("repeat", ToolOptionValue::Bool(true))
+            .unwrap();
+        assert!(tool.current_gradient.repeat);
+
+        // Test apply to selection option
+        tool.set_option("apply_to_selection", ToolOptionValue::Bool(true))
+            .unwrap();
+        assert!(tool.apply_to_selection);
+    }
+
+    #[test]
+    fn test_gradient_tool_get_options() {
+        let mut tool = GradientTool::new();
+        tool.current_gradient.gradient_type = psoc_core::GradientType::Radial;
+        tool.current_gradient.interpolation = psoc_core::InterpolationMethod::Hsv;
+        tool.current_gradient.repeat = true;
+        tool.apply_to_selection = true;
+
+        assert_eq!(
+            tool.get_option("gradient_type"),
+            Some(ToolOptionValue::String("Radial".to_string()))
+        );
+        assert_eq!(
+            tool.get_option("interpolation"),
+            Some(ToolOptionValue::String("HSV".to_string()))
+        );
+        assert_eq!(tool.get_option("repeat"), Some(ToolOptionValue::Bool(true)));
+        assert_eq!(
+            tool.get_option("apply_to_selection"),
+            Some(ToolOptionValue::Bool(true))
+        );
+        assert_eq!(tool.get_option("invalid"), None);
+    }
+
+    #[test]
+    fn test_gradient_tool_event_handling() {
+        let mut tool = GradientTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Add a layer to apply gradient to
+        let layer = Layer::new_pixel("Test Layer".to_string(), 100, 100);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Test mouse pressed event
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(20.0, 30.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        tool.handle_event(press_event, &mut document, &mut state)
+            .unwrap();
+        assert!(tool.is_creating);
+        assert!(state.is_active);
+        assert_eq!(tool.gradient_start, Some(Point::new(20.0, 30.0)));
+        assert_eq!(state.last_position, Some(Point::new(20.0, 30.0)));
+
+        // Test mouse dragged event
+        let drag_event = ToolEvent::MouseDragged {
+            position: Point::new(60.0, 70.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        tool.handle_event(drag_event, &mut document, &mut state)
+            .unwrap();
+        assert!(tool.is_creating);
+        assert_eq!(tool.gradient_end, Some(Point::new(60.0, 70.0)));
+        assert_eq!(state.last_position, Some(Point::new(60.0, 70.0)));
+
+        // Test mouse released event
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(60.0, 70.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        tool.handle_event(release_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!tool.is_creating);
+        assert!(!state.is_active);
+        assert!(tool.gradient_start.is_none());
+        assert!(tool.gradient_end.is_none());
+        assert!(document.is_dirty);
+    }
+
+    #[test]
+    fn test_gradient_tool_cancel() {
+        let mut tool = GradientTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Start gradient creation
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(10.0, 10.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        tool.handle_event(press_event, &mut document, &mut state)
+            .unwrap();
+        assert!(tool.is_creating);
+
+        // Cancel with Escape key
+        let escape_event = ToolEvent::KeyPressed {
+            key: crate::tools::tool_trait::Key::Escape,
+            modifiers: KeyModifiers::default(),
+        };
+
+        tool.handle_event(escape_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!tool.is_creating);
+        assert!(!state.is_active);
+        assert!(tool.gradient_start.is_none());
+        assert!(tool.gradient_end.is_none());
+    }
+
+    #[test]
+    fn test_gradient_tool_cursor() {
+        let mut tool = GradientTool::new();
+        assert_eq!(tool.cursor(), ToolCursor::Default);
+
+        tool.is_creating = true;
+        assert_eq!(tool.cursor(), ToolCursor::Crosshair);
+    }
+
+    #[test]
+    fn test_gradient_tool_manager_integration() {
+        let tool = GradientTool::new();
+        assert!(tool.gradient_manager().count() > 0);
+
+        let gradient_names = tool.gradient_manager().gradient_names();
+        assert!(gradient_names.contains(&"Black to White".to_string()));
+        assert!(gradient_names.contains(&"Rainbow".to_string()));
+    }
+
+    #[test]
+    fn test_gradient_tool_blend_pixel() {
+        let tool = GradientTool::new();
+
+        // Test blending with transparent gradient
+        let base = RgbaPixel::new(255, 0, 0, 255); // Red
+        let gradient = RgbaPixel::new(0, 255, 0, 128); // Semi-transparent green
+        let result = tool.blend_gradient_pixel(base, gradient);
+
+        // Result should be a blend of red and green
+        assert!(result.r > 0);
+        assert!(result.g > 0);
+        assert!(result.a > 0);
+
+        // Test blending with opaque gradient
+        let opaque_gradient = RgbaPixel::new(0, 0, 255, 255); // Blue
+        let result = tool.blend_gradient_pixel(base, opaque_gradient);
+        assert_eq!(result, opaque_gradient); // Should be completely blue
+
+        // Test blending with transparent base
+        let transparent_base = RgbaPixel::new(255, 0, 0, 0); // Transparent red
+        let solid_gradient = RgbaPixel::new(0, 255, 0, 255); // Solid green
+        let result = tool.blend_gradient_pixel(transparent_base, solid_gradient);
+        assert_eq!(result, solid_gradient); // Should be completely green
     }
 }

@@ -34,6 +34,7 @@ pub enum Icon {
     Bucket,
     Text,
     Shape,
+    Gradient,
 
     // View operations
     ZoomIn,
@@ -119,6 +120,7 @@ impl Icon {
             Icon::Bucket => 'F',
             Icon::Text => 'T',
             Icon::Shape => '◇',
+            Icon::Gradient => '▦',
 
             // View operations
             Icon::ZoomIn => '+',
@@ -214,6 +216,7 @@ impl Icon {
             Icon::Bucket => "Bucket Fill",
             Icon::Text => "Text",
             Icon::Shape => "Shape",
+            Icon::Gradient => "Gradient",
             Icon::ZoomIn => "Zoom In",
             Icon::ZoomOut => "Zoom Out",
             Icon::ZoomFit => "Zoom to Fit",
