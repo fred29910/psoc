@@ -159,6 +159,8 @@ pub enum Message {
     Redo,
     /// Adjustment-related messages
     Adjustment(AdjustmentMessage),
+    /// View-related messages
+    View(ViewMessage),
     /// Error occurred
     Error(String),
 }
@@ -302,6 +304,35 @@ pub enum AdjustmentMessage {
     ApplyReduceNoise { strength: u8, preserve_details: f32 },
     /// Show reduce noise dialog
     ShowReduceNoise,
+}
+
+/// View-specific messages for rulers, grid, and guides
+#[derive(Debug, Clone)]
+pub enum ViewMessage {
+    /// Toggle ruler visibility
+    ToggleRulers,
+    /// Set ruler visibility
+    SetRulersVisible(bool),
+    /// Toggle grid visibility
+    ToggleGrid,
+    /// Set grid visibility
+    SetGridVisible(bool),
+    /// Set grid size
+    SetGridSize(f32),
+    /// Toggle guides visibility
+    ToggleGuides,
+    /// Set guides visibility
+    SetGuidesVisible(bool),
+    /// Add horizontal guide at y position
+    AddHorizontalGuide(f32),
+    /// Add vertical guide at x position
+    AddVerticalGuide(f32),
+    /// Remove horizontal guide at index
+    RemoveHorizontalGuide(usize),
+    /// Remove vertical guide at index
+    RemoveVerticalGuide(usize),
+    /// Clear all guides
+    ClearGuides,
 }
 
 impl Default for AppState {
@@ -716,6 +747,10 @@ impl PsocApp {
                 debug!("Adjustment message: {:?}", adj_msg);
                 self.handle_adjustment_message(adj_msg);
             }
+            Message::View(view_msg) => {
+                debug!("View message: {:?}", view_msg);
+                self.handle_view_message(view_msg);
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
@@ -981,6 +1016,9 @@ impl PsocApp {
             Message::Adjustment(AdjustmentMessage::ShowAddNoise),
             Message::ShowColorPicker,
             Message::ShowColorPalette,
+            Message::View(ViewMessage::ToggleRulers),
+            Message::View(ViewMessage::ToggleGrid),
+            Message::View(ViewMessage::ToggleGuides),
             Message::ShowAbout,
             Message::Exit,
         )
@@ -2601,5 +2639,59 @@ impl PsocApp {
     /// Show color palette dialog
     pub fn show_color_palette(&mut self) {
         self.color_palette_dialog.show();
+    }
+
+    /// Handle view-related messages (rulers, grid, guides)
+    fn handle_view_message(&mut self, message: ViewMessage) {
+        match message {
+            ViewMessage::ToggleRulers => {
+                self.canvas.toggle_rulers();
+                debug!("Toggled rulers visibility");
+            }
+            ViewMessage::SetRulersVisible(visible) => {
+                self.canvas.set_rulers_visible(visible);
+                debug!("Set rulers visibility to: {}", visible);
+            }
+            ViewMessage::ToggleGrid => {
+                self.canvas.toggle_grid();
+                debug!("Toggled grid visibility");
+            }
+            ViewMessage::SetGridVisible(visible) => {
+                self.canvas.set_grid_visible(visible);
+                debug!("Set grid visibility to: {}", visible);
+            }
+            ViewMessage::SetGridSize(size) => {
+                self.canvas.set_grid_size(size);
+                debug!("Set grid size to: {:.1}", size);
+            }
+            ViewMessage::ToggleGuides => {
+                self.canvas.toggle_guides();
+                debug!("Toggled guides visibility");
+            }
+            ViewMessage::SetGuidesVisible(visible) => {
+                self.canvas.set_guides_visible(visible);
+                debug!("Set guides visibility to: {}", visible);
+            }
+            ViewMessage::AddHorizontalGuide(y) => {
+                self.canvas.add_horizontal_guide(y);
+                debug!("Added horizontal guide at y: {:.1}", y);
+            }
+            ViewMessage::AddVerticalGuide(x) => {
+                self.canvas.add_vertical_guide(x);
+                debug!("Added vertical guide at x: {:.1}", x);
+            }
+            ViewMessage::RemoveHorizontalGuide(index) => {
+                self.canvas.remove_horizontal_guide(index);
+                debug!("Removed horizontal guide at index: {}", index);
+            }
+            ViewMessage::RemoveVerticalGuide(index) => {
+                self.canvas.remove_vertical_guide(index);
+                debug!("Removed vertical guide at index: {}", index);
+            }
+            ViewMessage::ClearGuides => {
+                self.canvas.clear_guides();
+                debug!("Cleared all guides");
+            }
+        }
     }
 }

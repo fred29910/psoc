@@ -73,6 +73,9 @@ pub fn menu_bar<Message: Clone + 'static>(
     add_noise: Message,
     show_color_picker: Message,
     show_color_palette: Message,
+    toggle_rulers: Message,
+    toggle_grid: Message,
+    toggle_guides: Message,
     show_about: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
@@ -187,6 +190,34 @@ pub fn menu_bar<Message: Clone + 'static>(
                         }
                     }))
                     .on_press(show_color_palette)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // View menu section
+            container(
+                row![
+                    button(text("Rulers").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_rulers)
+                    .padding([4.0, 8.0]),
+                    button(text("Grid").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_grid)
+                    .padding([4.0, 8.0]),
+                    button(text("Guides").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_guides)
                     .padding([4.0, 8.0]),
                 ]
                 .spacing(8.0)
