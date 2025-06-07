@@ -104,6 +104,7 @@ impl Command for ClearSelectionCommand {
 
 /// Command to move selection contents
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct MoveSelectionCommand {
     metadata: CommandMetadata,
     layer_index: usize,
@@ -313,6 +314,7 @@ impl Command for SelectAllCommand {
 
 /// Command to transform a selection (resize, rotate, etc.)
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct TransformSelectionCommand {
     metadata: CommandMetadata,
     old_selection: Selection,

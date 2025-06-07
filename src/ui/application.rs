@@ -14,12 +14,12 @@ use super::{
     icons::Icon,
     theme::{spacing, PsocTheme},
 };
-use crate::commands::adjustment_commands::ApplyAdjustmentCommand;
+
 use crate::{
     tools::{ToolManager, ToolType},
     PsocError, Result,
 };
-use psoc_core::{AdjustmentApplication, AdjustmentScope};
+
 use psoc_core::{Command, Document, Layer};
 
 /// Main GUI application
@@ -162,6 +162,32 @@ pub enum AdjustmentMessage {
     ApplyContrast(f32),
     /// Show brightness/contrast dialog
     ShowBrightnessContrast,
+    /// Apply HSL adjustment
+    ApplyHsl {
+        hue: f32,
+        saturation: f32,
+        lightness: f32,
+    },
+    /// Show HSL dialog
+    ShowHsl,
+    /// Apply grayscale adjustment
+    ApplyGrayscale { method: String, opacity: f32 },
+    /// Show grayscale dialog
+    ShowGrayscale,
+    /// Apply color balance adjustment
+    ApplyColorBalance {
+        shadows_cyan_red: f32,
+        shadows_magenta_green: f32,
+        shadows_yellow_blue: f32,
+        midtones_cyan_red: f32,
+        midtones_magenta_green: f32,
+        midtones_yellow_blue: f32,
+        highlights_cyan_red: f32,
+        highlights_magenta_green: f32,
+        highlights_yellow_blue: f32,
+    },
+    /// Show color balance dialog
+    ShowColorBalance,
 }
 
 impl Default for AppState {
@@ -526,7 +552,7 @@ impl PsocApp {
         if self.brightness_contrast_dialog.visible {
             layers.push(
                 self.brightness_contrast_dialog
-                    .view(|msg| Message::BrightnessContrast(msg)),
+                    .view(Message::BrightnessContrast),
             );
         }
 
@@ -622,6 +648,9 @@ impl PsocApp {
             Message::Undo,
             Message::Redo,
             Message::Adjustment(AdjustmentMessage::ShowBrightnessContrast),
+            Message::Adjustment(AdjustmentMessage::ShowHsl),
+            Message::Adjustment(AdjustmentMessage::ShowGrayscale),
+            Message::Adjustment(AdjustmentMessage::ShowColorBalance),
             Message::ShowAbout,
             Message::Exit,
         )
@@ -993,6 +1022,63 @@ impl PsocApp {
                 info!("Showing brightness/contrast dialog");
                 self.brightness_contrast_dialog.show();
             }
+            AdjustmentMessage::ApplyHsl {
+                hue,
+                saturation,
+                lightness,
+            } => {
+                info!(
+                    "Applying HSL adjustment: h={}, s={}, l={}",
+                    hue, saturation, lightness
+                );
+                self.apply_hsl_adjustment(hue, saturation, lightness);
+            }
+            AdjustmentMessage::ShowHsl => {
+                info!("Showing HSL dialog");
+                // TODO: Implement HSL dialog
+                self.error_message = Some("HSL dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyGrayscale { method, opacity } => {
+                info!(
+                    "Applying grayscale adjustment: method={}, opacity={}",
+                    method, opacity
+                );
+                self.apply_grayscale_adjustment(method, opacity);
+            }
+            AdjustmentMessage::ShowGrayscale => {
+                info!("Showing grayscale dialog");
+                // TODO: Implement grayscale dialog
+                self.error_message = Some("Grayscale dialog not yet implemented".to_string());
+            }
+            AdjustmentMessage::ApplyColorBalance {
+                shadows_cyan_red,
+                shadows_magenta_green,
+                shadows_yellow_blue,
+                midtones_cyan_red,
+                midtones_magenta_green,
+                midtones_yellow_blue,
+                highlights_cyan_red,
+                highlights_magenta_green,
+                highlights_yellow_blue,
+            } => {
+                info!("Applying color balance adjustment");
+                self.apply_color_balance_adjustment(
+                    shadows_cyan_red,
+                    shadows_magenta_green,
+                    shadows_yellow_blue,
+                    midtones_cyan_red,
+                    midtones_magenta_green,
+                    midtones_yellow_blue,
+                    highlights_cyan_red,
+                    highlights_magenta_green,
+                    highlights_yellow_blue,
+                );
+            }
+            AdjustmentMessage::ShowColorBalance => {
+                info!("Showing color balance dialog");
+                // TODO: Implement color balance dialog
+                self.error_message = Some("Color balance dialog not yet implemented".to_string());
+            }
         }
     }
 
@@ -1046,6 +1132,134 @@ impl PsocApp {
                 let command = ApplyAdjustmentCommand::new(application);
                 if let Err(e) = command.execute(document) {
                     self.error_message = Some(format!("Failed to apply contrast: {}", e));
+                } else {
+                    // Update canvas with the modified document
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply HSL adjustment to the current document
+    fn apply_hsl_adjustment(&mut self, hue: f32, saturation: f32, lightness: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "hue": hue,
+                    "saturation": saturation,
+                    "lightness": lightness
+                });
+                let application = AdjustmentApplication::new(
+                    "hsl".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message = Some(format!("Failed to apply HSL adjustment: {}", e));
+                } else {
+                    // Update canvas with the modified document
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply grayscale adjustment to the current document
+    fn apply_grayscale_adjustment(&mut self, method: String, opacity: f32) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "method": method,
+                    "opacity": opacity
+                });
+                let application = AdjustmentApplication::new(
+                    "grayscale".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message =
+                        Some(format!("Failed to apply grayscale adjustment: {}", e));
+                } else {
+                    // Update canvas with the modified document
+                    self.canvas.set_document(document.clone());
+                    self.sync_canvas_state();
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("No active layer".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Apply color balance adjustment to the current document
+    #[allow(clippy::too_many_arguments)]
+    fn apply_color_balance_adjustment(
+        &mut self,
+        shadows_cyan_red: f32,
+        shadows_magenta_green: f32,
+        shadows_yellow_blue: f32,
+        midtones_cyan_red: f32,
+        midtones_magenta_green: f32,
+        midtones_yellow_blue: f32,
+        highlights_cyan_red: f32,
+        highlights_magenta_green: f32,
+        highlights_yellow_blue: f32,
+    ) {
+        use crate::commands::ApplyAdjustmentCommand;
+        use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
+
+        if let Some(ref mut document) = self.state.current_document {
+            if let Some(active_layer_index) = document.active_layer_index {
+                let params = serde_json::json!({
+                    "shadows_cyan_red": shadows_cyan_red,
+                    "shadows_magenta_green": shadows_magenta_green,
+                    "shadows_yellow_blue": shadows_yellow_blue,
+                    "midtones_cyan_red": midtones_cyan_red,
+                    "midtones_magenta_green": midtones_magenta_green,
+                    "midtones_yellow_blue": midtones_yellow_blue,
+                    "highlights_cyan_red": highlights_cyan_red,
+                    "highlights_magenta_green": highlights_magenta_green,
+                    "highlights_yellow_blue": highlights_yellow_blue,
+                    "preserve_luminosity": true
+                });
+                let application = AdjustmentApplication::new(
+                    "color_balance".to_string(),
+                    params,
+                    AdjustmentScope::EntireLayer,
+                    active_layer_index,
+                );
+
+                let command = ApplyAdjustmentCommand::new(application);
+                if let Err(e) = command.execute(document) {
+                    self.error_message =
+                        Some(format!("Failed to apply color balance adjustment: {}", e));
                 } else {
                     // Update canvas with the modified document
                     self.canvas.set_document(document.clone());

@@ -51,6 +51,7 @@ pub fn toolbar<Message: Clone + 'static>(
 }
 
 /// Create a modern menu bar
+#[allow(clippy::too_many_arguments)]
 pub fn menu_bar<Message: Clone + 'static>(
     new_doc: Message,
     open_doc: Message,
@@ -59,6 +60,9 @@ pub fn menu_bar<Message: Clone + 'static>(
     undo: Message,
     redo: Message,
     brightness_contrast: Message,
+    hsl: Message,
+    grayscale: Message,
+    color_balance: Message,
     show_about: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
@@ -89,6 +93,27 @@ pub fn menu_bar<Message: Clone + 'static>(
                         }
                     }))
                     .on_press(brightness_contrast)
+                    .padding([4.0, 8.0]),
+                    button(text("HSL").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(hsl)
+                    .padding([4.0, 8.0]),
+                    button(text("Grayscale").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(grayscale)
+                    .padding([4.0, 8.0]),
+                    button(text("Color Balance").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(color_balance)
                     .padding([4.0, 8.0]),
                 ]
                 .spacing(8.0)
