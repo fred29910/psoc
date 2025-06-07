@@ -10,14 +10,16 @@ use tracing::{debug, error, info};
 use super::{
     canvas::{ImageCanvas, ImageData},
     components,
-    dialogs::{AboutDialog, AboutMessage},
+    dialogs::{AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage},
     icons::Icon,
     theme::{spacing, PsocTheme},
 };
+use crate::commands::adjustment_commands::ApplyAdjustmentCommand;
 use crate::{
     tools::{ToolManager, ToolType},
     PsocError, Result,
 };
+use psoc_core::{AdjustmentApplication, AdjustmentScope};
 use psoc_core::{Command, Document, Layer};
 
 /// Main GUI application
@@ -29,6 +31,8 @@ pub struct PsocApp {
     error_message: Option<String>,
     /// About dialog
     about_dialog: AboutDialog,
+    /// Brightness/Contrast adjustment dialog
+    brightness_contrast_dialog: BrightnessContrastDialog,
     /// Image canvas for rendering
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
@@ -97,6 +101,8 @@ pub enum Message {
     About(AboutMessage),
     /// Show about dialog
     ShowAbout,
+    /// Brightness/Contrast dialog messages
+    BrightnessContrast(BrightnessContrastMessage),
     /// Layer-related messages
     Layer(LayerMessage),
     /// Undo the last operation
@@ -203,6 +209,7 @@ impl PsocApp {
                 state: AppState::default(),
                 error_message: None,
                 about_dialog: AboutDialog::new(),
+                brightness_contrast_dialog: BrightnessContrastDialog::new(),
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
             },
@@ -427,6 +434,10 @@ impl PsocApp {
                 info!("Showing about dialog");
                 self.about_dialog.show();
             }
+            Message::BrightnessContrast(bc_msg) => {
+                debug!("Brightness/Contrast dialog message: {:?}", bc_msg);
+                self.handle_brightness_contrast_message(bc_msg);
+            }
             Message::Layer(layer_msg) => {
                 debug!("Layer message: {:?}", layer_msg);
                 self.handle_layer_message(layer_msg);
@@ -505,15 +516,24 @@ impl PsocApp {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        // Layer the about dialog on top if visible
+        // Layer dialogs on top if visible
+        let mut layers = vec![content.into()];
+
         if self.about_dialog.visible {
-            iced::widget::stack![
-                content,
-                self.about_dialog.view(Message::About(AboutMessage::Hide))
-            ]
-            .into()
+            layers.push(self.about_dialog.view(Message::About(AboutMessage::Hide)));
+        }
+
+        if self.brightness_contrast_dialog.visible {
+            layers.push(
+                self.brightness_contrast_dialog
+                    .view(|msg| Message::BrightnessContrast(msg)),
+            );
+        }
+
+        if layers.len() > 1 {
+            iced::widget::stack(layers).into()
         } else {
-            content.into()
+            layers.into_iter().next().unwrap()
         }
     }
 
@@ -971,9 +991,7 @@ impl PsocApp {
             }
             AdjustmentMessage::ShowBrightnessContrast => {
                 info!("Showing brightness/contrast dialog");
-                // TODO: Implement brightness/contrast dialog
-                self.error_message =
-                    Some("Brightness/Contrast dialog not yet implemented".to_string());
+                self.brightness_contrast_dialog.show();
             }
         }
     }
@@ -1049,5 +1067,102 @@ impl PsocApp {
                 self.error_message = Some(format!("Tool error: {}", e));
             }
         }
+    }
+
+    /// Handle brightness/contrast dialog messages
+    fn handle_brightness_contrast_message(&mut self, message: BrightnessContrastMessage) {
+        match message {
+            BrightnessContrastMessage::Show => {
+                self.brightness_contrast_dialog.show();
+            }
+            BrightnessContrastMessage::Hide => {
+                self.brightness_contrast_dialog.hide();
+            }
+            BrightnessContrastMessage::BrightnessChanged(value) => {
+                self.brightness_contrast_dialog.set_brightness(value);
+                if self.brightness_contrast_dialog.is_preview_enabled() {
+                    self.apply_brightness_preview(value);
+                }
+            }
+            BrightnessContrastMessage::ContrastChanged(value) => {
+                self.brightness_contrast_dialog.set_contrast(value);
+                if self.brightness_contrast_dialog.is_preview_enabled() {
+                    self.apply_contrast_preview(value);
+                }
+            }
+            BrightnessContrastMessage::BrightnessTextChanged(text) => {
+                self.brightness_contrast_dialog
+                    .update_brightness_from_text(text);
+                if self.brightness_contrast_dialog.is_preview_enabled() {
+                    self.apply_brightness_preview(self.brightness_contrast_dialog.brightness());
+                }
+            }
+            BrightnessContrastMessage::ContrastTextChanged(text) => {
+                self.brightness_contrast_dialog
+                    .update_contrast_from_text(text);
+                if self.brightness_contrast_dialog.is_preview_enabled() {
+                    self.apply_contrast_preview(self.brightness_contrast_dialog.contrast());
+                }
+            }
+            BrightnessContrastMessage::TogglePreview => {
+                self.brightness_contrast_dialog.toggle_preview();
+                if self.brightness_contrast_dialog.is_preview_enabled() {
+                    // Apply current values as preview
+                    self.apply_brightness_preview(self.brightness_contrast_dialog.brightness());
+                    self.apply_contrast_preview(self.brightness_contrast_dialog.contrast());
+                } else {
+                    // Remove preview by resetting to original
+                    self.reset_preview();
+                }
+            }
+            BrightnessContrastMessage::Reset => {
+                self.brightness_contrast_dialog.reset_values();
+                if self.brightness_contrast_dialog.is_preview_enabled() {
+                    self.reset_preview();
+                }
+            }
+            BrightnessContrastMessage::Apply => {
+                let brightness = self.brightness_contrast_dialog.brightness();
+                let contrast = self.brightness_contrast_dialog.contrast();
+
+                // Apply both adjustments permanently
+                if brightness != 0.0 {
+                    self.apply_brightness_adjustment(brightness);
+                }
+                if contrast != 0.0 {
+                    self.apply_contrast_adjustment(contrast);
+                }
+
+                self.brightness_contrast_dialog
+                    .update(BrightnessContrastMessage::Apply);
+                self.brightness_contrast_dialog.hide();
+            }
+            BrightnessContrastMessage::Cancel => {
+                self.reset_preview();
+                self.brightness_contrast_dialog
+                    .update(BrightnessContrastMessage::Cancel);
+            }
+        }
+    }
+
+    /// Apply brightness adjustment as preview (temporary)
+    fn apply_brightness_preview(&mut self, _brightness: f32) {
+        // TODO: Implement preview functionality
+        // This would apply the adjustment temporarily without modifying the document
+        debug!("Brightness preview: {}", _brightness);
+    }
+
+    /// Apply contrast adjustment as preview (temporary)
+    fn apply_contrast_preview(&mut self, _contrast: f32) {
+        // TODO: Implement preview functionality
+        // This would apply the adjustment temporarily without modifying the document
+        debug!("Contrast preview: {}", _contrast);
+    }
+
+    /// Reset preview to original state
+    fn reset_preview(&mut self) {
+        // TODO: Implement preview reset functionality
+        // This would restore the original image state
+        debug!("Resetting preview");
     }
 }
