@@ -32,6 +32,8 @@ pub enum ToolType {
     Polygon,
     // Crop tool
     Crop,
+    // Eyedropper tool
+    Eyedropper,
 }
 
 impl std::fmt::Display for ToolType {
@@ -52,6 +54,7 @@ impl std::fmt::Display for ToolType {
             ToolType::Line => write!(f, "Line"),
             ToolType::Polygon => write!(f, "Polygon"),
             ToolType::Crop => write!(f, "Crop"),
+            ToolType::Eyedropper => write!(f, "Eyedropper"),
         }
     }
 }
@@ -5989,7 +5992,7 @@ impl Tool for PolygonTool {
 #[cfg(test)]
 mod shape_tool_tests {
     use super::*;
-    use psoc_core::{Document, Point, RgbaPixel};
+    use psoc_core::{Point, RgbaPixel};
 
     #[test]
     fn test_rectangle_tool_creation() {
@@ -6584,5 +6587,459 @@ mod crop_tool_tests {
         assert!(!state.is_active);
         assert_eq!(tool.crop_start, None);
         assert_eq!(tool.crop_end, None);
+    }
+}
+
+/// Eyedropper tool for picking colors from the canvas
+#[derive(Debug, Clone)]
+pub struct EyedropperTool {
+    /// Whether to pick color to foreground (true) or background (false)
+    pick_to_foreground: bool,
+    /// Sample size for color picking (1x1, 3x3, 5x5)
+    sample_size: u32,
+}
+
+impl EyedropperTool {
+    /// Create a new eyedropper tool
+    pub fn new() -> Self {
+        Self {
+            pick_to_foreground: true,
+            sample_size: 1,
+        }
+    }
+
+    /// Pick color from the document at the given position
+    fn pick_color_at_position(
+        &self,
+        position: Point,
+        document: &Document,
+    ) -> ToolResult<Option<RgbaPixel>> {
+        let x = position.x as u32;
+        let y = position.y as u32;
+
+        // Get the active layer
+        let active_layer = document.active_layer();
+        if active_layer.is_none() {
+            debug!("No active layer to pick color from");
+            return Ok(None);
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(None);
+        }
+
+        let layer_dims = layer.dimensions();
+        if layer_dims.is_none() {
+            return Ok(None);
+        }
+
+        let (width, height) = layer_dims.unwrap();
+
+        // Check bounds
+        if x >= width || y >= height {
+            debug!(
+                "Position out of bounds: ({}, {}) vs ({}, {})",
+                x, y, width, height
+            );
+            return Ok(None);
+        }
+
+        // Sample color based on sample size
+        let color = match self.sample_size {
+            1 => {
+                // Single pixel sampling
+                layer.get_pixel(x, y).unwrap_or(RgbaPixel::transparent())
+            }
+            size => {
+                // Multi-pixel sampling (average)
+                self.sample_average_color(x, y, size, layer)?
+            }
+        };
+
+        debug!("Picked color: {:?} at position ({}, {})", color, x, y);
+        Ok(Some(color))
+    }
+
+    /// Sample average color from a square area
+    fn sample_average_color(
+        &self,
+        center_x: u32,
+        center_y: u32,
+        size: u32,
+        layer: &psoc_core::Layer,
+    ) -> ToolResult<RgbaPixel> {
+        let layer_dims = layer.dimensions().unwrap_or((0, 0));
+        let (width, height) = layer_dims;
+
+        let half_size = size / 2;
+        let mut total_r = 0u32;
+        let mut total_g = 0u32;
+        let mut total_b = 0u32;
+        let mut total_a = 0u32;
+        let mut count = 0u32;
+
+        // Sample pixels in the square area
+        for dy in 0..size {
+            for dx in 0..size {
+                let sample_x = center_x.saturating_sub(half_size).saturating_add(dx);
+                let sample_y = center_y.saturating_sub(half_size).saturating_add(dy);
+
+                if sample_x < width && sample_y < height {
+                    if let Some(pixel) = layer.get_pixel(sample_x, sample_y) {
+                        total_r += pixel.r as u32;
+                        total_g += pixel.g as u32;
+                        total_b += pixel.b as u32;
+                        total_a += pixel.a as u32;
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        if count > 0 {
+            Ok(RgbaPixel::new(
+                (total_r / count) as u8,
+                (total_g / count) as u8,
+                (total_b / count) as u8,
+                (total_a / count) as u8,
+            ))
+        } else {
+            Ok(RgbaPixel::transparent())
+        }
+    }
+}
+
+impl Tool for EyedropperTool {
+    fn id(&self) -> &'static str {
+        "eyedropper"
+    }
+
+    fn name(&self) -> &'static str {
+        "Eyedropper Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Pick colors from the canvas"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        _state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed {
+                position,
+                button,
+                modifiers,
+                ..
+            } => {
+                if button == super::tool_trait::MouseButton::Left {
+                    debug!("Eyedropper tool picking color at: {:?}", position);
+
+                    // Check for Alt key to pick to background color
+                    self.pick_to_foreground = !modifiers.alt;
+
+                    // Pick color from the document
+                    if let Ok(Some(color)) = self.pick_color_at_position(position, document) {
+                        debug!(
+                            "Picked color: {:?} to {}",
+                            color,
+                            if self.pick_to_foreground {
+                                "foreground"
+                            } else {
+                                "background"
+                            }
+                        );
+
+                        // TODO: Apply the picked color to foreground/background
+                        // This would typically involve sending a message to the application
+                        // For now, we'll just log the action
+                        debug!("Color picked successfully: {:?}", color);
+                    } else {
+                        debug!("Failed to pick color at position: {:?}", position);
+                    }
+                }
+            }
+            _ => {
+                // Eyedropper tool doesn't handle other events
+            }
+        }
+
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "pick_to_foreground".to_string(),
+                display_name: "Pick to Foreground".to_string(),
+                description: "Pick color to foreground (true) or background (false)".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(true),
+            },
+            ToolOption {
+                name: "sample_size".to_string(),
+                display_name: "Sample Size".to_string(),
+                description: "Size of the sampling area (1x1, 3x3, 5x5)".to_string(),
+                option_type: ToolOptionType::Choice(vec![
+                    "1x1".to_string(),
+                    "3x3".to_string(),
+                    "5x5".to_string(),
+                ]),
+                default_value: ToolOptionValue::Choice(0),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "pick_to_foreground" => {
+                if let ToolOptionValue::Bool(pick_to_fg) = value {
+                    self.pick_to_foreground = pick_to_fg;
+                    debug!("Set pick_to_foreground to: {}", pick_to_fg);
+                } else {
+                    return Err(super::tool_trait::ToolError::InvalidOptionValue {
+                        option: name.to_string(),
+                        value: format!("{:?}", value),
+                    }
+                    .into());
+                }
+            }
+            "sample_size" => {
+                if let ToolOptionValue::Choice(choice) = value {
+                    self.sample_size = match choice {
+                        0 => 1, // 1x1
+                        1 => 3, // 3x3
+                        2 => 5, // 5x5
+                        _ => 1, // Default to 1x1
+                    };
+                    debug!(
+                        "Set sample_size to: {}x{}",
+                        self.sample_size, self.sample_size
+                    );
+                } else {
+                    return Err(super::tool_trait::ToolError::InvalidOptionValue {
+                        option: name.to_string(),
+                        value: format!("{:?}", value),
+                    }
+                    .into());
+                }
+            }
+            _ => {
+                return Err(super::tool_trait::ToolError::UnknownOption {
+                    option: name.to_string(),
+                }
+                .into());
+            }
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "pick_to_foreground" => Some(ToolOptionValue::Bool(self.pick_to_foreground)),
+            "sample_size" => {
+                let choice = match self.sample_size {
+                    1 => 0, // 1x1
+                    3 => 1, // 3x3
+                    5 => 2, // 5x5
+                    _ => 0, // Default to 1x1
+                };
+                Some(ToolOptionValue::Choice(choice))
+            }
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod eyedropper_tests {
+    use super::super::tool_trait::{KeyModifiers, MouseButton, ToolEvent, ToolState};
+    use super::*;
+    use psoc_core::{Document, Layer, Point, RgbaPixel};
+
+    #[test]
+    fn test_eyedropper_tool_creation() {
+        let tool = EyedropperTool::new();
+        assert_eq!(tool.id(), "eyedropper");
+        assert_eq!(tool.name(), "Eyedropper Tool");
+        assert!(tool.pick_to_foreground);
+        assert_eq!(tool.sample_size, 1);
+    }
+
+    #[test]
+    fn test_eyedropper_tool_options() {
+        let mut tool = EyedropperTool::new();
+
+        // Test setting pick_to_foreground option
+        tool.set_option("pick_to_foreground", ToolOptionValue::Bool(false))
+            .unwrap();
+        assert!(!tool.pick_to_foreground);
+
+        // Test getting pick_to_foreground option
+        let value = tool.get_option("pick_to_foreground").unwrap();
+        assert_eq!(value, ToolOptionValue::Bool(false));
+
+        // Test setting sample_size option
+        tool.set_option("sample_size", ToolOptionValue::Choice(1))
+            .unwrap();
+        assert_eq!(tool.sample_size, 3);
+
+        // Test getting sample_size option
+        let value = tool.get_option("sample_size").unwrap();
+        assert_eq!(value, ToolOptionValue::Choice(1));
+    }
+
+    #[test]
+    fn test_eyedropper_tool_reset_options() {
+        let mut tool = EyedropperTool::new();
+
+        // Change options
+        tool.set_option("pick_to_foreground", ToolOptionValue::Bool(false))
+            .unwrap();
+        tool.set_option("sample_size", ToolOptionValue::Choice(2))
+            .unwrap();
+
+        // Verify options were changed
+        assert!(!tool.pick_to_foreground);
+        assert_eq!(tool.sample_size, 5);
+
+        // Reset manually (since reset_options is not in the trait)
+        tool.pick_to_foreground = true;
+        tool.sample_size = 1;
+
+        // Check that options are reset to defaults
+        assert!(tool.pick_to_foreground);
+        assert_eq!(tool.sample_size, 1);
+    }
+
+    #[test]
+    fn test_eyedropper_color_picking() {
+        let tool = EyedropperTool::new();
+        let mut document = Document::new("Test".to_string(), 10, 10);
+
+        // Create a layer with known pixel data
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+
+        // Set a specific color at position (5, 5)
+        let test_color = RgbaPixel::new(255, 128, 64, 255);
+        layer.set_pixel(5, 5, test_color).unwrap();
+
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Pick color at position (5, 5)
+        let picked_color = tool
+            .pick_color_at_position(Point::new(5.0, 5.0), &document)
+            .unwrap();
+
+        assert!(picked_color.is_some());
+        assert_eq!(picked_color.unwrap(), test_color);
+    }
+
+    #[test]
+    fn test_eyedropper_out_of_bounds() {
+        let tool = EyedropperTool::new();
+        let mut document = Document::new("Test".to_string(), 10, 10);
+
+        let layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Try to pick color outside bounds
+        let picked_color = tool
+            .pick_color_at_position(Point::new(15.0, 15.0), &document)
+            .unwrap();
+
+        assert!(picked_color.is_none());
+    }
+
+    #[test]
+    fn test_eyedropper_sample_average_color() {
+        let tool = EyedropperTool::new();
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+
+        // Set colors in a 3x3 area around (5, 5)
+        let colors = [
+            RgbaPixel::new(255, 0, 0, 255), // Red
+            RgbaPixel::new(0, 255, 0, 255), // Green
+            RgbaPixel::new(0, 0, 255, 255), // Blue
+        ];
+
+        // Set pixels in a pattern
+        layer.set_pixel(4, 4, colors[0]).unwrap();
+        layer.set_pixel(5, 4, colors[1]).unwrap();
+        layer.set_pixel(6, 4, colors[2]).unwrap();
+        layer.set_pixel(4, 5, colors[1]).unwrap();
+        layer.set_pixel(5, 5, colors[2]).unwrap();
+        layer.set_pixel(6, 5, colors[0]).unwrap();
+        layer.set_pixel(4, 6, colors[2]).unwrap();
+        layer.set_pixel(5, 6, colors[0]).unwrap();
+        layer.set_pixel(6, 6, colors[1]).unwrap();
+
+        // Sample average color
+        let avg_color = tool.sample_average_color(5, 5, 3, &layer).unwrap();
+
+        // The average should be approximately (85, 85, 85, 255)
+        // since we have equal amounts of red, green, and blue
+        assert!(avg_color.r > 80 && avg_color.r < 90);
+        assert!(avg_color.g > 80 && avg_color.g < 90);
+        assert!(avg_color.b > 80 && avg_color.b < 90);
+        assert_eq!(avg_color.a, 255);
+    }
+
+    #[test]
+    fn test_eyedropper_mouse_event_handling() {
+        let mut tool = EyedropperTool::new();
+        let mut document = Document::new("Test".to_string(), 10, 10);
+        let mut state = ToolState::default();
+
+        let layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Test mouse press event
+        let event = ToolEvent::MousePressed {
+            position: Point::new(5.0, 5.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+
+        // Should not panic and should handle the event
+        tool.handle_event(event, &mut document, &mut state).unwrap();
+    }
+
+    #[test]
+    fn test_eyedropper_alt_modifier() {
+        let mut tool = EyedropperTool::new();
+        let mut document = Document::new("Test".to_string(), 10, 10);
+        let mut state = ToolState::default();
+
+        let layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Test mouse press with Alt modifier (should pick to background)
+        let event = ToolEvent::MousePressed {
+            position: Point::new(5.0, 5.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers {
+                alt: true,
+                ..Default::default()
+            },
+        };
+
+        tool.handle_event(event, &mut document, &mut state).unwrap();
+
+        // pick_to_foreground should be false when Alt is pressed
+        assert!(!tool.pick_to_foreground);
     }
 }

@@ -209,6 +209,7 @@ pub enum ToolOptionType {
     String,
     Color,
     Enum(Vec<String>),
+    Choice(Vec<String>),
 }
 
 /// Values for tool options
@@ -219,6 +220,7 @@ pub enum ToolOptionValue {
     Float(f32),
     String(String),
     Color([u8; 4]), // RGBA
+    Choice(usize),  // Index into choice list
 }
 
 /// Result type for tool operations
@@ -233,8 +235,10 @@ pub enum ToolError {
     InvalidState { message: String },
     #[error("Tool operation failed: {message}")]
     OperationFailed { message: String },
-    #[error("Invalid option: {name}")]
-    InvalidOption { name: String },
+    #[error("Invalid option: {option}")]
+    UnknownOption { option: String },
+    #[error("Invalid option value for {option}: {value}")]
+    InvalidOptionValue { option: String, value: String },
 }
 
 impl From<ToolError> for PsocError {

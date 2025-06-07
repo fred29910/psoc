@@ -1148,6 +1148,11 @@ impl PsocApp {
                 Message::ToolChanged(ToolType::Crop),
                 self.state.current_tool == ToolType::Crop,
             ),
+            (
+                Icon::Eyedropper,
+                Message::ToolChanged(ToolType::Eyedropper),
+                self.state.current_tool == ToolType::Eyedropper,
+            ),
             // Shape tools
             (
                 Icon::Rectangle,
@@ -1219,6 +1224,11 @@ impl PsocApp {
                 Icon::Crop,
                 Message::ToolChanged(ToolType::Crop),
                 self.state.current_tool == ToolType::Crop,
+            ),
+            (
+                Icon::Eyedropper,
+                Message::ToolChanged(ToolType::Eyedropper),
+                self.state.current_tool == ToolType::Eyedropper,
             ),
             // Shape tools
             (
@@ -1451,6 +1461,7 @@ impl PsocApp {
             ToolType::Ellipse => "Ellipse",
             ToolType::Line => "Line",
             ToolType::Polygon => "Polygon",
+            ToolType::Eyedropper => "Eyedropper",
         };
 
         let options = self.tool_manager.get_active_tool_options();
@@ -1584,6 +1595,34 @@ impl PsocApp {
                                         name: name.clone(),
                                         value: ToolOptionValue::String(v),
                                     })
+                                })
+                            },
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                ToolOptionType::Choice(ref choice_options) => {
+                    if let Some(ToolOptionValue::Choice(value)) =
+                        self.tool_manager.get_tool_option(&option.name)
+                    {
+                        let selected_text = choice_options.get(value).cloned().unwrap_or_default();
+                        ToolOptionControl::Dropdown {
+                            label: option.display_name,
+                            options: choice_options.clone(),
+                            selected: selected_text,
+                            on_change: {
+                                let name = option.name.clone();
+                                let options = choice_options.clone();
+                                Box::new(move |v| {
+                                    if let Some(index) = options.iter().position(|opt| opt == &v) {
+                                        Message::ToolOption(ToolOptionMessage::SetOption {
+                                            name: name.clone(),
+                                            value: ToolOptionValue::Choice(index),
+                                        })
+                                    } else {
+                                        Message::Error(format!("Invalid choice: {}", v))
+                                    }
                                 })
                             },
                         }

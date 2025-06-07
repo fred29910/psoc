@@ -80,6 +80,8 @@ impl ToolManager {
         self.register_tool(ToolType::Polygon, Box::new(PolygonTool::new()));
         // Crop tool
         self.register_tool(ToolType::Crop, Box::new(CropTool::new()));
+        // Eyedropper tool
+        self.register_tool(ToolType::Eyedropper, Box::new(EyedropperTool::new()));
     }
 
     /// Register a tool with the manager
@@ -220,6 +222,8 @@ impl ToolManager {
             ToolType::Polygon => Box::new(PolygonTool::new()),
             // Crop tool
             ToolType::Crop => Box::new(CropTool::new()),
+            // Eyedropper tool
+            ToolType::Eyedropper => Box::new(EyedropperTool::new()),
         };
 
         Ok(tool)
@@ -332,7 +336,7 @@ mod tests {
     fn test_tool_manager_creation() {
         let manager = ToolManager::new();
         assert!(manager.active_tool_type.is_some());
-        assert_eq!(manager.available_tools().len(), 15); // Select, EllipseSelect, LassoSelect, MagicWand, Brush, Eraser, Move, Transform, Text, Gradient, Rectangle, Ellipse, Line, Polygon, Crop
+        assert_eq!(manager.available_tools().len(), 16); // Select, EllipseSelect, LassoSelect, MagicWand, Brush, Eraser, Move, Transform, Text, Gradient, Rectangle, Ellipse, Line, Polygon, Crop, Eyedropper
     }
 
     #[test]
