@@ -12,9 +12,12 @@ use tracing::{debug, error, info, warn};
 use unic_langid::{langid, LanguageIdentifier};
 
 /// Supported languages in PSOC
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Default,
+)]
 pub enum Language {
     /// English (default)
+    #[default]
     English,
     /// Simplified Chinese
     ChineseSimplified,
@@ -57,12 +60,6 @@ impl Language {
             "zh" | "zh-cn" | "chinese" | "chinese-simplified" => Some(Language::ChineseSimplified),
             _ => None,
         }
-    }
-}
-
-impl Default for Language {
-    fn default() -> Self {
-        Language::English
     }
 }
 
@@ -321,11 +318,13 @@ pub fn init_localization() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Get a reference to the global localization manager
+#[allow(static_mut_refs)]
 pub fn localization_manager() -> Option<&'static LocalizationManager> {
     unsafe { LOCALIZATION_MANAGER.as_ref() }
 }
 
 /// Get a mutable reference to the global localization manager
+#[allow(static_mut_refs)]
 pub fn localization_manager_mut() -> Option<&'static mut LocalizationManager> {
     unsafe { LOCALIZATION_MANAGER.as_mut() }
 }

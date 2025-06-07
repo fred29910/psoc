@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     // Create application
-    let app = Application::new()?;
+    let _app = Application::new()?;
     println!("Application created successfully");
 
     // In a real example, we would run the app

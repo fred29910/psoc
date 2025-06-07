@@ -5,9 +5,8 @@ use psoc::rendering::{AppRenderer, RenderEngine};
 
 #[test]
 fn test_render_engine_creation() {
-    let engine = RenderEngine::new();
-    // Basic creation test
-    assert!(true); // Engine created successfully
+    let _engine = RenderEngine::new();
+    // Basic creation test - engine created successfully
 }
 
 #[test]

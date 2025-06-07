@@ -4213,12 +4213,10 @@ impl Tool for GradientTool {
                 }
             }
             ToolEvent::KeyPressed { key, .. } => {
-                if key == super::tool_trait::Key::Escape {
-                    if self.is_creating {
-                        debug!("Cancelling gradient creation");
-                        self.cancel_gradient_creation();
-                        state.is_active = false;
-                    }
+                if key == super::tool_trait::Key::Escape && self.is_creating {
+                    debug!("Cancelling gradient creation");
+                    self.cancel_gradient_creation();
+                    state.is_active = false;
                 }
             }
             _ => {}
@@ -4872,16 +4870,13 @@ impl Tool for RectangleTool {
                     state.is_active = false;
                 }
             }
-            ToolEvent::KeyPressed { key, .. } => match key {
-                super::tool_trait::Key::Escape => {
-                    if self.is_drawing {
-                        debug!("Cancelling rectangle drawing");
-                        self.cancel_drawing();
-                        state.is_active = false;
-                    }
+            ToolEvent::KeyPressed { key, .. } => {
+                if key == super::tool_trait::Key::Escape && self.is_drawing {
+                    debug!("Cancelling rectangle drawing");
+                    self.cancel_drawing();
+                    state.is_active = false;
                 }
-                _ => {}
-            },
+            }
             _ => {}
         }
         Ok(())
@@ -5273,16 +5268,13 @@ impl Tool for EllipseShapeTool {
                     state.is_active = false;
                 }
             }
-            ToolEvent::KeyPressed { key, .. } => match key {
-                super::tool_trait::Key::Escape => {
-                    if self.is_drawing {
-                        debug!("Cancelling ellipse drawing");
-                        self.cancel_drawing();
-                        state.is_active = false;
-                    }
+            ToolEvent::KeyPressed { key, .. } => {
+                if key == super::tool_trait::Key::Escape && self.is_drawing {
+                    debug!("Cancelling ellipse drawing");
+                    self.cancel_drawing();
+                    state.is_active = false;
                 }
-                _ => {}
-            },
+            }
             _ => {}
         }
         Ok(())
@@ -5712,16 +5704,13 @@ impl Tool for LineTool {
                     state.is_active = false;
                 }
             }
-            ToolEvent::KeyPressed { key, .. } => match key {
-                super::tool_trait::Key::Escape => {
-                    if self.is_drawing {
-                        debug!("Cancelling line drawing");
-                        self.cancel_drawing();
-                        state.is_active = false;
-                    }
+            ToolEvent::KeyPressed { key, .. } => {
+                if key == super::tool_trait::Key::Escape && self.is_drawing {
+                    debug!("Cancelling line drawing");
+                    self.cancel_drawing();
+                    state.is_active = false;
                 }
-                _ => {}
-            },
+            }
             _ => {}
         }
         Ok(())
@@ -6885,6 +6874,12 @@ pub struct EyedropperTool {
     pick_to_foreground: bool,
     /// Sample size for color picking (1x1, 3x3, 5x5)
     sample_size: u32,
+}
+
+impl Default for EyedropperTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EyedropperTool {

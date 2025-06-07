@@ -1,5 +1,5 @@
 use psoc::tools::{
-    tool_trait::{ToolOption, ToolOptionType, ToolOptionValue},
+    tool_trait::{ToolOptionType, ToolOptionValue},
     ToolManager, ToolType,
 };
 
@@ -167,7 +167,7 @@ fn test_invalid_option_name() {
 
 #[test]
 fn test_no_active_tool_options() {
-    let mut tool_manager = ToolManager::new();
+    let tool_manager = ToolManager::new();
 
     // No active tool set initially, but ToolManager starts with Select tool by default
     // So let's explicitly test with no tool set by creating a fresh manager
