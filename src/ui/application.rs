@@ -2,7 +2,7 @@
 
 #[cfg(feature = "gui")]
 use iced::{
-    widget::{column, container},
+    widget::{column, container, Column},
     Element, Length, Settings, Task, Theme,
 };
 use tracing::{debug, error, info};
@@ -20,7 +20,7 @@ use super::{
 
 use crate::{
     tools::{
-        tool_trait::{ToolOption, ToolOptionType, ToolOptionValue},
+        tool_trait::{ToolOptionType, ToolOptionValue},
         ToolManager, ToolType,
     },
     PsocError, Result,
@@ -70,6 +70,27 @@ pub struct AppState {
     pub theme: PsocTheme,
     /// File manager for I/O operations
     pub file_manager: crate::file_io::FileManager,
+    /// Current mouse position on canvas (in image coordinates)
+    pub mouse_position: Option<(f32, f32)>,
+    /// Current pixel color under mouse cursor
+    pub current_pixel_color: Option<psoc_core::RgbaPixel>,
+}
+
+/// Status information for display
+#[derive(Debug, Clone)]
+pub struct StatusInfo {
+    /// Image dimensions
+    pub image_size: Option<(u32, u32)>,
+    /// Color mode
+    pub color_mode: Option<String>,
+    /// Current zoom level
+    pub zoom_level: f32,
+    /// Mouse coordinates
+    pub mouse_position: Option<(f32, f32)>,
+    /// Pixel color under cursor
+    pub pixel_color: Option<psoc_core::RgbaPixel>,
+    /// Document status
+    pub document_status: String,
 }
 
 // Tool types are now defined in the tools module
@@ -281,6 +302,60 @@ impl Default for AppState {
             debug_mode: cfg!(debug_assertions),
             theme: PsocTheme::default(),
             file_manager: crate::file_io::FileManager::new(),
+            mouse_position: None,
+            current_pixel_color: None,
+        }
+    }
+}
+
+impl StatusInfo {
+    /// Create status info from application state
+    pub fn from_app_state(state: &AppState) -> Self {
+        let image_size = if let Some(ref document) = state.current_document {
+            Some((document.size.width as u32, document.size.height as u32))
+        } else if let Some(ref image) = state.current_image {
+            Some((image.width(), image.height()))
+        } else {
+            None
+        };
+
+        let color_mode = if let Some(ref document) = state.current_document {
+            Some(format!("{:?}", document.color_mode))
+        } else if let Some(ref image) = state.current_image {
+            Some(match image.color() {
+                image::ColorType::L8 => "Grayscale 8-bit".to_string(),
+                image::ColorType::La8 => "Grayscale + Alpha 8-bit".to_string(),
+                image::ColorType::Rgb8 => "RGB 8-bit".to_string(),
+                image::ColorType::Rgba8 => "RGBA 8-bit".to_string(),
+                image::ColorType::L16 => "Grayscale 16-bit".to_string(),
+                image::ColorType::La16 => "Grayscale + Alpha 16-bit".to_string(),
+                image::ColorType::Rgb16 => "RGB 16-bit".to_string(),
+                image::ColorType::Rgba16 => "RGBA 16-bit".to_string(),
+                image::ColorType::Rgb32F => "RGB 32-bit Float".to_string(),
+                image::ColorType::Rgba32F => "RGBA 32-bit Float".to_string(),
+                _ => "Unknown".to_string(),
+            })
+        } else {
+            None
+        };
+
+        let document_status = if state.document_open {
+            if state.current_file_path.is_some() {
+                "Saved".to_string()
+            } else {
+                "Unsaved".to_string()
+            }
+        } else {
+            "No document".to_string()
+        };
+
+        Self {
+            image_size,
+            color_mode,
+            zoom_level: state.zoom_level,
+            mouse_position: state.mouse_position,
+            pixel_color: state.current_pixel_color,
+            document_status,
         }
     }
 }
@@ -661,6 +736,106 @@ impl PsocApp {
 }
 
 impl PsocApp {
+    /// Update pixel color at the given canvas position
+    fn update_pixel_color_at_position(&mut self, canvas_x: f32, canvas_y: f32) {
+        // Convert canvas coordinates to image coordinates
+        if let Some(image_coords) = self.canvas_to_image_coordinates(canvas_x, canvas_y) {
+            let (img_x, img_y) = image_coords;
+
+            // Get pixel color from current image or document
+            if let Some(ref document) = self.state.current_document {
+                // Get color from document (considering layers)
+                if let Some(color) = self.get_pixel_color_from_document(document, img_x, img_y) {
+                    self.state.current_pixel_color = Some(color);
+                } else {
+                    self.state.current_pixel_color = None;
+                }
+            } else if let Some(ref image) = self.state.current_image {
+                // Get color from simple image
+                if let Some(color) = self.get_pixel_color_from_image(image, img_x, img_y) {
+                    self.state.current_pixel_color = Some(color);
+                } else {
+                    self.state.current_pixel_color = None;
+                }
+            } else {
+                self.state.current_pixel_color = None;
+            }
+        } else {
+            self.state.current_pixel_color = None;
+        }
+    }
+
+    /// Convert canvas coordinates to image coordinates
+    fn canvas_to_image_coordinates(&self, canvas_x: f32, canvas_y: f32) -> Option<(u32, u32)> {
+        // Get image dimensions
+        let (img_width, img_height) = if let Some(ref document) = self.state.current_document {
+            (document.size.width as f32, document.size.height as f32)
+        } else if let Some(ref image) = self.state.current_image {
+            (image.width() as f32, image.height() as f32)
+        } else {
+            return None;
+        };
+
+        // Convert canvas coordinates to image coordinates
+        // This is a simplified conversion - in a real implementation,
+        // you'd need to account for canvas bounds, zoom, and pan offset
+        let zoom = self.state.zoom_level;
+        let pan_x = self.state.pan_offset.0;
+        let pan_y = self.state.pan_offset.1;
+
+        // Simplified coordinate conversion
+        let img_x = ((canvas_x - pan_x) / zoom).round() as i32;
+        let img_y = ((canvas_y - pan_y) / zoom).round() as i32;
+
+        // Check bounds
+        if img_x >= 0 && img_y >= 0 && img_x < img_width as i32 && img_y < img_height as i32 {
+            Some((img_x as u32, img_y as u32))
+        } else {
+            None
+        }
+    }
+
+    /// Get pixel color from document (considering all layers)
+    fn get_pixel_color_from_document(
+        &self,
+        document: &Document,
+        x: u32,
+        y: u32,
+    ) -> Option<psoc_core::RgbaPixel> {
+        // For now, get color from the active layer
+        if let Some(active_index) = document.active_layer_index {
+            if let Some(layer) = document.layers.get(active_index) {
+                if let Some(pixel_data) = &layer.pixel_data {
+                    let (width, height) = pixel_data.dimensions();
+                    if x < width && y < height {
+                        return pixel_data.get_pixel(x, y);
+                    }
+                }
+            }
+        }
+
+        // Fallback to background color
+        Some(document.background_color)
+    }
+
+    /// Get pixel color from simple image
+    fn get_pixel_color_from_image(
+        &self,
+        image: &image::DynamicImage,
+        x: u32,
+        y: u32,
+    ) -> Option<psoc_core::RgbaPixel> {
+        use psoc_core::RgbaPixel;
+
+        if x < image.width() && y < image.height() {
+            let rgba_image = image.to_rgba8();
+            let pixel = rgba_image.get_pixel(x, y);
+            Some(RgbaPixel::new(pixel[0], pixel[1], pixel[2], pixel[3]))
+        } else {
+            None
+        }
+    }
+
     /// Handle canvas-specific messages
     fn handle_canvas_message(&mut self, message: CanvasMessage) {
         use crate::tools::{
@@ -672,6 +847,13 @@ impl PsocApp {
         match message {
             CanvasMessage::MouseMoved { x, y } => {
                 debug!("Mouse moved on canvas: ({}, {})", x, y);
+
+                // Update mouse position in state
+                self.state.mouse_position = Some((x, y));
+
+                // Get pixel color under cursor if image is available
+                self.update_pixel_color_at_position(x, y);
+
                 let event = ToolEvent::MouseMoved {
                     position: Point::new(x, y),
                     modifiers: KeyModifiers::default(),
@@ -869,32 +1051,144 @@ impl PsocApp {
 
     /// Create the right panel (properties and tool options)
     fn right_panel(&self) -> Element<Message> {
-        let content = vec![
-            self.create_tool_options_panel(),
-            components::section_header("Document".to_string()),
-            components::property_row(
-                "Status".to_string(),
-                if self.state.document_open {
-                    "Open".to_string()
-                } else {
-                    "None".to_string()
-                },
-            ),
-            components::property_row(
-                "Zoom".to_string(),
-                format!("{:.0}%", self.state.zoom_level * 100.0),
-            ),
-            components::property_row(
-                "Theme".to_string(),
-                match self.state.theme {
-                    PsocTheme::Dark => "Dark".to_string(),
-                    PsocTheme::Light => "Light".to_string(),
-                    PsocTheme::HighContrast => "High Contrast".to_string(),
-                },
-            ),
-        ];
+        // Create tool options panel
+        let tool_options = self.create_tool_options_panel();
 
-        components::side_panel("Properties".to_string(), content, 250.0)
+        // Create document info section
+        let mut doc_content = vec![components::section_header("Document".to_string())];
+
+        doc_content.push(components::property_row(
+            "Status".to_string(),
+            if self.state.document_open {
+                if self.state.current_file_path.is_some() {
+                    "Saved".to_string()
+                } else {
+                    "Unsaved".to_string()
+                }
+            } else {
+                "No document".to_string()
+            },
+        ));
+
+        if let Some(ref path) = self.state.current_file_path {
+            doc_content.push(components::property_row(
+                "File".to_string(),
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("Unknown")
+                    .to_string(),
+            ));
+        }
+
+        doc_content.push(components::property_row(
+            "Zoom".to_string(),
+            format!("{:.0}%", self.state.zoom_level * 100.0),
+        ));
+
+        // Create image info section
+        let mut img_content = vec![components::section_header("Image".to_string())];
+
+        if let Some(ref document) = self.state.current_document {
+            img_content.push(components::property_row(
+                "Size".to_string(),
+                format!(
+                    "{}×{}",
+                    document.size.width as u32, document.size.height as u32
+                ),
+            ));
+            img_content.push(components::property_row(
+                "Color Mode".to_string(),
+                format!("{:?}", document.color_mode),
+            ));
+            img_content.push(components::property_row(
+                "Resolution".to_string(),
+                format!("{:.1} PPI", document.resolution.x_ppi),
+            ));
+            img_content.push(components::property_row(
+                "Layers".to_string(),
+                document.layers.len().to_string(),
+            ));
+        } else if let Some(ref image) = self.state.current_image {
+            img_content.push(components::property_row(
+                "Size".to_string(),
+                format!("{}×{}", image.width(), image.height()),
+            ));
+            img_content.push(components::property_row(
+                "Color Type".to_string(),
+                match image.color() {
+                    image::ColorType::L8 => "Grayscale 8-bit".to_string(),
+                    image::ColorType::La8 => "Grayscale + Alpha 8-bit".to_string(),
+                    image::ColorType::Rgb8 => "RGB 8-bit".to_string(),
+                    image::ColorType::Rgba8 => "RGBA 8-bit".to_string(),
+                    image::ColorType::L16 => "Grayscale 16-bit".to_string(),
+                    image::ColorType::La16 => "Grayscale + Alpha 16-bit".to_string(),
+                    image::ColorType::Rgb16 => "RGB 16-bit".to_string(),
+                    image::ColorType::Rgba16 => "RGBA 16-bit".to_string(),
+                    image::ColorType::Rgb32F => "RGB 32-bit Float".to_string(),
+                    image::ColorType::Rgba32F => "RGBA 32-bit Float".to_string(),
+                    _ => "Unknown".to_string(),
+                },
+            ));
+        } else {
+            img_content.push(components::property_row(
+                "Status".to_string(),
+                "No image loaded".to_string(),
+            ));
+        }
+
+        // Create cursor info section
+        let mut cursor_content = vec![components::section_header("Cursor".to_string())];
+
+        if let Some((x, y)) = self.state.mouse_position {
+            cursor_content.push(components::property_row(
+                "Position".to_string(),
+                format!("({:.0}, {:.0})", x, y),
+            ));
+
+            if let Some(color) = self.state.current_pixel_color {
+                cursor_content.push(components::property_row(
+                    "RGB".to_string(),
+                    format!("({}, {}, {})", color.r, color.g, color.b),
+                ));
+
+                if color.a < 255 {
+                    cursor_content.push(components::property_row(
+                        "Alpha".to_string(),
+                        color.a.to_string(),
+                    ));
+                }
+
+                cursor_content.push(components::property_row(
+                    "Hex".to_string(),
+                    format!("#{:02X}{:02X}{:02X}", color.r, color.g, color.b),
+                ));
+            }
+        } else {
+            cursor_content.push(components::property_row(
+                "Position".to_string(),
+                "Outside canvas".to_string(),
+            ));
+        }
+
+        // Create theme info section
+        let mut theme_content = vec![components::section_header("Application".to_string())];
+        theme_content.push(components::property_row(
+            "Theme".to_string(),
+            match self.state.theme {
+                PsocTheme::Dark => "Dark".to_string(),
+                PsocTheme::Light => "Light".to_string(),
+                PsocTheme::HighContrast => "High Contrast".to_string(),
+            },
+        ));
+
+        // Combine all content
+        let mut all_content = vec![tool_options];
+        all_content.extend(doc_content);
+        all_content.extend(img_content);
+        all_content.extend(cursor_content);
+        all_content.extend(theme_content);
+
+        components::side_panel("Properties".to_string(), all_content, 250.0)
     }
 
     /// Create the tool options panel
@@ -1056,15 +1350,8 @@ impl PsocApp {
 
     /// Create the status bar
     fn status_bar(&self) -> Element<Message> {
-        let status_text = if let Some(ref error) = self.error_message {
-            format!("Error: {}", error)
-        } else if self.state.document_open {
-            "Ready".to_string()
-        } else {
-            "Ready - No document open".to_string()
-        };
-
-        components::status_bar(status_text, self.state.zoom_level)
+        let status_info = StatusInfo::from_app_state(&self.state);
+        components::enhanced_status_bar(&status_info)
     }
 
     /// Create the layers panel content

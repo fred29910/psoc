@@ -1,7 +1,7 @@
 //! Modern UI components for PSOC Image Editor
 
 use iced::{
-    widget::{button, checkbox, column, container, row, slider, text, text_input, Space},
+    widget::{button, checkbox, column, container, row, slider, text, text_input, Row, Space},
     Element, Length,
 };
 
@@ -219,7 +219,7 @@ pub fn side_panel<Message: 'static>(
     .into()
 }
 
-/// Create a modern status bar
+/// Create a modern status bar with comprehensive information
 pub fn status_bar<Message: 'static>(
     status_text: String,
     zoom_level: f32,
@@ -234,6 +234,73 @@ pub fn status_bar<Message: 'static>(
             text(format!("Zoom: {:.0}%", zoom_level * 100.0)).size(12.0),
         ]
         .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(8.0)
+    .width(Length::Fill)
+    .into()
+}
+
+/// Create an enhanced status bar with detailed information
+pub fn enhanced_status_bar<Message: 'static>(
+    status_info: &crate::ui::application::StatusInfo,
+) -> Element<'static, Message> {
+    let mut status_elements = Vec::new();
+
+    // Document status
+    status_elements.push(
+        text(format!("Status: {}", status_info.document_status))
+            .size(12.0)
+            .into(),
+    );
+
+    // Image dimensions
+    if let Some((width, height)) = status_info.image_size {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(
+            text(format!("Size: {}×{}", width, height))
+                .size(12.0)
+                .into(),
+        );
+    }
+
+    // Color mode
+    if let Some(ref color_mode) = status_info.color_mode {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(text(format!("Mode: {}", color_mode)).size(12.0).into());
+    }
+
+    // Mouse coordinates
+    if let Some((x, y)) = status_info.mouse_position {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(text(format!("Pos: ({:.0}, {:.0})", x, y)).size(12.0).into());
+    }
+
+    // Pixel color
+    if let Some(color) = status_info.pixel_color {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(
+            text(format!("RGB: ({}, {}, {})", color.r, color.g, color.b))
+                .size(12.0)
+                .into(),
+        );
+
+        if color.a < 255 {
+            status_elements.push(text(format!(" A: {}", color.a)).size(12.0).into());
+        }
+    }
+
+    // Add spacer and zoom
+    status_elements.push(Space::new(Length::Fill, Length::Shrink).into());
+    status_elements.push(
+        text(format!("Zoom: {:.0}%", status_info.zoom_level * 100.0))
+            .size(12.0)
+            .into(),
+    );
+
+    container(
+        Row::with_children(status_elements)
+            .align_y(iced::alignment::Vertical::Center)
+            .spacing(0),
     )
     .padding(8.0)
     .width(Length::Fill)
