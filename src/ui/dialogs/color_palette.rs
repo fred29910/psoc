@@ -8,7 +8,7 @@ use psoc_core::RgbaPixel;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::ui::theme::{spacing, PsocTheme};
+use crate::ui::theme::spacing;
 
 /// Color palette dialog messages
 #[derive(Debug, Clone)]

@@ -70,7 +70,7 @@ fn extract_jpeg_icc_profile<P: AsRef<Path>>(path: P) -> Result<Option<IccProfile
     // Read segments to find APP2 segments with ICC profile
     let mut profile_chunks = Vec::new();
     let mut total_chunks = 0u8;
-    let mut current_chunk = 0u8;
+    let mut current_chunk;
 
     loop {
         let mut segment_marker = [0u8; 2];
@@ -108,16 +108,17 @@ fn extract_jpeg_icc_profile<P: AsRef<Path>>(path: P) -> Result<Option<IccProfile
                 .context("Failed to read APP2 segment data")?;
 
             // Check for ICC profile identifier
-            if segment_data.len() >= 12 && &segment_data[0..12] == b"ICC_PROFILE\0" {
-                if segment_data.len() >= 14 {
-                    current_chunk = segment_data[12];
-                    total_chunks = segment_data[13];
+            if segment_data.len() >= 12
+                && &segment_data[0..12] == b"ICC_PROFILE\0"
+                && segment_data.len() >= 14
+            {
+                current_chunk = segment_data[12];
+                total_chunks = segment_data[13];
 
-                    debug!("Found ICC profile chunk {}/{}", current_chunk, total_chunks);
+                debug!("Found ICC profile chunk {}/{}", current_chunk, total_chunks);
 
-                    let profile_data = segment_data[14..].to_vec();
-                    profile_chunks.push((current_chunk, profile_data));
-                }
+                let profile_data = segment_data[14..].to_vec();
+                profile_chunks.push((current_chunk, profile_data));
             }
         } else {
             // Skip other segments

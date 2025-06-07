@@ -6,7 +6,8 @@
 use tracing::debug;
 
 use super::tool_trait::{
-    Tool, ToolCursor, ToolEvent, ToolOption, ToolOptionType, ToolOptionValue, ToolResult, ToolState,
+    Key, Tool, ToolCursor, ToolEvent, ToolOption, ToolOptionType, ToolOptionValue, ToolResult,
+    ToolState,
 };
 use psoc_core::{Document, Point, RgbaPixel, Selection};
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,8 @@ pub enum ToolType {
     Ellipse,
     Line,
     Polygon,
+    // Crop tool
+    Crop,
 }
 
 impl std::fmt::Display for ToolType {
@@ -48,6 +51,7 @@ impl std::fmt::Display for ToolType {
             ToolType::Ellipse => write!(f, "Ellipse"),
             ToolType::Line => write!(f, "Line"),
             ToolType::Polygon => write!(f, "Polygon"),
+            ToolType::Crop => write!(f, "Crop"),
         }
     }
 }
@@ -1532,6 +1536,7 @@ impl MagicWandTool {
     }
 
     /// Flood fill algorithm for contiguous selection
+    #[allow(clippy::too_many_arguments)]
     fn flood_fill_selection(
         &self,
         start_x: u32,
@@ -2790,19 +2795,16 @@ impl Tool for TransformTool {
     }
 
     fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
-        match name {
-            "mode" => {
-                if let ToolOptionValue::String(mode_str) = value {
-                    self.transform_mode = match mode_str.as_str() {
-                        "Scale" => TransformMode::Scale,
-                        "Rotate" => TransformMode::Rotate,
-                        "Flip Horizontal" => TransformMode::FlipHorizontal,
-                        "Flip Vertical" => TransformMode::FlipVertical,
-                        _ => TransformMode::Free,
-                    };
-                }
+        if name == "mode" {
+            if let ToolOptionValue::String(mode_str) = value {
+                self.transform_mode = match mode_str.as_str() {
+                    "Scale" => TransformMode::Scale,
+                    "Rotate" => TransformMode::Rotate,
+                    "Flip Horizontal" => TransformMode::FlipHorizontal,
+                    "Flip Vertical" => TransformMode::FlipVertical,
+                    _ => TransformMode::Free,
+                };
             }
-            _ => {}
         }
         Ok(())
     }
@@ -3943,16 +3945,15 @@ impl Tool for GradientTool {
                     state.is_active = false;
                 }
             }
-            ToolEvent::KeyPressed { key, .. } => match key {
-                super::tool_trait::Key::Escape => {
+            ToolEvent::KeyPressed { key, .. } => {
+                if key == super::tool_trait::Key::Escape {
                     if self.is_creating {
                         debug!("Cancelling gradient creation");
                         self.cancel_gradient_creation();
                         state.is_active = false;
                     }
                 }
-                _ => {}
-            },
+            }
             _ => {}
         }
         Ok(())
@@ -6176,5 +6177,412 @@ mod shape_tool_tests {
         let close_point = Point::new(11.0, 11.0); // Close to start point
         let should_close = tool.add_point(close_point);
         assert!(should_close); // Should trigger close
+    }
+}
+
+/// Crop tool for cropping images
+#[derive(Debug)]
+pub struct CropTool {
+    crop_start: Option<Point>,
+    crop_end: Option<Point>,
+    is_cropping: bool,
+    aspect_ratio_constraint: Option<f32>,
+    show_preview: bool,
+    crop_mode: CropMode,
+}
+
+/// Crop mode enumeration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CropMode {
+    Free,
+    FixedRatio(u32, u32), // width, height ratio
+    Square,
+}
+
+impl std::fmt::Display for CropMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CropMode::Free => write!(f, "Free"),
+            CropMode::FixedRatio(w, h) => write!(f, "{}:{}", w, h),
+            CropMode::Square => write!(f, "Square"),
+        }
+    }
+}
+
+impl CropTool {
+    pub fn new() -> Self {
+        Self {
+            crop_start: None,
+            crop_end: None,
+            is_cropping: false,
+            aspect_ratio_constraint: None,
+            show_preview: true,
+            crop_mode: CropMode::Free,
+        }
+    }
+
+    /// Calculate constrained crop rectangle based on aspect ratio
+    fn calculate_constrained_rect(&self, start: Point, end: Point) -> (Point, Point) {
+        match self.crop_mode {
+            CropMode::Free => (start, end),
+            CropMode::Square => {
+                let width = (end.x - start.x).abs();
+                let height = (end.y - start.y).abs();
+                let size = width.min(height);
+
+                let new_end = Point::new(
+                    start.x + if end.x >= start.x { size } else { -size },
+                    start.y + if end.y >= start.y { size } else { -size },
+                );
+                (start, new_end)
+            }
+            CropMode::FixedRatio(ratio_w, ratio_h) => {
+                let ratio = ratio_w as f32 / ratio_h as f32;
+                let width = (end.x - start.x).abs();
+                let height = width / ratio;
+
+                let new_end = Point::new(
+                    start.x + if end.x >= start.x { width } else { -width },
+                    start.y + if end.y >= start.y { height } else { -height },
+                );
+                (start, new_end)
+            }
+        }
+    }
+
+    /// Apply crop to the document
+    fn apply_crop(&self, document: &mut Document) -> ToolResult<()> {
+        if let (Some(start), Some(end)) = (self.crop_start, self.crop_end) {
+            let (constrained_start, constrained_end) = self.calculate_constrained_rect(start, end);
+
+            // Calculate crop rectangle
+            let x = constrained_start.x.min(constrained_end.x);
+            let y = constrained_start.y.min(constrained_end.y);
+            let width = (constrained_end.x - constrained_start.x).abs();
+            let height = (constrained_end.y - constrained_start.y).abs();
+
+            debug!(
+                "Applying crop: x={}, y={}, width={}, height={}",
+                x, y, width, height
+            );
+
+            // TODO: Implement actual crop operation on document
+            // This would involve:
+            // 1. Creating a crop command
+            // 2. Applying it to all layers or selected layer
+            // 3. Updating document dimensions
+
+            document.mark_dirty();
+        }
+        Ok(())
+    }
+}
+
+impl Default for CropTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for CropTool {
+    fn id(&self) -> &'static str {
+        "crop"
+    }
+
+    fn name(&self) -> &'static str {
+        "Crop Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Crop image to selected area"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed { position, .. } => {
+                debug!("Crop selection started at: {:?}", position);
+                self.crop_start = Some(position);
+                self.crop_end = None;
+                self.is_cropping = true;
+                state.is_active = true;
+                state.last_position = Some(position);
+            }
+            ToolEvent::MouseDragged { position, .. } => {
+                if self.is_cropping {
+                    debug!("Crop selection dragged to: {:?}", position);
+                    self.crop_end = Some(position);
+                    state.last_position = Some(position);
+
+                    // Update preview if enabled
+                    if self.show_preview {
+                        // TODO: Update crop preview visualization
+                    }
+                }
+            }
+            ToolEvent::MouseReleased { position, .. } => {
+                if self.is_cropping {
+                    debug!("Crop selection completed at: {:?}", position);
+                    self.crop_end = Some(position);
+                    self.is_cropping = false;
+                    state.is_active = false;
+
+                    // Apply crop operation
+                    self.apply_crop(document)?;
+
+                    // Reset crop selection
+                    self.crop_start = None;
+                    self.crop_end = None;
+                }
+            }
+            ToolEvent::KeyPressed { key, .. } => {
+                // ESC key cancels crop operation
+                if key == Key::Escape {
+                    debug!("Crop operation cancelled");
+                    self.crop_start = None;
+                    self.crop_end = None;
+                    self.is_cropping = false;
+                    state.is_active = false;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "crop_mode".to_string(),
+                display_name: "Crop Mode".to_string(),
+                description: "Constraint mode for crop selection".to_string(),
+                option_type: ToolOptionType::Enum(vec![
+                    "Free".to_string(),
+                    "Square".to_string(),
+                    "16:9".to_string(),
+                    "4:3".to_string(),
+                    "3:2".to_string(),
+                ]),
+                default_value: ToolOptionValue::String("Free".to_string()),
+            },
+            ToolOption {
+                name: "show_preview".to_string(),
+                display_name: "Show Preview".to_string(),
+                description: "Show crop preview overlay".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.show_preview),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "crop_mode" => {
+                if let ToolOptionValue::String(mode_str) = value {
+                    self.crop_mode = match mode_str.as_str() {
+                        "Free" => CropMode::Free,
+                        "Square" => CropMode::Square,
+                        "16:9" => CropMode::FixedRatio(16, 9),
+                        "4:3" => CropMode::FixedRatio(4, 3),
+                        "3:2" => CropMode::FixedRatio(3, 2),
+                        _ => CropMode::Free,
+                    };
+
+                    // Update aspect ratio constraint
+                    self.aspect_ratio_constraint = match self.crop_mode {
+                        CropMode::Free => None,
+                        CropMode::Square => Some(1.0),
+                        CropMode::FixedRatio(w, h) => Some(w as f32 / h as f32),
+                    };
+                }
+            }
+            "show_preview" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.show_preview = enabled;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "crop_mode" => Some(ToolOptionValue::String(self.crop_mode.to_string())),
+            "show_preview" => Some(ToolOptionValue::Bool(self.show_preview)),
+            _ => None,
+        }
+    }
+}
+
+// Crop tool tests
+#[cfg(test)]
+mod crop_tool_tests {
+    use super::*;
+    use psoc_core::{Document, Point};
+
+    #[test]
+    fn test_crop_tool_creation() {
+        let tool = CropTool::new();
+        assert_eq!(tool.id(), "crop");
+        assert_eq!(tool.name(), "Crop Tool");
+        assert!(!tool.is_cropping);
+        assert!(tool.show_preview);
+        assert!(matches!(tool.crop_mode, CropMode::Free));
+    }
+
+    #[test]
+    fn test_crop_tool_options() {
+        let tool = CropTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 2);
+
+        let crop_mode_option = &options[0];
+        assert_eq!(crop_mode_option.name, "crop_mode");
+        assert_eq!(crop_mode_option.display_name, "Crop Mode");
+
+        let preview_option = &options[1];
+        assert_eq!(preview_option.name, "show_preview");
+        assert_eq!(preview_option.display_name, "Show Preview");
+    }
+
+    #[test]
+    fn test_crop_tool_set_options() {
+        let mut tool = CropTool::new();
+
+        // Test crop mode setting
+        tool.set_option("crop_mode", ToolOptionValue::String("Square".to_string()))
+            .unwrap();
+        assert!(matches!(tool.crop_mode, CropMode::Square));
+        assert_eq!(tool.aspect_ratio_constraint, Some(1.0));
+
+        tool.set_option("crop_mode", ToolOptionValue::String("16:9".to_string()))
+            .unwrap();
+        assert!(matches!(tool.crop_mode, CropMode::FixedRatio(16, 9)));
+        assert_eq!(tool.aspect_ratio_constraint, Some(16.0 / 9.0));
+
+        // Test preview setting
+        tool.set_option("show_preview", ToolOptionValue::Bool(false))
+            .unwrap();
+        assert!(!tool.show_preview);
+    }
+
+    #[test]
+    fn test_crop_tool_get_options() {
+        let tool = CropTool::new();
+
+        let crop_mode = tool.get_option("crop_mode").unwrap();
+        assert_eq!(crop_mode, ToolOptionValue::String("Free".to_string()));
+
+        let show_preview = tool.get_option("show_preview").unwrap();
+        assert_eq!(show_preview, ToolOptionValue::Bool(true));
+
+        assert!(tool.get_option("invalid_option").is_none());
+    }
+
+    #[test]
+    fn test_crop_mode_display() {
+        assert_eq!(CropMode::Free.to_string(), "Free");
+        assert_eq!(CropMode::Square.to_string(), "Square");
+        assert_eq!(CropMode::FixedRatio(16, 9).to_string(), "16:9");
+        assert_eq!(CropMode::FixedRatio(4, 3).to_string(), "4:3");
+    }
+
+    #[test]
+    fn test_crop_tool_constrained_rect() {
+        let mut tool = CropTool::new();
+        let start = Point::new(10.0, 10.0);
+        let end = Point::new(50.0, 30.0);
+
+        // Free mode - no constraint
+        let (constrained_start, constrained_end) = tool.calculate_constrained_rect(start, end);
+        assert_eq!(constrained_start, start);
+        assert_eq!(constrained_end, end);
+
+        // Square mode - should constrain to square
+        tool.crop_mode = CropMode::Square;
+        let (constrained_start, constrained_end) = tool.calculate_constrained_rect(start, end);
+        assert_eq!(constrained_start, start);
+        // Should be square with smaller dimension
+        let _expected_size = 20.0; // min(40, 20)
+        assert_eq!(constrained_end, Point::new(30.0, 30.0));
+    }
+
+    #[test]
+    fn test_crop_tool_event_handling() {
+        let mut tool = CropTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Test mouse press
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(10.0, 10.0),
+            button: super::super::tool_trait::MouseButton::Left,
+            modifiers: super::super::tool_trait::KeyModifiers::default(),
+        };
+
+        tool.handle_event(press_event, &mut document, &mut state)
+            .unwrap();
+        assert!(tool.is_cropping);
+        assert_eq!(tool.crop_start, Some(Point::new(10.0, 10.0)));
+        assert!(state.is_active);
+
+        // Test mouse drag
+        let drag_event = ToolEvent::MouseDragged {
+            position: Point::new(50.0, 30.0),
+            button: super::super::tool_trait::MouseButton::Left,
+            modifiers: super::super::tool_trait::KeyModifiers::default(),
+        };
+
+        tool.handle_event(drag_event, &mut document, &mut state)
+            .unwrap();
+        assert_eq!(tool.crop_end, Some(Point::new(50.0, 30.0)));
+
+        // Test mouse release
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(50.0, 30.0),
+            button: super::super::tool_trait::MouseButton::Left,
+            modifiers: super::super::tool_trait::KeyModifiers::default(),
+        };
+
+        tool.handle_event(release_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!tool.is_cropping);
+        assert!(!state.is_active);
+        assert_eq!(tool.crop_start, None);
+        assert_eq!(tool.crop_end, None);
+    }
+
+    #[test]
+    fn test_crop_tool_escape_cancel() {
+        let mut tool = CropTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Start cropping
+        tool.crop_start = Some(Point::new(10.0, 10.0));
+        tool.is_cropping = true;
+        state.is_active = true;
+
+        // Press escape
+        let escape_event = ToolEvent::KeyPressed {
+            key: Key::Escape,
+            modifiers: super::super::tool_trait::KeyModifiers::default(),
+        };
+
+        tool.handle_event(escape_event, &mut document, &mut state)
+            .unwrap();
+        assert!(!tool.is_cropping);
+        assert!(!state.is_active);
+        assert_eq!(tool.crop_start, None);
+        assert_eq!(tool.crop_end, None);
     }
 }

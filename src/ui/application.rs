@@ -58,6 +58,7 @@ pub struct PsocApp {
     /// Tool manager for handling editing tools
     tool_manager: ToolManager,
     /// Shortcut manager for keyboard shortcuts
+    #[allow(dead_code)]
     shortcut_manager: ShortcutManager,
 }
 
@@ -465,7 +466,7 @@ impl PsocApp {
 
         iced::application(PsocApp::title, PsocApp::update, PsocApp::view)
             .subscription(PsocApp::subscription)
-            .run_with(|| PsocApp::new())
+            .run_with(PsocApp::new)
             .map_err(|e| {
                 error!("Failed to run GUI application: {}", e);
                 PsocError::gui(format!("GUI application error: {}", e))
@@ -939,7 +940,7 @@ impl PsocApp {
     fn canvas_to_image_coordinates(&self, canvas_x: f32, canvas_y: f32) -> Option<(u32, u32)> {
         // Get image dimensions
         let (img_width, img_height) = if let Some(ref document) = self.state.current_document {
-            (document.size.width as f32, document.size.height as f32)
+            (document.size.width, document.size.height)
         } else if let Some(ref image) = self.state.current_image {
             (image.width() as f32, image.height() as f32)
         } else {
@@ -1142,6 +1143,11 @@ impl PsocApp {
                 Message::ToolChanged(ToolType::Gradient),
                 self.state.current_tool == ToolType::Gradient,
             ),
+            (
+                Icon::Crop,
+                Message::ToolChanged(ToolType::Crop),
+                self.state.current_tool == ToolType::Crop,
+            ),
             // Shape tools
             (
                 Icon::Rectangle,
@@ -1208,6 +1214,11 @@ impl PsocApp {
                 Icon::Gradient,
                 Message::ToolChanged(ToolType::Gradient),
                 self.state.current_tool == ToolType::Gradient,
+            ),
+            (
+                Icon::Crop,
+                Message::ToolChanged(ToolType::Crop),
+                self.state.current_tool == ToolType::Crop,
             ),
             // Shape tools
             (
@@ -1435,6 +1446,7 @@ impl PsocApp {
             ToolType::Transform => "Transform",
             ToolType::Text => "Text",
             ToolType::Gradient => "Gradient",
+            ToolType::Crop => "Crop",
             ToolType::Rectangle => "Rectangle",
             ToolType::Ellipse => "Ellipse",
             ToolType::Line => "Line",

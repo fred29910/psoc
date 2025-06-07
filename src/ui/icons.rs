@@ -35,6 +35,7 @@ pub enum Icon {
     Text,
     Shape,
     Gradient,
+    Crop,
 
     // Shape tools
     Rectangle,
@@ -127,6 +128,7 @@ impl Icon {
             Icon::Text => 'T',
             Icon::Shape => '◇',
             Icon::Gradient => '▦',
+            Icon::Crop => '✂',
 
             // Shape tools
             Icon::Rectangle => '▭',
@@ -229,6 +231,7 @@ impl Icon {
             Icon::Text => "Text",
             Icon::Shape => "Shape",
             Icon::Gradient => "Gradient",
+            Icon::Crop => "Crop",
             Icon::Rectangle => "Rectangle",
             Icon::Ellipse => "Ellipse",
             Icon::Line => "Line",

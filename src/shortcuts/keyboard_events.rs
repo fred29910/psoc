@@ -10,11 +10,9 @@ pub fn iced_key_to_shortcut_key(key: &iced::keyboard::Key) -> Option<ShortcutKey
     match key {
         iced::keyboard::Key::Character(c) => {
             // Convert to lowercase for consistency
-            if let Some(ch) = c.chars().next() {
-                Some(ShortcutKey::Character(ch.to_ascii_lowercase()))
-            } else {
-                None
-            }
+            c.chars()
+                .next()
+                .map(|ch| ShortcutKey::Character(ch.to_ascii_lowercase()))
         }
         iced::keyboard::Key::Named(named_key) => match named_key {
             iced::keyboard::key::Named::Escape => Some(ShortcutKey::Escape),

@@ -66,7 +66,7 @@ impl ApplyTransformCommand {
     }
 
     /// Find layer by ID in document
-    fn find_layer_mut<'a>(document: &'a mut Document, layer_id: Uuid) -> Option<&'a mut Layer> {
+    fn find_layer_mut(document: &mut Document, layer_id: Uuid) -> Option<&mut Layer> {
         document
             .layers
             .iter_mut()
@@ -74,6 +74,7 @@ impl ApplyTransformCommand {
     }
 
     /// Find layer by ID in document (immutable)
+    #[allow(dead_code)]
     fn find_layer(document: &Document, layer_id: Uuid) -> Option<&Layer> {
         document.layers.iter().find(|layer| layer.id == layer_id)
     }
@@ -125,7 +126,7 @@ impl Command for ApplyTransformCommand {
         }
     }
 
-    fn merge_with(&mut self, other: Box<dyn Command>) -> anyhow::Result<()> {
+    fn merge_with(&mut self, _other: Box<dyn Command>) -> anyhow::Result<()> {
         // For simplicity, we'll not implement merging for now
         Err(anyhow::anyhow!("Transform command merging not implemented"))
     }
