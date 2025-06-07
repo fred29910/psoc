@@ -11,6 +11,21 @@ use psoc_core::{HistoryEntry, RgbaPixel};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
+// Type aliases for complex layer information tuples
+
+#[allow(clippy::type_complexity)]
+type LayerInfoSimple<Message> = (
+    String,               // name
+    bool,                 // visible
+    bool,                 // selected
+    f32,                  // opacity
+    psoc_core::BlendMode, // blend_mode
+    String,               // layer_type
+    bool,                 // has_mask
+    Message,              // toggle_visibility
+    Message,              // select_layer
+);
+
 /// Create a modern toolbar with icons and proper spacing
 pub fn toolbar<Message: Clone + 'static>(
     tools: Vec<(Icon, Message, bool)>, // (icon, message, is_active)
@@ -481,6 +496,7 @@ pub fn layer_item<Message: Clone + 'static>(
 }
 
 /// Create an advanced layer item with blend mode and opacity controls
+#[allow(clippy::too_many_arguments)]
 pub fn layer_item_advanced<Message: Clone + 'static>(
     name: String,
     is_visible: bool,
@@ -489,11 +505,9 @@ pub fn layer_item_advanced<Message: Clone + 'static>(
     blend_mode: psoc_core::BlendMode,
     toggle_visibility: Message,
     select_layer: Message,
-    opacity_change_fn: impl Fn(f32) -> Message + 'static,
-    blend_change_fn: impl Fn(psoc_core::BlendMode) -> Message + 'static,
+    _opacity_change: Message,
+    _blend_change: Message,
 ) -> Element<'static, Message> {
-    use iced::widget::slider;
-
     let visibility_icon = if is_visible {
         Icon::LayerVisible
     } else {
@@ -530,21 +544,16 @@ pub fn layer_item_advanced<Message: Clone + 'static>(
                 // Opacity control
                 row![
                     text("Opacity:").size(10.0).width(Length::Fixed(50.0)),
-                    slider(0.0..=1.0, opacity, opacity_change_fn)
-                        .width(Length::Fill)
-                        .step(0.01),
                     text(format!("{:.0}%", opacity * 100.0))
                         .size(10.0)
                         .width(Length::Fixed(35.0)),
                 ]
                 .spacing(4.0)
                 .align_y(iced::alignment::Vertical::Center),
-                // Blend mode control - show current mode and cycle through with buttons
+                // Blend mode control - show current mode
                 row![
                     text("Blend:").size(10.0).width(Length::Fixed(50.0)),
-                    button(text(blend_mode.name()).size(10.0))
-                        .on_press(blend_change_fn(get_next_blend_mode(blend_mode)))
-                        .style(button::secondary),
+                    text(blend_mode.name()).size(10.0),
                 ]
                 .spacing(4.0)
                 .align_y(iced::alignment::Vertical::Center),
@@ -569,51 +578,57 @@ pub fn layer_item_advanced<Message: Clone + 'static>(
     layer_container.into()
 }
 
+/// Parameters for simple layer item
+pub struct LayerItemSimpleParams<Message: Clone + 'static> {
+    pub name: String,
+    pub is_visible: bool,
+    pub is_selected: bool,
+    pub opacity: f32,
+    pub blend_mode: psoc_core::BlendMode,
+    pub layer_type: Option<String>, // For adjustment layers, show the adjustment type
+    pub has_mask: bool,
+    pub toggle_visibility: Message,
+    pub select_layer: Message,
+}
+
 /// Create a simple layer item with blend mode and opacity display (no interactive controls)
+#[allow(clippy::too_many_arguments)]
 pub fn layer_item_simple<Message: Clone + 'static>(
-    name: String,
-    is_visible: bool,
-    is_selected: bool,
-    opacity: f32,
-    blend_mode: psoc_core::BlendMode,
-    layer_type: Option<String>, // For adjustment layers, show the adjustment type
-    has_mask: bool,
-    toggle_visibility: Message,
-    select_layer: Message,
+    params: LayerItemSimpleParams<Message>,
 ) -> Element<'static, Message> {
-    let visibility_icon = if is_visible {
+    let visibility_icon = if params.is_visible {
         Icon::LayerVisible
     } else {
         Icon::LayerHidden
     };
 
     // Create layer name with type indicator for adjustment layers, smart objects, and mask indicator
-    let display_name = if let Some(layer_type_str) = layer_type {
+    let display_name = if let Some(layer_type_str) = params.layer_type {
         let type_indicator = match layer_type_str.as_str() {
             "SmartObject" => "📦",                 // Box emoji for smart objects
             _ => &format!("[{}]", layer_type_str), // Adjustment layers
         };
 
-        if has_mask {
-            format!("{} {} 🎭", name, type_indicator)
+        if params.has_mask {
+            format!("{} {} 🎭", params.name, type_indicator)
         } else {
-            format!("{} {}", name, type_indicator)
+            format!("{} {}", params.name, type_indicator)
         }
-    } else if has_mask {
-        format!("{} 🎭", name)
+    } else if params.has_mask {
+        format!("{} 🎭", params.name)
     } else {
-        name
+        params.name
     };
 
     // Create layer item with selection highlighting
-    let layer_button = if is_selected {
+    let layer_button = if params.is_selected {
         button(text(display_name).size(12.0))
-            .on_press(select_layer)
+            .on_press(params.select_layer)
             .width(Length::Fill)
             .style(button::primary)
     } else {
         button(text(display_name).size(12.0))
-            .on_press(select_layer)
+            .on_press(params.select_layer)
             .width(Length::Fill)
     };
 
@@ -621,29 +636,29 @@ pub fn layer_item_simple<Message: Clone + 'static>(
     let layer_content = column![
         // Top row: visibility and name
         row![
-            simple_icon_button(visibility_icon, toggle_visibility),
+            simple_icon_button(visibility_icon, params.toggle_visibility),
             layer_button,
         ]
         .spacing(8.0)
         .align_y(iced::alignment::Vertical::Center),
         // Properties row (only show if selected)
-        if is_selected {
+        if params.is_selected {
             column![
                 // Opacity display
                 row![
                     text("Opacity:").size(10.0).width(Length::Fixed(50.0)),
-                    text(format!("{:.0}%", opacity * 100.0)).size(10.0),
+                    text(format!("{:.0}%", params.opacity * 100.0)).size(10.0),
                 ]
                 .spacing(4.0)
                 .align_y(iced::alignment::Vertical::Center),
                 // Blend mode display
                 row![
                     text("Blend:").size(10.0).width(Length::Fixed(50.0)),
-                    text(blend_mode.name())
-                        .size(10.0)
-                        .style(|_theme| iced::widget::text::Style {
+                    text(params.blend_mode.name()).size(10.0).style(|_theme| {
+                        iced::widget::text::Style {
                             color: Some(iced::Color::from_rgb(0.3, 0.6, 1.0)),
-                        }),
+                        }
+                    }),
                 ]
                 .spacing(4.0)
                 .align_y(iced::alignment::Vertical::Center),
@@ -656,7 +671,7 @@ pub fn layer_item_simple<Message: Clone + 'static>(
     ]
     .spacing(4.0);
 
-    let layer_container = if is_selected {
+    let layer_container = if params.is_selected {
         container(layer_content)
             .padding(8.0)
             .width(Length::Fill)
@@ -668,29 +683,10 @@ pub fn layer_item_simple<Message: Clone + 'static>(
     layer_container.into()
 }
 
-/// Get the next blend mode in the list (for cycling through modes)
-fn get_next_blend_mode(current: psoc_core::BlendMode) -> psoc_core::BlendMode {
-    let modes = psoc_core::BlendMode::all();
-    let current_index = modes.iter().position(|&mode| mode == current).unwrap_or(0);
-    let next_index = (current_index + 1) % modes.len();
-    modes[next_index]
-}
-
 /// Create an advanced layer panel with controls
+#[allow(clippy::type_complexity)]
 pub fn layer_panel<Message: Clone + 'static>(
-    layers: Vec<(
-        String,
-        bool,
-        bool,
-        f32,
-        psoc_core::BlendMode,
-        Option<String>,
-        bool,
-        Message,
-        Message,
-        Message,
-        Message,
-    )>, // (name, visible, selected, opacity, blend_mode, layer_type, has_mask, toggle_vis, select, opacity_change, blend_change)
+    layers: Vec<LayerInfoSimple<Message>>, // (name, visible, selected, opacity, blend_mode, layer_type, has_mask, toggle_vis, select)
     add_layer: Message,
     delete_layer: Option<Message>,
     duplicate_layer: Option<Message>,
@@ -755,24 +751,22 @@ pub fn layer_panel<Message: Clone + 'static>(
                 has_mask,
                 toggle_visibility,
                 select_layer,
-                _opacity_change,
-                _blend_change,
             ),
         ) in layers.into_iter().enumerate()
         {
             // Calculate the actual layer index (reverse order)
             let _layer_index = layer_count - 1 - index;
-            content.push(layer_item_simple(
+            content.push(layer_item_simple(LayerItemSimpleParams {
                 name,
                 is_visible,
                 is_selected,
                 opacity,
                 blend_mode,
-                layer_type,
+                layer_type: Some(layer_type),
                 has_mask,
                 toggle_visibility,
                 select_layer,
-            ));
+            }));
         }
     }
 
@@ -1004,7 +998,7 @@ impl<Message: Clone + 'static> ToolOptionControl<Message> {
                 step,
                 on_change,
             } => {
-                let slider = slider(min..=max, value, move |v| on_change(v)).step(step);
+                let slider = slider(min..=max, value, on_change).step(step);
 
                 column![
                     row![
@@ -1026,7 +1020,7 @@ impl<Message: Clone + 'static> ToolOptionControl<Message> {
                 max,
                 on_change,
             } => {
-                let slider = slider(min..=max, value, move |v| on_change(v));
+                let slider = slider(min..=max, value, on_change);
 
                 column![
                     row![

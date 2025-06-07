@@ -36,6 +36,20 @@ use crate::{
 
 use psoc_core::{Command, Document, Layer};
 
+// Type alias for complex layer information tuple
+#[allow(clippy::type_complexity)]
+type LayerPanelData = (
+    String,               // name
+    bool,                 // visible
+    bool,                 // selected
+    f32,                  // opacity
+    psoc_core::BlendMode, // blend_mode
+    String,               // layer_type (not Option)
+    bool,                 // has_mask
+    Message,              // toggle_visibility
+    Message,              // select_layer
+);
+
 /// Main GUI application
 #[derive(Debug)]
 pub struct PsocApp {
@@ -458,30 +472,32 @@ impl StatusInfo {
     pub fn from_app_state(state: &AppState) -> Self {
         let image_size = if let Some(ref document) = state.current_document {
             Some((document.size.width as u32, document.size.height as u32))
-        } else if let Some(ref image) = state.current_image {
-            Some((image.width(), image.height()))
         } else {
-            None
+            state
+                .current_image
+                .as_ref()
+                .map(|image| (image.width(), image.height()))
         };
 
         let color_mode = if let Some(ref document) = state.current_document {
             Some(format!("{:?}", document.color_mode))
-        } else if let Some(ref image) = state.current_image {
-            Some(match image.color() {
-                image::ColorType::L8 => "Grayscale 8-bit".to_string(),
-                image::ColorType::La8 => "Grayscale + Alpha 8-bit".to_string(),
-                image::ColorType::Rgb8 => "RGB 8-bit".to_string(),
-                image::ColorType::Rgba8 => "RGBA 8-bit".to_string(),
-                image::ColorType::L16 => "Grayscale 16-bit".to_string(),
-                image::ColorType::La16 => "Grayscale + Alpha 16-bit".to_string(),
-                image::ColorType::Rgb16 => "RGB 16-bit".to_string(),
-                image::ColorType::Rgba16 => "RGBA 16-bit".to_string(),
-                image::ColorType::Rgb32F => "RGB 32-bit Float".to_string(),
-                image::ColorType::Rgba32F => "RGBA 32-bit Float".to_string(),
-                _ => "Unknown".to_string(),
-            })
         } else {
-            None
+            state
+                .current_image
+                .as_ref()
+                .map(|image| match image.color() {
+                    image::ColorType::L8 => "Grayscale 8-bit".to_string(),
+                    image::ColorType::La8 => "Grayscale + Alpha 8-bit".to_string(),
+                    image::ColorType::Rgb8 => "RGB 8-bit".to_string(),
+                    image::ColorType::Rgba8 => "RGBA 8-bit".to_string(),
+                    image::ColorType::L16 => "Grayscale 16-bit".to_string(),
+                    image::ColorType::La16 => "Grayscale + Alpha 16-bit".to_string(),
+                    image::ColorType::Rgb16 => "RGB 16-bit".to_string(),
+                    image::ColorType::Rgba16 => "RGBA 16-bit".to_string(),
+                    image::ColorType::Rgb32F => "RGB 32-bit Float".to_string(),
+                    image::ColorType::Rgba32F => "RGBA 32-bit Float".to_string(),
+                    _ => "Unknown".to_string(),
+                })
         };
 
         let document_status = if state.document_open {
@@ -1777,19 +1793,7 @@ impl PsocApp {
     fn create_layers_content(&self) -> Vec<Element<'static, Message>> {
         if let Some(ref document) = self.state.current_document {
             // Create layer data for the panel
-            let layers: Vec<(
-                String,
-                bool,
-                bool,
-                f32,
-                psoc_core::BlendMode,
-                Option<String>,
-                bool,
-                Message,
-                Message,
-                Message,
-                Message,
-            )> = document
+            let layers: Vec<LayerPanelData> = document
                 .layers
                 .iter()
                 .enumerate()
@@ -1799,9 +1803,9 @@ impl PsocApp {
                     let layer_type = match &layer.layer_type {
                         psoc_core::LayerType::Adjustment {
                             adjustment_type, ..
-                        } => Some(adjustment_type.clone()),
-                        psoc_core::LayerType::SmartObject { .. } => Some("SmartObject".to_string()),
-                        _ => None,
+                        } => adjustment_type.clone(),
+                        psoc_core::LayerType::SmartObject { .. } => "SmartObject".to_string(),
+                        _ => "Normal".to_string(),
                     };
                     (
                         layer.name.clone(),
@@ -1813,8 +1817,6 @@ impl PsocApp {
                         layer.has_mask(),
                         Message::Layer(LayerMessage::ToggleLayerVisibility(index)),
                         Message::Layer(LayerMessage::SelectLayer(index)),
-                        Message::Layer(LayerMessage::ChangeLayerOpacity(index, layer.opacity)),
-                        Message::Layer(LayerMessage::ChangeLayerBlendMode(index, layer.blend_mode)),
                     )
                 })
                 .collect();
@@ -2141,14 +2143,12 @@ impl PsocApp {
                 if let Some(layer) = document.layers.get_mut(index) {
                     if layer.has_mask() {
                         self.error_message = Some("Layer already has a mask".to_string());
+                    } else if let Err(e) = layer.create_mask(width, height) {
+                        self.error_message = Some(format!("Failed to create mask: {}", e));
                     } else {
-                        if let Err(e) = layer.create_mask(width, height) {
-                            self.error_message = Some(format!("Failed to create mask: {}", e));
-                        } else {
-                            document.mark_dirty();
-                            self.canvas.set_document(document.clone());
-                            self.error_message = None;
-                        }
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
                     }
                 } else {
                     self.error_message = Some("Layer index out of bounds".to_string());

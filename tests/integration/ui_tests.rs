@@ -15,9 +15,10 @@ fn test_app_state_creation() {
 
 #[test]
 fn test_app_state_tool_changes() {
-    let mut state = AppState::default();
-
-    state.current_tool = ToolType::Brush;
+    let mut state = AppState {
+        current_tool: ToolType::Brush,
+        ..Default::default()
+    };
     assert_eq!(state.current_tool, ToolType::Brush);
 
     state.current_tool = ToolType::Eraser;
@@ -29,10 +30,12 @@ fn test_app_state_tool_changes() {
 
 #[test]
 fn test_app_state_zoom_operations() {
-    let mut state = AppState::default();
+    let mut state = AppState {
+        zoom_level: 1.0,
+        ..Default::default()
+    };
 
     // Test zoom in
-    state.zoom_level = 1.0;
     let new_zoom = (state.zoom_level * 1.2).min(10.0);
     state.zoom_level = new_zoom;
     assert!((state.zoom_level - 1.2).abs() < f32::EPSILON);
@@ -57,10 +60,12 @@ fn test_app_state_zoom_operations() {
 
 #[test]
 fn test_app_state_pan_operations() {
-    let mut state = AppState::default();
+    let mut state = AppState {
+        pan_offset: (0.0, 0.0),
+        ..Default::default()
+    };
 
     // Test panning
-    state.pan_offset = (0.0, 0.0);
     state.pan_offset.0 += 10.0;
     state.pan_offset.1 += 5.0;
     assert_eq!(state.pan_offset, (10.0, 5.0));
@@ -138,8 +143,8 @@ mod canvas_tests {
     #[test]
     fn test_canvas_message_creation() {
         let mouse_moved = CanvasMessage::MouseMoved { x: 10.0, y: 20.0 };
-        let mouse_pressed = CanvasMessage::MousePressed { x: 15.0, y: 25.0 };
-        let mouse_released = CanvasMessage::MouseReleased { x: 20.0, y: 30.0 };
+        let _mouse_pressed = CanvasMessage::MousePressed { x: 15.0, y: 25.0 };
+        let _mouse_released = CanvasMessage::MouseReleased { x: 20.0, y: 30.0 };
         let scrolled = CanvasMessage::Scrolled {
             delta_x: 5.0,
             delta_y: -3.0,
@@ -233,14 +238,14 @@ mod layer_panel_tests {
     #[test]
     fn test_layer_message_creation() {
         // Test that layer messages can be created with different parameters
-        let add_empty = LayerMessage::AddEmptyLayer;
+        let _add_empty = LayerMessage::AddEmptyLayer;
         let delete_layer = LayerMessage::DeleteLayer(0);
-        let duplicate_layer = LayerMessage::DuplicateLayer(1);
-        let select_layer = LayerMessage::SelectLayer(2);
-        let toggle_visibility = LayerMessage::ToggleLayerVisibility(0);
+        let _duplicate_layer = LayerMessage::DuplicateLayer(1);
+        let _select_layer = LayerMessage::SelectLayer(2);
+        let _toggle_visibility = LayerMessage::ToggleLayerVisibility(0);
         let change_opacity = LayerMessage::ChangeLayerOpacity(1, 0.75);
-        let move_up = LayerMessage::MoveLayerUp(1);
-        let move_down = LayerMessage::MoveLayerDown(0);
+        let _move_up = LayerMessage::MoveLayerUp(1);
+        let _move_down = LayerMessage::MoveLayerDown(0);
         let rename = LayerMessage::RenameLayer(0, "New Name".to_string());
 
         // Test that messages contain expected data

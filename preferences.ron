@@ -1,6 +1,6 @@
 (
     interface: (
-        theme: Dark,
+        theme: Light,
         language: English,
         ui_scale: 1.0,
         font_size: 12,
@@ -10,7 +10,7 @@
         show_status_bar: true,
     ),
     performance: (
-        memory_limit: 2048,
+        memory_limit: 4096,
         cache_size: 512,
         worker_threads: 8,
         gpu_acceleration: true,

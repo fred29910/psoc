@@ -14,7 +14,7 @@ use crate::i18n::{Language, LocalizationManager};
 use crate::ui::theme::{spacing, PsocTheme};
 
 /// User preferences structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserPreferences {
     /// Interface preferences
     pub interface: InterfacePreferences,
@@ -98,17 +98,6 @@ pub struct AdvancedPreferences {
     pub crash_reporting: bool,
     /// Enable telemetry
     pub telemetry: bool,
-}
-
-impl Default for UserPreferences {
-    fn default() -> Self {
-        Self {
-            interface: InterfacePreferences::default(),
-            performance: PerformancePreferences::default(),
-            defaults: DefaultPreferences::default(),
-            advanced: AdvancedPreferences::default(),
-        }
-    }
 }
 
 impl Default for InterfacePreferences {

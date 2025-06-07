@@ -4,8 +4,7 @@
 //! including loading and saving images in various formats.
 
 use image::{DynamicImage, ImageBuffer, Rgb};
-use psoc::file_io::{can_export, is_supported_import_extension, FileManager};
-use std::path::Path;
+use psoc::file_io::{is_supported_import_extension, FileManager};
 use tempfile::tempdir;
 
 #[tokio::main]
