@@ -3,10 +3,12 @@
 //! This module defines the layer system for the PSOC image editor, including
 //! layer types, blend modes, and layer operations.
 
-use crate::geometry::{Point, Rect, Transform};
+use crate::geometry::{Point, Rect, Size, Transform};
 use crate::pixel::{PixelData, RgbaPixel};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+// use std::collections::HashMap; // Commented out - not currently used
+use std::path::PathBuf;
 use uuid::Uuid;
 
 /// Layer blend modes
@@ -419,6 +421,76 @@ impl BlendMode {
     }
 }
 
+/// Smart object content type
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SmartObjectContentType {
+    /// Embedded image file
+    EmbeddedImage {
+        /// Original file path (for reference)
+        original_path: Option<PathBuf>,
+        /// Embedded image data
+        image_data: Vec<u8>,
+        /// Image format (png, jpg, etc.)
+        format: String,
+    },
+    /// Linked image file
+    LinkedImage {
+        /// Path to the linked file
+        file_path: PathBuf,
+        /// Last modification time for update detection
+        last_modified: Option<std::time::SystemTime>,
+    },
+    /// Embedded document (nested PSOC project)
+    EmbeddedDocument {
+        /// Serialized document data
+        document_data: Vec<u8>,
+    },
+}
+
+/// Smart transformation parameters for non-destructive editing
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SmartTransform {
+    /// Scale factors (x, y)
+    pub scale: (f32, f32),
+    /// Rotation angle in radians
+    pub rotation: f32,
+    /// Translation offset
+    pub translation: Point,
+    /// Whether to maintain aspect ratio
+    pub maintain_aspect_ratio: bool,
+    /// Interpolation quality for transformations
+    pub interpolation_quality: InterpolationQuality,
+}
+
+impl Default for SmartTransform {
+    fn default() -> Self {
+        Self {
+            scale: (1.0, 1.0),
+            rotation: 0.0,
+            translation: Point::origin(),
+            maintain_aspect_ratio: true,
+            interpolation_quality: InterpolationQuality::High,
+        }
+    }
+}
+
+/// Interpolation quality for smart object transformations
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InterpolationQuality {
+    /// Nearest neighbor (fastest, lowest quality)
+    Nearest,
+    /// Linear interpolation (balanced)
+    Linear,
+    /// High quality interpolation (slowest, best quality)
+    High,
+}
+
+impl Default for InterpolationQuality {
+    fn default() -> Self {
+        Self::High
+    }
+}
+
 /// Layer type enumeration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LayerType {
@@ -442,6 +514,17 @@ pub enum LayerType {
     Adjustment {
         adjustment_type: String,
         parameters: std::collections::HashMap<String, f32>,
+    },
+    /// Smart object layer
+    SmartObject {
+        /// Source content type
+        content_type: SmartObjectContentType,
+        /// Original dimensions before any transformations
+        original_size: Size,
+        /// Non-destructive transformation parameters
+        smart_transform: SmartTransform,
+        /// Whether the content has been modified externally
+        needs_update: bool,
     },
 }
 
@@ -557,6 +640,42 @@ impl Layer {
             offset: Point::origin(),
             transform: Transform::identity(),
             bounds: Rect::new(0.0, 0.0, 0.0, 0.0), // Adjustment layers have no bounds
+            locked: false,
+            mask: None,
+        }
+    }
+
+    /// Create a new smart object layer
+    pub fn new_smart_object(
+        name: String,
+        content_type: SmartObjectContentType,
+        original_size: Size,
+        position: Point,
+    ) -> Self {
+        let id = Uuid::new_v4();
+        let bounds = Rect::new(
+            position.x,
+            position.y,
+            original_size.width,
+            original_size.height,
+        );
+
+        Self {
+            id,
+            name,
+            layer_type: LayerType::SmartObject {
+                content_type,
+                original_size,
+                smart_transform: SmartTransform::default(),
+                needs_update: false,
+            },
+            pixel_data: None, // Smart objects generate pixel data on demand
+            visible: true,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            offset: position,
+            transform: Transform::identity(),
+            bounds,
             locked: false,
             mask: None,
         }
@@ -742,6 +861,90 @@ impl Layer {
     pub fn document_bounds(&self) -> Rect {
         self.transform
             .transform_rect(self.bounds.translate(self.offset.x, self.offset.y))
+    }
+
+    /// Check if this is a smart object layer
+    pub fn is_smart_object(&self) -> bool {
+        matches!(self.layer_type, LayerType::SmartObject { .. })
+    }
+
+    /// Get smart object content type (if this is a smart object)
+    pub fn smart_object_content_type(&self) -> Option<&SmartObjectContentType> {
+        if let LayerType::SmartObject { content_type, .. } = &self.layer_type {
+            Some(content_type)
+        } else {
+            None
+        }
+    }
+
+    /// Get smart object original size (if this is a smart object)
+    pub fn smart_object_original_size(&self) -> Option<Size> {
+        if let LayerType::SmartObject { original_size, .. } = &self.layer_type {
+            Some(*original_size)
+        } else {
+            None
+        }
+    }
+
+    /// Get smart object transform parameters (if this is a smart object)
+    pub fn smart_object_transform(&self) -> Option<&SmartTransform> {
+        if let LayerType::SmartObject {
+            smart_transform, ..
+        } = &self.layer_type
+        {
+            Some(smart_transform)
+        } else {
+            None
+        }
+    }
+
+    /// Check if smart object needs update (if this is a smart object)
+    pub fn smart_object_needs_update(&self) -> bool {
+        if let LayerType::SmartObject { needs_update, .. } = &self.layer_type {
+            *needs_update
+        } else {
+            false
+        }
+    }
+
+    /// Mark smart object as needing update
+    pub fn mark_smart_object_for_update(&mut self) {
+        if let LayerType::SmartObject { needs_update, .. } = &mut self.layer_type {
+            *needs_update = true;
+        }
+    }
+
+    /// Clear smart object update flag
+    pub fn clear_smart_object_update_flag(&mut self) {
+        if let LayerType::SmartObject { needs_update, .. } = &mut self.layer_type {
+            *needs_update = false;
+        }
+    }
+
+    /// Update smart object transform parameters
+    pub fn update_smart_object_transform(&mut self, new_transform: SmartTransform) -> Result<()> {
+        if let LayerType::SmartObject {
+            smart_transform, ..
+        } = &mut self.layer_type
+        {
+            *smart_transform = new_transform;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer is not a smart object"))
+        }
+    }
+
+    /// Reset smart object transform to default
+    pub fn reset_smart_object_transform(&mut self) -> Result<()> {
+        if let LayerType::SmartObject {
+            smart_transform, ..
+        } = &mut self.layer_type
+        {
+            *smart_transform = SmartTransform::default();
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer is not a smart object"))
+        }
     }
 }
 

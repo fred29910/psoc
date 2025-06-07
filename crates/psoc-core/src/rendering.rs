@@ -3,7 +3,10 @@
 //! This module provides high-performance rendering capabilities for the PSOC image editor.
 //! It handles layer composition, blend mode application, and optimized rendering pipelines.
 
-use crate::{adjustment::AdjustmentRegistry, Document, Layer, LayerType, PixelData};
+use crate::{
+    adjustment::AdjustmentRegistry, geometry::Size, smart_object::SmartObjectManager, Document,
+    Layer, LayerType, PixelData,
+};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -18,6 +21,8 @@ pub struct RenderEngine {
     tile_size: u32,
     /// Adjustment registry for applying adjustment layers
     adjustment_registry: AdjustmentRegistry,
+    /// Smart object manager for handling embedded content
+    smart_object_manager: SmartObjectManager,
 }
 
 impl Default for RenderEngine {
@@ -36,6 +41,7 @@ impl RenderEngine {
             parallel_enabled: true,
             tile_size: 64,
             adjustment_registry,
+            smart_object_manager: SmartObjectManager::new(),
         }
     }
 
@@ -48,12 +54,13 @@ impl RenderEngine {
             parallel_enabled,
             tile_size: tile_size.max(16), // Minimum tile size
             adjustment_registry,
+            smart_object_manager: SmartObjectManager::new(),
         }
     }
 
     /// Render document to a single flattened image
     #[instrument(skip(self, document))]
-    pub fn render_document(&self, document: &Document) -> Result<PixelData> {
+    pub fn render_document(&mut self, document: &Document) -> Result<PixelData> {
         debug!(
             "Rendering document: {}x{} with {} layers",
             document.size.width,
@@ -81,18 +88,37 @@ impl RenderEngine {
                 continue;
             }
 
-            // Handle adjustment layers
-            if let LayerType::Adjustment {
-                adjustment_type,
-                parameters,
-            } = &layer.layer_type
-            {
-                self.apply_adjustment_layer(&mut result, layer, adjustment_type, parameters)?;
-                continue;
-            }
-
-            if let Some(layer_data) = &layer.pixel_data {
-                self.composite_layer(&mut result, layer, layer_data)?;
+            match &layer.layer_type {
+                // Handle adjustment layers
+                LayerType::Adjustment {
+                    adjustment_type,
+                    parameters,
+                } => {
+                    self.apply_adjustment_layer(&mut result, layer, adjustment_type, parameters)?;
+                    continue;
+                }
+                // Handle smart object layers
+                LayerType::SmartObject {
+                    content_type,
+                    original_size,
+                    smart_transform,
+                    ..
+                } => {
+                    let smart_object_data = self.render_smart_object_layer(
+                        content_type,
+                        *original_size,
+                        smart_transform,
+                        Some(Size::new(document.size.width, document.size.height)),
+                    )?;
+                    self.composite_layer(&mut result, layer, &smart_object_data)?;
+                    continue;
+                }
+                // Handle other layer types with pixel data
+                _ => {
+                    if let Some(layer_data) = &layer.pixel_data {
+                        self.composite_layer(&mut result, layer, layer_data)?;
+                    }
+                }
             }
         }
 
@@ -410,6 +436,41 @@ impl RenderEngine {
         }
 
         Ok(())
+    }
+
+    /// Render a smart object layer
+    #[instrument(skip(self, content_type, smart_transform))]
+    fn render_smart_object_layer(
+        &mut self,
+        content_type: &crate::layer::SmartObjectContentType,
+        original_size: Size,
+        smart_transform: &crate::layer::SmartTransform,
+        target_size: Option<Size>,
+    ) -> Result<PixelData> {
+        trace!(
+            "Rendering smart object with original size {}x{} and transform scale ({}, {})",
+            original_size.width,
+            original_size.height,
+            smart_transform.scale.0,
+            smart_transform.scale.1
+        );
+
+        self.smart_object_manager.render_smart_object(
+            content_type,
+            original_size,
+            smart_transform,
+            target_size,
+        )
+    }
+
+    /// Get mutable access to smart object manager for cache management
+    pub fn smart_object_manager_mut(&mut self) -> &mut SmartObjectManager {
+        &mut self.smart_object_manager
+    }
+
+    /// Get read-only access to smart object manager
+    pub fn smart_object_manager(&self) -> &SmartObjectManager {
+        &self.smart_object_manager
     }
 }
 

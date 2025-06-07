@@ -167,6 +167,8 @@ pub enum Message {
     ColorPalette(ColorPaletteMessage),
     /// Show color palette dialog
     ShowColorPalette,
+    /// Create smart object from file
+    CreateSmartObject,
     /// Layer-related messages
     Layer(LayerMessage),
     /// Undo the last operation
@@ -233,6 +235,14 @@ pub enum LayerMessage {
     ClearLayerMask(usize),
     /// Fill layer mask (fill with white)
     FillLayerMask(usize),
+    /// Create smart object from image file
+    CreateSmartObjectFromImage(std::path::PathBuf, bool), // path, embed_content
+    /// Replace smart object content
+    ReplaceSmartObjectContent(usize, std::path::PathBuf), // layer_index, new_path
+    /// Update smart object transform
+    UpdateSmartObjectTransform(usize, psoc_core::layer::SmartTransform), // layer_index, transform
+    /// Reset smart object transform
+    ResetSmartObjectTransform(usize), // layer_index
 }
 
 /// Canvas-specific messages
@@ -765,6 +775,38 @@ impl PsocApp {
                 info!("Showing color palette dialog");
                 self.show_color_palette();
             }
+            Message::CreateSmartObject => {
+                info!("Creating smart object from file");
+                #[cfg(feature = "gui")]
+                {
+                    return Task::perform(
+                        async {
+                            rfd::AsyncFileDialog::new()
+                                .add_filter(
+                                    "Image Files",
+                                    &["png", "jpg", "jpeg", "bmp", "tiff", "webp"],
+                                )
+                                .pick_file()
+                                .await
+                        },
+                        |file_handle| {
+                            if let Some(file) = file_handle {
+                                // For now, default to embedding the content
+                                Message::Layer(LayerMessage::CreateSmartObjectFromImage(
+                                    file.path().to_path_buf(),
+                                    true, // embed_content
+                                ))
+                            } else {
+                                Message::Error("No file selected".to_string())
+                            }
+                        },
+                    );
+                }
+                #[cfg(not(feature = "gui"))]
+                {
+                    self.error_message = Some("File dialogs require GUI feature".to_string());
+                }
+            }
             Message::Layer(layer_msg) => {
                 debug!("Layer message: {:?}", layer_msg);
                 self.handle_layer_message(layer_msg);
@@ -1122,6 +1164,7 @@ impl PsocApp {
             Message::Adjustment(AdjustmentMessage::ShowAddNoise),
             Message::ShowColorPicker,
             Message::ShowColorPalette,
+            Message::CreateSmartObject,
             Message::View(ViewMessage::ToggleRulers),
             Message::View(ViewMessage::ToggleGrid),
             Message::View(ViewMessage::ToggleGuides),
@@ -1690,6 +1733,7 @@ impl PsocApp {
                         psoc_core::LayerType::Adjustment {
                             adjustment_type, ..
                         } => Some(adjustment_type.clone()),
+                        psoc_core::LayerType::SmartObject { .. } => Some("SmartObject".to_string()),
                         _ => None,
                     };
                     (
@@ -2102,6 +2146,28 @@ impl PsocApp {
                 } else {
                     self.error_message = Some("Layer index out of bounds".to_string());
                 }
+            }
+            LayerMessage::CreateSmartObjectFromImage(path, embed_content) => {
+                info!(
+                    "Creating smart object from image: {:?}, embed: {}",
+                    path, embed_content
+                );
+                self.handle_create_smart_object_from_image(path, embed_content);
+            }
+            LayerMessage::ReplaceSmartObjectContent(layer_index, new_path) => {
+                info!(
+                    "Replacing smart object content for layer {}: {:?}",
+                    layer_index, new_path
+                );
+                self.handle_replace_smart_object_content(layer_index, new_path);
+            }
+            LayerMessage::UpdateSmartObjectTransform(layer_index, transform) => {
+                info!("Updating smart object transform for layer {}", layer_index);
+                self.handle_update_smart_object_transform(layer_index, transform);
+            }
+            LayerMessage::ResetSmartObjectTransform(layer_index) => {
+                info!("Resetting smart object transform for layer {}", layer_index);
+                self.handle_reset_smart_object_transform(layer_index);
             }
         }
     }
@@ -3395,6 +3461,183 @@ impl PsocApp {
             GradientEditorMessage::Reset => {
                 self.gradient_editor.update(message);
             }
+        }
+    }
+
+    /// Handle creating a smart object from an image file
+    fn handle_create_smart_object_from_image(
+        &mut self,
+        path: std::path::PathBuf,
+        embed_content: bool,
+    ) {
+        if let Some(document) = &mut self.state.current_document {
+            // Load the image to get its dimensions
+            match image::open(&path) {
+                Ok(img) => {
+                    let original_size =
+                        psoc_core::geometry::Size::new(img.width() as f32, img.height() as f32);
+                    let position = psoc_core::geometry::Point::new(0.0, 0.0);
+
+                    let content_type = if embed_content {
+                        // Read and embed the image data
+                        match std::fs::read(&path) {
+                            Ok(image_data) => {
+                                let format = path
+                                    .extension()
+                                    .and_then(|ext| ext.to_str())
+                                    .unwrap_or("png")
+                                    .to_lowercase();
+
+                                psoc_core::layer::SmartObjectContentType::EmbeddedImage {
+                                    original_path: Some(path.clone()),
+                                    image_data,
+                                    format,
+                                }
+                            }
+                            Err(e) => {
+                                self.error_message =
+                                    Some(format!("Failed to read image file: {}", e));
+                                return;
+                            }
+                        }
+                    } else {
+                        // Create a linked smart object
+                        psoc_core::layer::SmartObjectContentType::LinkedImage {
+                            file_path: path.clone(),
+                            last_modified: std::fs::metadata(&path)
+                                .ok()
+                                .and_then(|m| m.modified().ok()),
+                        }
+                    };
+
+                    let layer_name = path
+                        .file_stem()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("Smart Object")
+                        .to_string();
+
+                    let smart_object_layer = psoc_core::Layer::new_smart_object(
+                        layer_name,
+                        content_type,
+                        original_size,
+                        position,
+                    );
+
+                    document.add_layer(smart_object_layer);
+
+                    // Set the new layer as active
+                    if let Err(e) = document.set_active_layer(document.layer_count() - 1) {
+                        self.error_message = Some(format!("Failed to set active layer: {}", e));
+                    } else {
+                        // Update canvas with new document state
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to load image: {}", e));
+                }
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Handle replacing smart object content
+    fn handle_replace_smart_object_content(
+        &mut self,
+        layer_index: usize,
+        new_path: std::path::PathBuf,
+    ) {
+        if let Some(document) = &mut self.state.current_document {
+            if let Some(layer) = document.layers.get_mut(layer_index) {
+                if layer.is_smart_object() {
+                    // Load the new image to get its dimensions
+                    match image::open(&new_path) {
+                        Ok(img) => {
+                            let new_original_size = psoc_core::geometry::Size::new(
+                                img.width() as f32,
+                                img.height() as f32,
+                            );
+
+                            // Create new content type (always linked for replacement)
+                            let new_content_type =
+                                psoc_core::layer::SmartObjectContentType::LinkedImage {
+                                    file_path: new_path.clone(),
+                                    last_modified: std::fs::metadata(&new_path)
+                                        .ok()
+                                        .and_then(|m| m.modified().ok()),
+                                };
+
+                            // Update the smart object
+                            if let psoc_core::LayerType::SmartObject {
+                                content_type,
+                                original_size,
+                                ..
+                            } = &mut layer.layer_type
+                            {
+                                *content_type = new_content_type;
+                                *original_size = new_original_size;
+                                layer.mark_smart_object_for_update();
+                                document.mark_dirty();
+                                self.canvas.set_document(document.clone());
+                                self.error_message = None;
+                            }
+                        }
+                        Err(e) => {
+                            self.error_message = Some(format!("Failed to load new image: {}", e));
+                        }
+                    }
+                } else {
+                    self.error_message = Some("Layer is not a smart object".to_string());
+                }
+            } else {
+                self.error_message = Some("Layer index out of bounds".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Handle updating smart object transform
+    fn handle_update_smart_object_transform(
+        &mut self,
+        layer_index: usize,
+        transform: psoc_core::layer::SmartTransform,
+    ) {
+        if let Some(document) = &mut self.state.current_document {
+            if let Some(layer) = document.layers.get_mut(layer_index) {
+                if let Err(e) = layer.update_smart_object_transform(transform) {
+                    self.error_message = Some(format!("Failed to update transform: {}", e));
+                } else {
+                    document.mark_dirty();
+                    self.canvas.set_document(document.clone());
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("Layer index out of bounds".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Handle resetting smart object transform
+    fn handle_reset_smart_object_transform(&mut self, layer_index: usize) {
+        if let Some(document) = &mut self.state.current_document {
+            if let Some(layer) = document.layers.get_mut(layer_index) {
+                if let Err(e) = layer.reset_smart_object_transform() {
+                    self.error_message = Some(format!("Failed to reset transform: {}", e));
+                } else {
+                    document.mark_dirty();
+                    self.canvas.set_document(document.clone());
+                    self.error_message = None;
+                }
+            } else {
+                self.error_message = Some("Layer index out of bounds".to_string());
+            }
+        } else {
+            self.error_message = Some("No document open".to_string());
         }
     }
 }

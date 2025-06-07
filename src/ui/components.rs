@@ -73,6 +73,7 @@ pub fn menu_bar<Message: Clone + 'static>(
     add_noise: Message,
     show_color_picker: Message,
     show_color_palette: Message,
+    create_smart_object: Message,
     toggle_rulers: Message,
     toggle_grid: Message,
     toggle_guides: Message,
@@ -192,6 +193,18 @@ pub fn menu_bar<Message: Clone + 'static>(
                     .on_press(show_color_palette)
                     .padding([4.0, 8.0]),
                 ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Layer menu section
+            container(
+                row![button(text("Smart Object").size(12.0).style(|_theme| {
+                    iced::widget::text::Style {
+                        color: Some(iced::Color::WHITE),
+                    }
+                }))
+                .on_press(create_smart_object)
+                .padding([4.0, 8.0]),]
                 .spacing(8.0)
             )
             .padding(8.0),
@@ -573,12 +586,17 @@ pub fn layer_item_simple<Message: Clone + 'static>(
         Icon::LayerHidden
     };
 
-    // Create layer name with type indicator for adjustment layers and mask indicator
-    let display_name = if let Some(adj_type) = layer_type {
+    // Create layer name with type indicator for adjustment layers, smart objects, and mask indicator
+    let display_name = if let Some(layer_type_str) = layer_type {
+        let type_indicator = match layer_type_str.as_str() {
+            "SmartObject" => "📦",                 // Box emoji for smart objects
+            _ => &format!("[{}]", layer_type_str), // Adjustment layers
+        };
+
         if has_mask {
-            format!("{} [{}] 🎭", name, adj_type)
+            format!("{} {} 🎭", name, type_indicator)
         } else {
-            format!("{} [{}]", name, adj_type)
+            format!("{} {}", name, type_indicator)
         }
     } else if has_mask {
         format!("{} 🎭", name)

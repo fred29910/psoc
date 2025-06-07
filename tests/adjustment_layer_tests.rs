@@ -62,7 +62,7 @@ fn test_adjustment_layer_in_document() {
 
 #[test]
 fn test_adjustment_layer_rendering() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 10, 10);
 
     // Add base layer with known color
@@ -89,7 +89,7 @@ fn test_adjustment_layer_rendering() {
 
 #[test]
 fn test_multiple_adjustment_layers() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 10, 10);
 
     // Add base layer
@@ -124,7 +124,7 @@ fn test_multiple_adjustment_layers() {
 
 #[test]
 fn test_adjustment_layer_visibility() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 10, 10);
 
     // Add base layer
@@ -152,7 +152,7 @@ fn test_adjustment_layer_visibility() {
 
 #[test]
 fn test_adjustment_layer_opacity_effect() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 10, 10);
 
     // Add base layer

@@ -12,7 +12,7 @@ fn test_render_engine_creation() {
 
 #[test]
 fn test_document_rendering_empty() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let document = Document::new("Test".to_string(), 100, 100);
 
     let result = engine.render_document(&document);
@@ -26,7 +26,7 @@ fn test_document_rendering_empty() {
 
 #[test]
 fn test_document_rendering_with_layer() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 100, 100);
 
     // Add a red layer
@@ -53,7 +53,7 @@ fn test_document_rendering_with_layer() {
 
 #[test]
 fn test_blend_modes_rendering() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 100, 100);
 
     // Add base layer (blue)
@@ -95,7 +95,7 @@ fn test_blend_modes_rendering() {
 
 #[test]
 fn test_layer_opacity_rendering() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 100, 100);
 
     // Add base layer (white)
@@ -124,7 +124,7 @@ fn test_layer_opacity_rendering() {
 
 #[test]
 fn test_layer_visibility_rendering() {
-    let engine = RenderEngine::new();
+    let mut engine = RenderEngine::new();
     let mut document = Document::new("Test".to_string(), 100, 100);
 
     // Add base layer (white)
