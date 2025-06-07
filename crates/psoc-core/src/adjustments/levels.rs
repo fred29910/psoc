@@ -400,10 +400,10 @@ impl Adjustment for LevelsAdjustment {
     fn set_parameters(&mut self, parameters: serde_json::Value) -> Result<()> {
         // RGB composite parameters
         if let Some(value) = parameters.get("input_black").and_then(|v| v.as_u64()) {
-            self.input_black = (value as u8).min(255);
+            self.input_black = value as u8;
         }
         if let Some(value) = parameters.get("input_white").and_then(|v| v.as_u64()) {
-            self.input_white = (value as u8).min(255);
+            self.input_white = value as u8;
         }
         if let Some(value) = parameters.get("gamma").and_then(|v| v.as_f64()) {
             self.gamma = (value as f32).clamp(0.1, 9.99);

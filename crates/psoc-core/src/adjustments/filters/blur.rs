@@ -301,7 +301,7 @@ impl Adjustment for MotionBlurFilter {
         let dy = angle_rad.sin() * self.distance;
 
         // Number of samples along the motion path
-        let samples = (self.distance.ceil() as usize).max(1).min(50);
+        let samples = (self.distance.ceil() as usize).clamp(1, 50);
 
         for y in 0..height {
             for x in 0..width {

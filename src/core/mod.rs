@@ -5,8 +5,9 @@
 
 // Re-export core types for convenience
 pub use psoc_core::{
-    BlendMode, ColorAdjustment, ColorMode, ColorSpace, Document, DocumentMetadata, HslColor,
-    HsvColor, Layer, LayerType, PixelData, Point, Rect, Resolution, RgbaPixel, Size, Transform,
+    BlendMode, ColorAdjustment, ColorMode, Document, DocumentColorSpace as ColorSpace,
+    DocumentMetadata, HslColor, HsvColor, Layer, LayerType, PixelData, Point, Rect, Resolution,
+    RgbaPixel, Size, Transform,
 };
 
 /// Create a new document with default settings

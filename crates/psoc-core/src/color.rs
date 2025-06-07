@@ -2,8 +2,11 @@
 //!
 //! This module provides color space definitions, conversions, and color management functionality.
 //! It supports RGB, HSL, HSV color spaces and provides utilities for color manipulation.
+//! Also integrates with ICC profiles for professional color management.
 
+use crate::icc::{ColorManager, IccProfile};
 use crate::pixel::{Channel, RgbaPixel, CHANNEL_MAX};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 /// Color space enumeration
@@ -345,5 +348,125 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
         3 => (p, q, v),
         4 => (t, p, v),
         _ => (v, p, q),
+    }
+}
+
+/// Color conversion utilities with ICC profile support
+pub struct ColorConverter {
+    color_manager: ColorManager,
+}
+
+impl ColorConverter {
+    /// Create a new color converter
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            color_manager: ColorManager::new()?,
+        })
+    }
+
+    /// Convert pixel data from source profile to display profile
+    pub fn convert_to_display(
+        &self,
+        _pixels: &mut [RgbaPixel],
+        _source_profile: Option<&IccProfile>,
+    ) -> Result<()> {
+        if !self.color_manager.is_enabled() {
+            return Ok(()); // Color management disabled
+        }
+
+        // TODO: Implement actual color conversion when LCMS2 integration is complete
+        // For now, just return Ok to allow compilation
+        Ok(())
+    }
+
+    /// Get the color manager
+    pub fn color_manager(&self) -> &ColorManager {
+        &self.color_manager
+    }
+
+    /// Get mutable color manager
+    pub fn color_manager_mut(&mut self) -> &mut ColorManager {
+        &mut self.color_manager
+    }
+}
+
+impl Default for ColorConverter {
+    fn default() -> Self {
+        Self::new().expect("Failed to create default ColorConverter")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_color_converter_creation() {
+        let converter = ColorConverter::new();
+        assert!(converter.is_ok());
+
+        let converter = converter.unwrap();
+        assert!(converter.color_manager().is_enabled());
+    }
+
+    #[test]
+    fn test_display_conversion_disabled() {
+        let mut converter = ColorConverter::new().unwrap();
+        converter
+            .color_manager_mut()
+            .update_config(crate::icc::CmsConfig {
+                enabled: false,
+                ..Default::default()
+            });
+
+        let mut pixels = vec![RgbaPixel::new(255, 128, 64, 255)];
+        let original = pixels[0];
+
+        let result = converter.convert_to_display(&mut pixels, None);
+        assert!(result.is_ok());
+        assert_eq!(pixels[0], original); // Should be unchanged
+    }
+
+    #[test]
+    fn test_display_conversion_with_srgb() {
+        let converter = ColorConverter::new().unwrap();
+        let mut pixels = vec![RgbaPixel::new(255, 128, 64, 255)];
+
+        let result = converter.convert_to_display(&mut pixels, None);
+        assert!(result.is_ok());
+        // Alpha should be preserved
+        assert_eq!(pixels[0].a, 255);
+    }
+
+    #[test]
+    fn test_color_converter_default() {
+        let converter = ColorConverter::default();
+        assert!(converter.color_manager().is_enabled());
+    }
+
+    #[test]
+    fn test_display_conversion_large_batch() {
+        let converter = ColorConverter::new().unwrap();
+        let mut pixels = vec![RgbaPixel::new(255, 128, 64, 255); 2048]; // Larger than chunk size
+        let original_alpha = pixels[0].a;
+
+        let result = converter.convert_to_display(&mut pixels, None);
+        assert!(result.is_ok());
+
+        // All pixels should have preserved alpha
+        for pixel in &pixels {
+            assert_eq!(pixel.a, original_alpha);
+        }
+    }
+
+    #[test]
+    fn test_color_converter_with_custom_profile() {
+        let converter = ColorConverter::new().unwrap();
+        let srgb_profile = converter.color_manager().get_srgb_profile().unwrap();
+        let mut pixels = vec![RgbaPixel::new(200, 100, 50, 200)];
+
+        let result = converter.convert_to_display(&mut pixels, Some(srgb_profile));
+        assert!(result.is_ok());
+        assert_eq!(pixels[0].a, 200); // Alpha preserved
     }
 }

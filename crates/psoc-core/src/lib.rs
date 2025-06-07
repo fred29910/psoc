@@ -10,6 +10,7 @@ pub mod color;
 pub mod command;
 pub mod document;
 pub mod geometry;
+pub mod icc;
 pub mod layer;
 pub mod math;
 pub mod pixel;
@@ -19,12 +20,16 @@ pub mod selection;
 // Re-export commonly used types
 pub use adjustment::*;
 pub use adjustments::*;
-pub use color::*;
+pub use color::{ColorAdjustment, ColorConverter, HslColor, HsvColor};
 pub use command::*;
 pub use document::*;
 pub use geometry::*;
+pub use icc::{CmsConfig, ColorManager, IccProfile, RenderingIntent};
 pub use layer::*;
 pub use math::*;
 pub use pixel::*;
 pub use rendering::*;
 pub use selection::*;
+
+// Re-export color space from color module to avoid conflicts
+pub use color::ColorSpace as DocumentColorSpace;
