@@ -67,6 +67,7 @@ impl ToolManager {
         self.register_tool(ToolType::Brush, Box::new(BrushTool::new()));
         self.register_tool(ToolType::Eraser, Box::new(EraserTool::new()));
         self.register_tool(ToolType::Move, Box::new(MoveTool::new()));
+        self.register_tool(ToolType::Transform, Box::new(TransformTool::new()));
     }
 
     /// Register a tool with the manager
@@ -218,7 +219,7 @@ mod tests {
     fn test_tool_manager_creation() {
         let manager = ToolManager::new();
         assert!(manager.active_tool_type.is_some());
-        assert_eq!(manager.available_tools().len(), 4); // Select, Brush, Eraser, Move
+        assert_eq!(manager.available_tools().len(), 5); // Select, Brush, Eraser, Move, Transform
     }
 
     #[test]

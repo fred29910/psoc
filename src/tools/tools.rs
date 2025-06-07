@@ -18,6 +18,7 @@ pub enum ToolType {
     Brush,
     Eraser,
     Move,
+    Transform,
 }
 
 impl std::fmt::Display for ToolType {
@@ -27,6 +28,7 @@ impl std::fmt::Display for ToolType {
             ToolType::Brush => write!(f, "Brush"),
             ToolType::Eraser => write!(f, "Eraser"),
             ToolType::Move => write!(f, "Move"),
+            ToolType::Transform => write!(f, "Transform"),
         }
     }
 }
@@ -1541,5 +1543,570 @@ mod tests {
         // No layers added, so no active layer
         let result = move_tool.move_active_layer(10.0, 20.0, &mut document);
         assert!(result.is_ok()); // Should not fail, just do nothing
+    }
+
+    #[test]
+    fn test_transform_tool_creation() {
+        let transform = TransformTool::new();
+
+        assert_eq!(transform.transform_mode(), TransformMode::Free);
+        assert!(!transform.is_transforming);
+        assert_eq!(
+            transform.current_transform,
+            psoc_core::Transform::identity()
+        );
+        assert!(transform.original_bounds.is_none());
+    }
+
+    #[test]
+    fn test_transform_tool_properties() {
+        let transform = TransformTool::new();
+
+        assert_eq!(transform.id(), "transform");
+        assert_eq!(transform.name(), "Transform Tool");
+        assert_eq!(
+            transform.description(),
+            "Scale, rotate, and flip layers or selections"
+        );
+        assert_eq!(transform.cursor(), ToolCursor::Default);
+    }
+
+    #[test]
+    fn test_transform_mode_setting() {
+        let mut transform = TransformTool::new();
+
+        transform.set_transform_mode(TransformMode::Scale);
+        assert_eq!(transform.transform_mode(), TransformMode::Scale);
+
+        transform.set_transform_mode(TransformMode::Rotate);
+        assert_eq!(transform.transform_mode(), TransformMode::Rotate);
+
+        transform.set_transform_mode(TransformMode::FlipHorizontal);
+        assert_eq!(transform.transform_mode(), TransformMode::FlipHorizontal);
+    }
+
+    #[test]
+    fn test_transform_tool_options() {
+        let transform = TransformTool::new();
+        let options = transform.options();
+
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].name, "mode");
+        assert_eq!(options[0].display_name, "Transform Mode");
+
+        // Test getting option
+        let mode_option = transform.get_option("mode");
+        assert!(mode_option.is_some());
+        if let Some(ToolOptionValue::String(mode)) = mode_option {
+            assert_eq!(mode, "Free");
+        } else {
+            panic!("Expected String option value");
+        }
+    }
+
+    #[test]
+    fn test_transform_tool_set_options() {
+        let mut transform = TransformTool::new();
+
+        // Set scale mode
+        let result = transform.set_option("mode", ToolOptionValue::String("Scale".to_string()));
+        assert!(result.is_ok());
+        assert_eq!(transform.transform_mode(), TransformMode::Scale);
+
+        // Set rotate mode
+        let result = transform.set_option("mode", ToolOptionValue::String("Rotate".to_string()));
+        assert!(result.is_ok());
+        assert_eq!(transform.transform_mode(), TransformMode::Rotate);
+
+        // Set invalid mode (should default to Free)
+        let result = transform.set_option("mode", ToolOptionValue::String("Invalid".to_string()));
+        assert!(result.is_ok());
+        assert_eq!(transform.transform_mode(), TransformMode::Free);
+    }
+
+    #[test]
+    fn test_transform_tool_with_layer() {
+        let mut transform = TransformTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        // Start transformation
+        let result = transform.start_transform(&document);
+        assert!(result.is_ok());
+        assert!(transform.is_transforming);
+        assert!(transform.original_bounds.is_some());
+
+        // Check original bounds
+        if let Some(bounds) = transform.original_bounds {
+            assert_eq!(bounds.width, 50.0);
+            assert_eq!(bounds.height, 50.0);
+        }
+    }
+
+    #[test]
+    fn test_transform_tool_without_layer() {
+        let mut transform = TransformTool::new();
+        let document = Document::new("Test".to_string(), 100, 100);
+
+        // Try to start transformation without active layer
+        let result = transform.start_transform(&document);
+        assert!(result.is_err());
+        assert!(!transform.is_transforming);
+    }
+
+    #[test]
+    fn test_transform_tool_event_handling() {
+        let mut transform = TransformTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        let mut state = ToolState::default();
+
+        // Mouse press should start transformation
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(25.0, 25.0),
+            button: crate::tools::tool_trait::MouseButton::Left,
+            modifiers: crate::tools::tool_trait::KeyModifiers::default(),
+        };
+
+        let result = transform.handle_event(press_event, &mut document, &mut state);
+        assert!(result.is_ok());
+        assert!(transform.is_transforming);
+        assert!(state.is_active);
+
+        // Mouse release should stop active state but keep transforming
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(30.0, 30.0),
+            button: crate::tools::tool_trait::MouseButton::Left,
+            modifiers: crate::tools::tool_trait::KeyModifiers::default(),
+        };
+
+        let result = transform.handle_event(release_event, &mut document, &mut state);
+        assert!(result.is_ok());
+        assert!(transform.is_transforming); // Still transforming
+        assert!(!state.is_active); // But not actively dragging
+
+        // Enter key should commit transformation
+        let enter_event = ToolEvent::KeyPressed {
+            key: crate::tools::tool_trait::Key::Enter,
+            modifiers: crate::tools::tool_trait::KeyModifiers::default(),
+        };
+
+        let result = transform.handle_event(enter_event, &mut document, &mut state);
+        assert!(result.is_ok());
+        assert!(!transform.is_transforming); // Transformation committed
+    }
+
+    #[test]
+    fn test_transform_tool_cancel() {
+        let mut transform = TransformTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
+        document.add_layer(layer);
+        document.set_active_layer(0).unwrap();
+
+        let mut state = ToolState::default();
+
+        // Start transformation
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(25.0, 25.0),
+            button: crate::tools::tool_trait::MouseButton::Left,
+            modifiers: crate::tools::tool_trait::KeyModifiers::default(),
+        };
+
+        let result = transform.handle_event(press_event, &mut document, &mut state);
+        assert!(result.is_ok());
+        assert!(transform.is_transforming);
+
+        // Escape key should cancel transformation
+        let escape_event = ToolEvent::KeyPressed {
+            key: crate::tools::tool_trait::Key::Escape,
+            modifiers: crate::tools::tool_trait::KeyModifiers::default(),
+        };
+
+        let result = transform.handle_event(escape_event, &mut document, &mut state);
+        assert!(result.is_ok());
+        assert!(!transform.is_transforming); // Transformation cancelled
+    }
+}
+
+/// Transform tool for scaling, rotating, and flipping layers
+#[derive(Debug)]
+pub struct TransformTool {
+    /// Current transformation being applied
+    current_transform: psoc_core::Transform,
+    /// Whether we're currently transforming
+    is_transforming: bool,
+    /// Transform mode (scale, rotate, etc.)
+    transform_mode: TransformMode,
+    /// Transform anchor point
+    anchor_point: Point,
+    /// Original bounds of the transform target
+    original_bounds: Option<psoc_core::Rect>,
+    /// Transform handles for UI interaction
+    transform_handles: TransformHandles,
+}
+
+/// Transform modes available
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransformMode {
+    /// Free transform (scale and rotate)
+    Free,
+    /// Scale only
+    Scale,
+    /// Rotate only
+    Rotate,
+    /// Flip horizontal
+    FlipHorizontal,
+    /// Flip vertical
+    FlipVertical,
+}
+
+/// Transform handles for UI interaction
+#[derive(Debug, Clone)]
+pub struct TransformHandles {
+    /// Corner handles for scaling
+    pub corners: [Point; 4],
+    /// Edge handles for scaling
+    pub edges: [Point; 4],
+    /// Rotation handle
+    pub rotation: Point,
+    /// Center handle for moving anchor
+    pub center: Point,
+}
+
+impl TransformTool {
+    pub fn new() -> Self {
+        Self {
+            current_transform: psoc_core::Transform::identity(),
+            is_transforming: false,
+            transform_mode: TransformMode::Free,
+            anchor_point: Point::new(0.0, 0.0),
+            original_bounds: None,
+            transform_handles: TransformHandles::default(),
+        }
+    }
+
+    /// Set the transform mode
+    pub fn set_transform_mode(&mut self, mode: TransformMode) {
+        self.transform_mode = mode;
+    }
+
+    /// Get the current transform mode
+    pub fn transform_mode(&self) -> TransformMode {
+        self.transform_mode
+    }
+
+    /// Start a new transformation
+    fn start_transform(&mut self, document: &Document) -> ToolResult<()> {
+        // Get the bounds of the current selection or active layer
+        if let psoc_core::Selection::Rectangle(rect_selection) = &document.selection {
+            self.original_bounds = Some(rect_selection.bounds());
+            self.anchor_point = rect_selection.bounds().center();
+        } else if let Some(layer) = document.active_layer() {
+            self.original_bounds = Some(layer.bounds);
+            self.anchor_point = layer.bounds.center();
+        } else {
+            return Err(crate::PsocError::Tool {
+                message: "No selection or active layer to transform".to_string(),
+            });
+        }
+
+        self.current_transform = psoc_core::Transform::identity();
+        self.update_transform_handles();
+        self.is_transforming = true;
+
+        Ok(())
+    }
+
+    /// Update transform handles based on current bounds
+    fn update_transform_handles(&mut self) {
+        if let Some(bounds) = self.original_bounds {
+            let transformed_bounds = self.current_transform.transform_rect(bounds);
+
+            // Corner handles
+            self.transform_handles.corners = [
+                transformed_bounds.top_left(),
+                transformed_bounds.top_right(),
+                transformed_bounds.bottom_right(),
+                transformed_bounds.bottom_left(),
+            ];
+
+            // Edge handles (midpoints of edges)
+            self.transform_handles.edges = [
+                Point::new(
+                    (transformed_bounds.x + transformed_bounds.x + transformed_bounds.width) / 2.0,
+                    transformed_bounds.y,
+                ), // Top
+                Point::new(
+                    transformed_bounds.x + transformed_bounds.width,
+                    (transformed_bounds.y + transformed_bounds.y + transformed_bounds.height) / 2.0,
+                ), // Right
+                Point::new(
+                    (transformed_bounds.x + transformed_bounds.x + transformed_bounds.width) / 2.0,
+                    transformed_bounds.y + transformed_bounds.height,
+                ), // Bottom
+                Point::new(
+                    transformed_bounds.x,
+                    (transformed_bounds.y + transformed_bounds.y + transformed_bounds.height) / 2.0,
+                ), // Left
+            ];
+
+            // Rotation handle (above the top edge)
+            self.transform_handles.rotation = Point::new(
+                (transformed_bounds.x + transformed_bounds.x + transformed_bounds.width) / 2.0,
+                transformed_bounds.y - 20.0,
+            );
+
+            // Center handle
+            self.transform_handles.center = transformed_bounds.center();
+        }
+    }
+
+    /// Apply scale transformation
+    fn apply_scale(&mut self, scale_x: f32, scale_y: f32) {
+        let scale_transform = psoc_core::Transform::scale(scale_x, scale_y);
+        self.current_transform = self.current_transform.then(&scale_transform);
+        self.update_transform_handles();
+    }
+
+    /// Apply rotation transformation
+    fn apply_rotation(&mut self, angle: f32) {
+        let rotation_transform = psoc_core::Transform::rotation(angle);
+        self.current_transform = self.current_transform.then(&rotation_transform);
+        self.update_transform_handles();
+    }
+
+    /// Apply flip transformation
+    fn apply_flip(&mut self, horizontal: bool) {
+        let (scale_x, scale_y) = if horizontal { (-1.0, 1.0) } else { (1.0, -1.0) };
+        self.apply_scale(scale_x, scale_y);
+    }
+
+    /// Commit the current transformation
+    fn commit_transform(&mut self, document: &mut Document) -> ToolResult<()> {
+        if !self.is_transforming {
+            return Ok(());
+        }
+
+        // Apply transformation to the target (selection or active layer)
+        if !document.selection.is_select_all() {
+            // TODO: Apply transform to selection content
+            debug!("Applying transform to selection (not yet implemented)");
+        } else if let Some(layer) = document.active_layer_mut() {
+            layer.apply_transform(self.current_transform);
+            document.mark_dirty();
+        }
+
+        self.reset_transform();
+        Ok(())
+    }
+
+    /// Cancel the current transformation
+    fn cancel_transform(&mut self) {
+        self.reset_transform();
+    }
+
+    /// Reset transformation state
+    fn reset_transform(&mut self) {
+        self.current_transform = psoc_core::Transform::identity();
+        self.is_transforming = false;
+        self.original_bounds = None;
+        self.transform_handles = TransformHandles::default();
+    }
+}
+
+impl Default for TransformTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for TransformHandles {
+    fn default() -> Self {
+        let origin = Point::new(0.0, 0.0);
+        Self {
+            corners: [origin; 4],
+            edges: [origin; 4],
+            rotation: origin,
+            center: origin,
+        }
+    }
+}
+
+impl Tool for TransformTool {
+    fn id(&self) -> &'static str {
+        "transform"
+    }
+
+    fn name(&self) -> &'static str {
+        "Transform Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Scale, rotate, and flip layers or selections"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        if self.is_transforming {
+            match self.transform_mode {
+                TransformMode::Scale => ToolCursor::Resize,
+                TransformMode::Rotate => ToolCursor::Crosshair,
+                _ => ToolCursor::Move,
+            }
+        } else {
+            ToolCursor::Default
+        }
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed { position, .. } => {
+                debug!("Transform tool mouse pressed at: {:?}", position);
+
+                if !self.is_transforming {
+                    // Start a new transformation
+                    self.start_transform(document)?;
+                    state.is_active = true;
+                } else {
+                    // Check if clicking on transform handles
+                    // For now, just continue with the transformation
+                    state.is_active = true;
+                }
+
+                state.last_position = Some(position);
+            }
+            ToolEvent::MouseDragged { position, .. } => {
+                if self.is_transforming && state.is_active {
+                    debug!("Transform tool dragging to: {:?}", position);
+
+                    if let Some(last_pos) = state.last_position {
+                        // Calculate transformation based on drag
+                        let dx = position.x - last_pos.x;
+                        let dy = position.y - last_pos.y;
+
+                        match self.transform_mode {
+                            TransformMode::Scale => {
+                                // Simple uniform scaling based on drag distance
+                                let scale_factor = 1.0 + (dx + dy) * 0.01;
+                                self.apply_scale(scale_factor, scale_factor);
+                            }
+                            TransformMode::Rotate => {
+                                // Rotation based on angle from center
+                                if let Some(bounds) = self.original_bounds {
+                                    let center = bounds.center();
+                                    let angle = (position.y - center.y)
+                                        .atan2(position.x - center.x)
+                                        - (last_pos.y - center.y).atan2(last_pos.x - center.x);
+                                    self.apply_rotation(angle);
+                                }
+                            }
+                            TransformMode::Free => {
+                                // Free transform - scale based on drag
+                                let scale_factor = 1.0 + (dx + dy) * 0.01;
+                                self.apply_scale(scale_factor, scale_factor);
+                            }
+                            TransformMode::FlipHorizontal => {
+                                self.apply_flip(true);
+                                self.transform_mode = TransformMode::Free; // Reset to free after flip
+                            }
+                            TransformMode::FlipVertical => {
+                                self.apply_flip(false);
+                                self.transform_mode = TransformMode::Free; // Reset to free after flip
+                            }
+                        }
+                    }
+
+                    state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseReleased { .. } => {
+                if self.is_transforming && state.is_active {
+                    debug!("Transform tool mouse released");
+                    // Keep transformation active until explicitly committed or cancelled
+                    state.is_active = false;
+                }
+            }
+            ToolEvent::KeyPressed { key, .. } => {
+                match key {
+                    super::tool_trait::Key::Enter => {
+                        // Commit transformation
+                        if self.is_transforming {
+                            debug!("Committing transformation");
+                            self.commit_transform(document)?;
+                        }
+                    }
+                    super::tool_trait::Key::Escape => {
+                        // Cancel transformation
+                        if self.is_transforming {
+                            debug!("Cancelling transformation");
+                            self.cancel_transform();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![ToolOption {
+            name: "mode".to_string(),
+            display_name: "Transform Mode".to_string(),
+            description: "Type of transformation to apply".to_string(),
+            option_type: ToolOptionType::Enum(vec![
+                "Free".to_string(),
+                "Scale".to_string(),
+                "Rotate".to_string(),
+                "Flip Horizontal".to_string(),
+                "Flip Vertical".to_string(),
+            ]),
+            default_value: ToolOptionValue::String("Free".to_string()),
+        }]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "mode" => {
+                if let ToolOptionValue::String(mode_str) = value {
+                    self.transform_mode = match mode_str.as_str() {
+                        "Scale" => TransformMode::Scale,
+                        "Rotate" => TransformMode::Rotate,
+                        "Flip Horizontal" => TransformMode::FlipHorizontal,
+                        "Flip Vertical" => TransformMode::FlipVertical,
+                        _ => TransformMode::Free,
+                    };
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "mode" => {
+                let mode_str = match self.transform_mode {
+                    TransformMode::Free => "Free",
+                    TransformMode::Scale => "Scale",
+                    TransformMode::Rotate => "Rotate",
+                    TransformMode::FlipHorizontal => "Flip Horizontal",
+                    TransformMode::FlipVertical => "Flip Vertical",
+                };
+                Some(ToolOptionValue::String(mode_str.to_string()))
+            }
+            _ => None,
+        }
     }
 }

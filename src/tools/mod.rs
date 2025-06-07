@@ -14,4 +14,4 @@ pub mod tools;
 // Re-export commonly used types
 pub use tool_manager::{ToolManager, ToolManagerError};
 pub use tool_trait::{Tool, ToolEvent, ToolResult, ToolState};
-pub use tools::{BrushTool, EraserTool, MoveTool, SelectTool, ToolType};
+pub use tools::{BrushTool, EraserTool, MoveTool, SelectTool, ToolType, TransformTool};

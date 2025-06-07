@@ -754,6 +754,11 @@ impl PsocApp {
                 Message::ToolChanged(ToolType::Move),
                 self.state.current_tool == ToolType::Move,
             ),
+            (
+                Icon::Transform,
+                Message::ToolChanged(ToolType::Transform),
+                self.state.current_tool == ToolType::Transform,
+            ),
         ];
 
         components::toolbar(tools, Message::ZoomIn, Message::ZoomOut, Message::ZoomReset)
@@ -789,6 +794,11 @@ impl PsocApp {
                 Icon::Move,
                 Message::ToolChanged(ToolType::Move),
                 self.state.current_tool == ToolType::Move,
+            ),
+            (
+                Icon::Transform,
+                Message::ToolChanged(ToolType::Transform),
+                self.state.current_tool == ToolType::Transform,
             ),
         ];
 
