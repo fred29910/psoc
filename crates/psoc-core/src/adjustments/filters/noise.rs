@@ -99,7 +99,7 @@ impl AddNoiseFilter {
     fn gaussian_random(&self, state: &mut u32) -> f32 {
         static mut SPARE: Option<f32> = None;
         static mut HAS_SPARE: bool = false;
-        
+
         unsafe {
             if HAS_SPARE {
                 HAS_SPARE = false;
@@ -109,16 +109,16 @@ impl AddNoiseFilter {
 
         let u1 = self.next_random(state);
         let u2 = self.next_random(state);
-        
+
         let mag = self.amount * (-2.0 * u1.ln()).sqrt();
         let z0 = mag * (2.0 * std::f32::consts::PI * u2).cos();
         let z1 = mag * (2.0 * std::f32::consts::PI * u2).sin();
-        
+
         unsafe {
             SPARE = Some(z1);
             HAS_SPARE = true;
         }
-        
+
         z0
     }
 
@@ -134,7 +134,7 @@ impl AddNoiseFilter {
         match self.noise_type {
             NoiseType::Uniform => {
                 let noise_range = self.amount * 255.0;
-                
+
                 if self.monochromatic {
                     let noise = (self.next_random(&mut rng_state) - 0.5) * noise_range;
                     RgbaPixel::new(
@@ -147,7 +147,7 @@ impl AddNoiseFilter {
                     let noise_r = (self.next_random(&mut rng_state) - 0.5) * noise_range;
                     let noise_g = (self.next_random(&mut rng_state) - 0.5) * noise_range;
                     let noise_b = (self.next_random(&mut rng_state) - 0.5) * noise_range;
-                    
+
                     RgbaPixel::new(
                         (pixel.r as f32 + noise_r).clamp(0.0, 255.0) as u8,
                         (pixel.g as f32 + noise_g).clamp(0.0, 255.0) as u8,
@@ -158,7 +158,7 @@ impl AddNoiseFilter {
             }
             NoiseType::Gaussian => {
                 let noise_scale = self.amount * 64.0; // Scale for visible effect
-                
+
                 if self.monochromatic {
                     let noise = self.gaussian_random(&mut rng_state) * noise_scale;
                     RgbaPixel::new(
@@ -171,7 +171,7 @@ impl AddNoiseFilter {
                     let noise_r = self.gaussian_random(&mut rng_state) * noise_scale;
                     let noise_g = self.gaussian_random(&mut rng_state) * noise_scale;
                     let noise_b = self.gaussian_random(&mut rng_state) * noise_scale;
-                    
+
                     RgbaPixel::new(
                         (pixel.r as f32 + noise_r).clamp(0.0, 255.0) as u8,
                         (pixel.g as f32 + noise_g).clamp(0.0, 255.0) as u8,
@@ -183,7 +183,7 @@ impl AddNoiseFilter {
             NoiseType::SaltPepper => {
                 let threshold = self.amount;
                 let rand_val = self.next_random(&mut rng_state);
-                
+
                 if rand_val < threshold / 2.0 {
                     // Salt (white)
                     RgbaPixel::new(255, 255, 255, pixel.a)
@@ -359,7 +359,7 @@ impl Adjustment for ReduceNoiseFilter {
 
         let (width, height) = pixel_data.dimensions();
         let mut result_data = PixelData::new_rgba(width, height);
-        
+
         let kernel_size = (self.strength as usize * 2 + 1).min(9);
         let half_kernel = kernel_size / 2;
 
@@ -375,10 +375,15 @@ impl Adjustment for ReduceNoiseFilter {
                     for kx in 0..kernel_size {
                         let sample_x = x as i32 + kx as i32 - half_kernel as i32;
                         let sample_y = y as i32 + ky as i32 - half_kernel as i32;
-                        
-                        if sample_x >= 0 && sample_x < width as i32 
-                            && sample_y >= 0 && sample_y < height as i32 {
-                            if let Some(pixel) = pixel_data.get_pixel(sample_x as u32, sample_y as u32) {
+
+                        if sample_x >= 0
+                            && sample_x < width as i32
+                            && sample_y >= 0
+                            && sample_y < height as i32
+                        {
+                            if let Some(pixel) =
+                                pixel_data.get_pixel(sample_x as u32, sample_y as u32)
+                            {
                                 r_values.push(pixel.r);
                                 g_values.push(pixel.g);
                                 b_values.push(pixel.b);
@@ -394,21 +399,25 @@ impl Adjustment for ReduceNoiseFilter {
                     g_values.sort_unstable();
                     b_values.sort_unstable();
                     a_values.sort_unstable();
-                    
+
                     let median_idx = r_values.len() / 2;
                     let median_r = r_values[median_idx];
                     let median_g = g_values[median_idx];
                     let median_b = b_values[median_idx];
                     let median_a = a_values[median_idx];
-                    
+
                     // Blend with original based on preserve_details
                     if let Some(original) = pixel_data.get_pixel(x, y) {
                         let blend_factor = 1.0 - self.preserve_details;
                         let result_pixel = RgbaPixel::new(
-                            (original.r as f32 * self.preserve_details + median_r as f32 * blend_factor) as u8,
-                            (original.g as f32 * self.preserve_details + median_g as f32 * blend_factor) as u8,
-                            (original.b as f32 * self.preserve_details + median_b as f32 * blend_factor) as u8,
-                            (original.a as f32 * self.preserve_details + median_a as f32 * blend_factor) as u8,
+                            (original.r as f32 * self.preserve_details
+                                + median_r as f32 * blend_factor) as u8,
+                            (original.g as f32 * self.preserve_details
+                                + median_g as f32 * blend_factor) as u8,
+                            (original.b as f32 * self.preserve_details
+                                + median_b as f32 * blend_factor) as u8,
+                            (original.a as f32 * self.preserve_details
+                                + median_a as f32 * blend_factor) as u8,
                         );
                         result_data.set_pixel(x, y, result_pixel)?;
                     }
@@ -441,7 +450,8 @@ impl Adjustment for ReduceNoiseFilter {
         if let Some(strength) = parameters.get("strength").and_then(|v| v.as_u64()) {
             self.set_strength(strength as u8);
         }
-        if let Some(preserve_details) = parameters.get("preserve_details").and_then(|v| v.as_f64()) {
+        if let Some(preserve_details) = parameters.get("preserve_details").and_then(|v| v.as_f64())
+        {
             self.set_preserve_details(preserve_details as f32);
         }
         Ok(())

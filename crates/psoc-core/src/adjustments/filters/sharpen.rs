@@ -62,12 +62,12 @@ impl UnsharpMaskFilter {
 
         let apply_to_channel = |orig: u8, blur: u8| -> u8 {
             let diff = orig as i32 - blur as i32;
-            
+
             // Apply threshold
             if diff.abs() < self.threshold as i32 {
                 return orig;
             }
-            
+
             // Apply sharpening
             let sharpened = orig as f32 + diff as f32 * self.amount;
             sharpened.clamp(0.0, 255.0) as u8
@@ -85,9 +85,13 @@ impl UnsharpMaskFilter {
     fn create_blur_mask(&self, pixel_data: &PixelData) -> Result<PixelData> {
         let (width, height) = pixel_data.dimensions();
         let mut blurred = PixelData::new_rgba(width, height);
-        
+
         let kernel_size = (self.radius * 2.0).ceil() as usize;
-        let kernel_size = if kernel_size % 2 == 0 { kernel_size + 1 } else { kernel_size };
+        let kernel_size = if kernel_size % 2 == 0 {
+            kernel_size + 1
+        } else {
+            kernel_size
+        };
         let half_kernel = kernel_size / 2;
 
         for y in 0..height {
@@ -102,10 +106,15 @@ impl UnsharpMaskFilter {
                     for kx in 0..kernel_size {
                         let sample_x = x as i32 + kx as i32 - half_kernel as i32;
                         let sample_y = y as i32 + ky as i32 - half_kernel as i32;
-                        
-                        if sample_x >= 0 && sample_x < width as i32 
-                            && sample_y >= 0 && sample_y < height as i32 {
-                            if let Some(pixel) = pixel_data.get_pixel(sample_x as u32, sample_y as u32) {
+
+                        if sample_x >= 0
+                            && sample_x < width as i32
+                            && sample_y >= 0
+                            && sample_y < height as i32
+                        {
+                            if let Some(pixel) =
+                                pixel_data.get_pixel(sample_x as u32, sample_y as u32)
+                            {
                                 r_sum += pixel.r as u32;
                                 g_sum += pixel.g as u32;
                                 b_sum += pixel.b as u32;
@@ -157,17 +166,16 @@ impl Adjustment for UnsharpMaskFilter {
         }
 
         let (width, height) = pixel_data.dimensions();
-        
+
         // Create blurred version
         let blurred = self.create_blur_mask(pixel_data)?;
-        
+
         // Apply unsharp mask
         for y in 0..height {
             for x in 0..width {
-                if let (Some(original), Some(blur)) = (
-                    pixel_data.get_pixel(x, y),
-                    blurred.get_pixel(x, y)
-                ) {
+                if let (Some(original), Some(blur)) =
+                    (pixel_data.get_pixel(x, y), blurred.get_pixel(x, y))
+                {
                     let sharpened = self.apply_unsharp_mask(original, blur);
                     pixel_data.set_pixel(x, y, sharpened)?;
                 }
@@ -271,7 +279,7 @@ impl Adjustment for SharpenFilter {
 
         let (width, height) = pixel_data.dimensions();
         let mut result_data = PixelData::new_rgba(width, height);
-        
+
         // 3x3 sharpening kernel
         let kernel = [
             [0.0, -self.strength, 0.0],
@@ -290,17 +298,22 @@ impl Adjustment for SharpenFilter {
                     for kx in 0..3 {
                         let sample_x = x as i32 + kx as i32 - 1;
                         let sample_y = y as i32 + ky as i32 - 1;
-                        
-                        let pixel = if sample_x >= 0 && sample_x < width as i32 
-                            && sample_y >= 0 && sample_y < height as i32 {
-                            pixel_data.get_pixel(sample_x as u32, sample_y as u32)
+
+                        let pixel = if sample_x >= 0
+                            && sample_x < width as i32
+                            && sample_y >= 0
+                            && sample_y < height as i32
+                        {
+                            pixel_data
+                                .get_pixel(sample_x as u32, sample_y as u32)
                                 .unwrap_or_else(|| RgbaPixel::new(0, 0, 0, 0))
                         } else {
                             // Use edge pixel for out-of-bounds
-                            pixel_data.get_pixel(x, y)
+                            pixel_data
+                                .get_pixel(x, y)
                                 .unwrap_or_else(|| RgbaPixel::new(0, 0, 0, 0))
                         };
-                        
+
                         let weight = kernel[ky][kx];
                         r_sum += pixel.r as f32 * weight;
                         g_sum += pixel.g as f32 * weight;

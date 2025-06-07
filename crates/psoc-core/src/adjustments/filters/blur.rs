@@ -60,7 +60,7 @@ impl GaussianBlurFilter {
         if self.radius < 0.01 {
             return 1;
         }
-        
+
         let size = (self.radius * self.quality * 2.0).ceil() as usize;
         // Ensure odd size and minimum of 3
         let size = if size % 2 == 0 { size + 1 } else { size };
@@ -84,7 +84,7 @@ impl GaussianBlurFilter {
 
                 for i in 0..kernel_size {
                     let sample_x = x as i32 + i as i32 - half_kernel as i32;
-                    
+
                     if sample_x >= 0 && sample_x < width as i32 {
                         if let Some(pixel) = input.get_pixel(sample_x as u32, y) {
                             let weight = kernel[i];
@@ -129,7 +129,7 @@ impl GaussianBlurFilter {
 
                 for i in 0..kernel_size {
                     let sample_y = y as i32 + i as i32 - half_kernel as i32;
-                    
+
                     if sample_y >= 0 && sample_y < height as i32 {
                         if let Some(pixel) = input.get_pixel(x, sample_y as u32) {
                             let weight = kernel[i];
@@ -183,13 +183,13 @@ impl Adjustment for GaussianBlurFilter {
         }
 
         let (width, height) = pixel_data.dimensions();
-        
+
         // Create temporary buffer for horizontal pass
         let mut temp_data = PixelData::new_rgba(width, height);
-        
+
         // Apply horizontal blur
         self.blur_horizontal(pixel_data, &mut temp_data)?;
-        
+
         // Apply vertical blur (back to original)
         self.blur_vertical(&temp_data, pixel_data)?;
 
@@ -294,15 +294,15 @@ impl Adjustment for MotionBlurFilter {
 
         let (width, height) = pixel_data.dimensions();
         let mut result_data = PixelData::new_rgba(width, height);
-        
+
         // Convert angle to radians
         let angle_rad = self.angle.to_radians();
         let dx = angle_rad.cos() * self.distance;
         let dy = angle_rad.sin() * self.distance;
-        
+
         // Number of samples along the motion path
         let samples = (self.distance.ceil() as usize).max(1).min(50);
-        
+
         for y in 0..height {
             for x in 0..width {
                 let mut r_sum = 0.0f32;
@@ -315,13 +315,18 @@ impl Adjustment for MotionBlurFilter {
                     let t = i as f32 / samples as f32 - 0.5;
                     let sample_x = x as f32 + dx * t;
                     let sample_y = y as f32 + dy * t;
-                    
+
                     let sample_x_int = sample_x.round() as i32;
                     let sample_y_int = sample_y.round() as i32;
-                    
-                    if sample_x_int >= 0 && sample_x_int < width as i32 
-                        && sample_y_int >= 0 && sample_y_int < height as i32 {
-                        if let Some(pixel) = pixel_data.get_pixel(sample_x_int as u32, sample_y_int as u32) {
+
+                    if sample_x_int >= 0
+                        && sample_x_int < width as i32
+                        && sample_y_int >= 0
+                        && sample_y_int < height as i32
+                    {
+                        if let Some(pixel) =
+                            pixel_data.get_pixel(sample_x_int as u32, sample_y_int as u32)
+                        {
                             r_sum += pixel.r as f32;
                             g_sum += pixel.g as f32;
                             b_sum += pixel.b as f32;

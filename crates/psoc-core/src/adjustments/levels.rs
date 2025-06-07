@@ -110,7 +110,14 @@ impl LevelsAdjustment {
     }
 
     /// Set RGB levels
-    pub fn set_rgb_levels(&mut self, input_black: u8, input_white: u8, gamma: f32, output_black: u8, output_white: u8) {
+    pub fn set_rgb_levels(
+        &mut self,
+        input_black: u8,
+        input_white: u8,
+        gamma: f32,
+        output_black: u8,
+        output_white: u8,
+    ) {
         self.input_black = input_black.min(input_white);
         self.input_white = input_white.max(input_black);
         self.gamma = gamma.clamp(0.1, 9.99);
@@ -119,7 +126,14 @@ impl LevelsAdjustment {
     }
 
     /// Set red channel levels
-    pub fn set_red_levels(&mut self, input_black: u8, input_white: u8, gamma: f32, output_black: u8, output_white: u8) {
+    pub fn set_red_levels(
+        &mut self,
+        input_black: u8,
+        input_white: u8,
+        gamma: f32,
+        output_black: u8,
+        output_white: u8,
+    ) {
         self.red_input_black = input_black.min(input_white);
         self.red_input_white = input_white.max(input_black);
         self.red_gamma = gamma.clamp(0.1, 9.99);
@@ -129,7 +143,14 @@ impl LevelsAdjustment {
     }
 
     /// Set green channel levels
-    pub fn set_green_levels(&mut self, input_black: u8, input_white: u8, gamma: f32, output_black: u8, output_white: u8) {
+    pub fn set_green_levels(
+        &mut self,
+        input_black: u8,
+        input_white: u8,
+        gamma: f32,
+        output_black: u8,
+        output_white: u8,
+    ) {
         self.green_input_black = input_black.min(input_white);
         self.green_input_white = input_white.max(input_black);
         self.green_gamma = gamma.clamp(0.1, 9.99);
@@ -139,7 +160,14 @@ impl LevelsAdjustment {
     }
 
     /// Set blue channel levels
-    pub fn set_blue_levels(&mut self, input_black: u8, input_white: u8, gamma: f32, output_black: u8, output_white: u8) {
+    pub fn set_blue_levels(
+        &mut self,
+        input_black: u8,
+        input_white: u8,
+        gamma: f32,
+        output_black: u8,
+        output_white: u8,
+    ) {
         self.blue_input_black = input_black.min(input_white);
         self.blue_input_white = input_white.max(input_black);
         self.blue_gamma = gamma.clamp(0.1, 9.99);
@@ -191,7 +219,15 @@ impl LevelsAdjustment {
     }
 
     /// Apply levels adjustment to a single channel value
-    fn adjust_channel(&self, value: u8, input_black: u8, input_white: u8, gamma: f32, output_black: u8, output_white: u8) -> u8 {
+    fn adjust_channel(
+        &self,
+        value: u8,
+        input_black: u8,
+        input_white: u8,
+        gamma: f32,
+        output_black: u8,
+        output_white: u8,
+    ) -> u8 {
         if input_white == input_black {
             return value;
         }
@@ -230,15 +266,57 @@ impl LevelsAdjustment {
         let mut b = pixel.b;
 
         // Apply RGB composite levels
-        r = self.adjust_channel(r, self.input_black, self.input_white, self.gamma, self.output_black, self.output_white);
-        g = self.adjust_channel(g, self.input_black, self.input_white, self.gamma, self.output_black, self.output_white);
-        b = self.adjust_channel(b, self.input_black, self.input_white, self.gamma, self.output_black, self.output_white);
+        r = self.adjust_channel(
+            r,
+            self.input_black,
+            self.input_white,
+            self.gamma,
+            self.output_black,
+            self.output_white,
+        );
+        g = self.adjust_channel(
+            g,
+            self.input_black,
+            self.input_white,
+            self.gamma,
+            self.output_black,
+            self.output_white,
+        );
+        b = self.adjust_channel(
+            b,
+            self.input_black,
+            self.input_white,
+            self.gamma,
+            self.output_black,
+            self.output_white,
+        );
 
         // Apply per-channel levels if enabled
         if self.per_channel {
-            r = self.adjust_channel(r, self.red_input_black, self.red_input_white, self.red_gamma, self.red_output_black, self.red_output_white);
-            g = self.adjust_channel(g, self.green_input_black, self.green_input_white, self.green_gamma, self.green_output_black, self.green_output_white);
-            b = self.adjust_channel(b, self.blue_input_black, self.blue_input_white, self.blue_gamma, self.blue_output_black, self.blue_output_white);
+            r = self.adjust_channel(
+                r,
+                self.red_input_black,
+                self.red_input_white,
+                self.red_gamma,
+                self.red_output_black,
+                self.red_output_white,
+            );
+            g = self.adjust_channel(
+                g,
+                self.green_input_black,
+                self.green_input_white,
+                self.green_gamma,
+                self.green_output_black,
+                self.green_output_white,
+            );
+            b = self.adjust_channel(
+                b,
+                self.blue_input_black,
+                self.blue_input_white,
+                self.blue_gamma,
+                self.blue_output_black,
+                self.blue_output_white,
+            );
         }
 
         RgbaPixel::new(r, g, b, pixel.a)
@@ -367,10 +445,16 @@ impl Adjustment for LevelsAdjustment {
         if let Some(value) = parameters.get("green_gamma").and_then(|v| v.as_f64()) {
             self.green_gamma = (value as f32).clamp(0.1, 9.99);
         }
-        if let Some(value) = parameters.get("green_output_black").and_then(|v| v.as_u64()) {
+        if let Some(value) = parameters
+            .get("green_output_black")
+            .and_then(|v| v.as_u64())
+        {
             self.green_output_black = (value as u8).min(255);
         }
-        if let Some(value) = parameters.get("green_output_white").and_then(|v| v.as_u64()) {
+        if let Some(value) = parameters
+            .get("green_output_white")
+            .and_then(|v| v.as_u64())
+        {
             self.green_output_white = (value as u8).min(255);
         }
 
@@ -514,7 +598,10 @@ mod tests {
         let result = adjustment.apply_to_pixel(mid_pixel).unwrap();
 
         // With gamma 0.5, midtones should be darker
-        println!("Gamma 0.5 result: r={}, g={}, b={}", result.r, result.g, result.b);
+        println!(
+            "Gamma 0.5 result: r={}, g={}, b={}",
+            result.r, result.g, result.b
+        );
         // 128/255 = 0.502, (0.502)^(1/0.5) = (0.502)^2 = 0.252, 0.252 * 255 = 64.3 ≈ 64
         // So with gamma 0.5, the result should be darker
         assert!(result.r < 128);
@@ -524,7 +611,10 @@ mod tests {
         // Test with gamma > 1 to make midtones brighter
         adjustment.set_rgb_levels(0, 255, 3.0, 0, 255);
         let result = adjustment.apply_to_pixel(mid_pixel).unwrap();
-        println!("Gamma 3.0 result: r={}, g={}, b={}", result.r, result.g, result.b);
+        println!(
+            "Gamma 3.0 result: r={}, g={}, b={}",
+            result.r, result.g, result.b
+        );
 
         // With gamma 3.0, midtones should be brighter
         assert!(result.r > 128);
@@ -563,7 +653,7 @@ mod tests {
 
         assert_eq!(result.r, 128); // Red channel limited to 128
         assert_eq!(result.g, 255); // Green channel unchanged
-        assert_eq!(result.b, 64);  // Blue channel limited to 64
+        assert_eq!(result.b, 64); // Blue channel limited to 64
         assert_eq!(result.a, 255);
     }
 
@@ -617,11 +707,11 @@ mod tests {
         for y in 0..3 {
             for x in 0..3 {
                 let pixel = if x == 0 && y == 0 {
-                    RgbaPixel::new(50, 60, 70, 255)  // Min values
+                    RgbaPixel::new(50, 60, 70, 255) // Min values
                 } else if x == 1 && y == 1 {
-                    RgbaPixel::new(200, 190, 180, 255)  // Max values
+                    RgbaPixel::new(200, 190, 180, 255) // Max values
                 } else {
-                    RgbaPixel::new(100, 120, 140, 255)  // Mid values
+                    RgbaPixel::new(100, 120, 140, 255) // Mid values
                 };
                 pixel_data.set_pixel(x, y, pixel).unwrap();
             }
@@ -631,7 +721,7 @@ mod tests {
         adjustment.auto_levels(&pixel_data);
 
         // Should set input levels based on min/max found
-        assert_eq!(adjustment.input_black, 50);  // Overall minimum
+        assert_eq!(adjustment.input_black, 50); // Overall minimum
         assert_eq!(adjustment.input_white, 200); // Overall maximum
         assert_eq!(adjustment.output_black, 0);
         assert_eq!(adjustment.output_white, 255);

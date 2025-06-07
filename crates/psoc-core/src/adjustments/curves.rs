@@ -66,10 +66,7 @@ pub struct ToneCurve {
 impl ToneCurve {
     /// Create a new linear tone curve (identity)
     pub fn linear() -> Self {
-        let points = vec![
-            CurvePoint::new(0.0, 0.0),
-            CurvePoint::new(1.0, 1.0),
-        ];
+        let points = vec![CurvePoint::new(0.0, 0.0), CurvePoint::new(1.0, 1.0)];
         let mut curve = Self {
             points,
             lookup_table: Vec::new(),
@@ -82,7 +79,7 @@ impl ToneCurve {
     pub fn from_points(mut points: Vec<CurvePoint>) -> Self {
         // Sort points by input value
         points.sort_by(|a, b| a.input.partial_cmp(&b.input).unwrap());
-        
+
         // Ensure we have start and end points
         if points.is_empty() || points[0].input > 0.0 {
             points.insert(0, CurvePoint::new(0.0, 0.0));
@@ -102,7 +99,8 @@ impl ToneCurve {
     /// Add a control point to the curve
     pub fn add_point(&mut self, point: CurvePoint) {
         self.points.push(point);
-        self.points.sort_by(|a, b| a.input.partial_cmp(&b.input).unwrap());
+        self.points
+            .sort_by(|a, b| a.input.partial_cmp(&b.input).unwrap());
         self.rebuild_lookup_table();
     }
 
@@ -137,7 +135,7 @@ impl ToneCurve {
 
     /// Check if this is an identity curve (no change)
     pub fn is_identity(&self) -> bool {
-        self.points.len() == 2 
+        self.points.len() == 2
             && (self.points[0].input - 0.0).abs() < 1e-6
             && (self.points[0].output - 0.0).abs() < 1e-6
             && (self.points[1].input - 1.0).abs() < 1e-6
@@ -152,7 +150,8 @@ impl ToneCurve {
         for i in 0..256 {
             let input = i as f32 / 255.0;
             let output = self.interpolate(input);
-            self.lookup_table.push((output * 255.0).clamp(0.0, 255.0) as u8);
+            self.lookup_table
+                .push((output * 255.0).clamp(0.0, 255.0) as u8);
         }
     }
 
@@ -231,10 +230,10 @@ impl CurvesAdjustment {
 
     /// Check if this adjustment would make no changes
     pub fn is_identity(&self) -> bool {
-        self.rgb_curve.is_identity() 
-            && (!self.use_individual_curves 
-                || (self.red_curve.is_identity() 
-                    && self.green_curve.is_identity() 
+        self.rgb_curve.is_identity()
+            && (!self.use_individual_curves
+                || (self.red_curve.is_identity()
+                    && self.green_curve.is_identity()
                     && self.blue_curve.is_identity()))
     }
 
@@ -368,7 +367,10 @@ impl Adjustment for CurvesAdjustment {
     }
 
     fn set_parameters(&mut self, parameters: serde_json::Value) -> Result<()> {
-        if let Some(use_individual) = parameters.get("use_individual_curves").and_then(|v| v.as_bool()) {
+        if let Some(use_individual) = parameters
+            .get("use_individual_curves")
+            .and_then(|v| v.as_bool())
+        {
             self.use_individual_curves = use_individual;
         }
 
@@ -567,7 +569,11 @@ mod tests {
         adjustment.use_individual_curves = true;
 
         let params = adjustment.get_parameters();
-        assert!(params.get("use_individual_curves").unwrap().as_bool().unwrap());
+        assert!(params
+            .get("use_individual_curves")
+            .unwrap()
+            .as_bool()
+            .unwrap());
 
         // Test parameter setting
         let new_params = serde_json::json!({

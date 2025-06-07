@@ -10,7 +10,10 @@ use tracing::{debug, error, info};
 use super::{
     canvas::{ImageCanvas, ImageData},
     components,
-    dialogs::{AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage},
+    dialogs::{
+        AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage,
+        GaussianBlurDialog, GaussianBlurMessage,
+    },
     icons::Icon,
     theme::{spacing, PsocTheme},
 };
@@ -33,6 +36,8 @@ pub struct PsocApp {
     about_dialog: AboutDialog,
     /// Brightness/Contrast adjustment dialog
     brightness_contrast_dialog: BrightnessContrastDialog,
+    /// Gaussian Blur filter dialog
+    gaussian_blur_dialog: GaussianBlurDialog,
     /// Image canvas for rendering
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
@@ -103,6 +108,8 @@ pub enum Message {
     ShowAbout,
     /// Brightness/Contrast dialog messages
     BrightnessContrast(BrightnessContrastMessage),
+    /// Gaussian Blur dialog messages
+    GaussianBlur(GaussianBlurMessage),
     /// Layer-related messages
     Layer(LayerMessage),
     /// Undo the last operation
@@ -239,10 +246,7 @@ pub enum AdjustmentMessage {
     /// Show add noise dialog
     ShowAddNoise,
     /// Apply reduce noise filter
-    ApplyReduceNoise {
-        strength: u8,
-        preserve_details: f32,
-    },
+    ApplyReduceNoise { strength: u8, preserve_details: f32 },
     /// Show reduce noise dialog
     ShowReduceNoise,
 }
@@ -293,6 +297,7 @@ impl PsocApp {
                 error_message: None,
                 about_dialog: AboutDialog::new(),
                 brightness_contrast_dialog: BrightnessContrastDialog::new(),
+                gaussian_blur_dialog: GaussianBlurDialog::new(),
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
             },
@@ -521,6 +526,10 @@ impl PsocApp {
                 debug!("Brightness/Contrast dialog message: {:?}", bc_msg);
                 self.handle_brightness_contrast_message(bc_msg);
             }
+            Message::GaussianBlur(gb_msg) => {
+                debug!("Gaussian Blur dialog message: {:?}", gb_msg);
+                self.handle_gaussian_blur_message(gb_msg);
+            }
             Message::Layer(layer_msg) => {
                 debug!("Layer message: {:?}", layer_msg);
                 self.handle_layer_message(layer_msg);
@@ -611,6 +620,10 @@ impl PsocApp {
                 self.brightness_contrast_dialog
                     .view(Message::BrightnessContrast),
             );
+        }
+
+        if self.gaussian_blur_dialog.visible {
+            layers.push(self.gaussian_blur_dialog.view(Message::GaussianBlur));
         }
 
         if layers.len() > 1 {
@@ -1186,16 +1199,21 @@ impl PsocApp {
                 self.error_message = Some("Levels dialog not yet implemented".to_string());
             }
             AdjustmentMessage::ApplyGaussianBlur { radius, quality } => {
-                info!("Applying Gaussian blur: radius={}, quality={}", radius, quality);
+                info!(
+                    "Applying Gaussian blur: radius={}, quality={}",
+                    radius, quality
+                );
                 self.apply_gaussian_blur_filter(radius, quality);
             }
             AdjustmentMessage::ShowGaussianBlur => {
                 info!("Showing Gaussian blur dialog");
-                // TODO: Implement Gaussian blur dialog
-                self.error_message = Some("Gaussian blur dialog not yet implemented".to_string());
+                self.gaussian_blur_dialog.show();
             }
             AdjustmentMessage::ApplyMotionBlur { distance, angle } => {
-                info!("Applying motion blur: distance={}, angle={}", distance, angle);
+                info!(
+                    "Applying motion blur: distance={}, angle={}",
+                    distance, angle
+                );
                 self.apply_motion_blur_filter(distance, angle);
             }
             AdjustmentMessage::ShowMotionBlur => {
@@ -1208,7 +1226,10 @@ impl PsocApp {
                 radius,
                 threshold,
             } => {
-                info!("Applying unsharp mask: amount={}, radius={}, threshold={}", amount, radius, threshold);
+                info!(
+                    "Applying unsharp mask: amount={}, radius={}, threshold={}",
+                    amount, radius, threshold
+                );
                 self.apply_unsharp_mask_filter(amount, radius, threshold);
             }
             AdjustmentMessage::ShowUnsharpMask => {
@@ -1231,8 +1252,10 @@ impl PsocApp {
                 monochromatic,
                 seed,
             } => {
-                info!("Applying add noise filter: type={}, amount={}, mono={}, seed={}",
-                      noise_type, amount, monochromatic, seed);
+                info!(
+                    "Applying add noise filter: type={}, amount={}, mono={}, seed={}",
+                    noise_type, amount, monochromatic, seed
+                );
                 self.apply_add_noise_filter(noise_type, amount, monochromatic, seed);
             }
             AdjustmentMessage::ShowAddNoise => {
@@ -1244,7 +1267,10 @@ impl PsocApp {
                 strength,
                 preserve_details,
             } => {
-                info!("Applying reduce noise filter: strength={}, preserve={}", strength, preserve_details);
+                info!(
+                    "Applying reduce noise filter: strength={}, preserve={}",
+                    strength, preserve_details
+                );
                 self.apply_reduce_noise_filter(strength, preserve_details);
             }
             AdjustmentMessage::ShowReduceNoise => {
@@ -1692,7 +1718,13 @@ impl PsocApp {
     }
 
     /// Apply add noise filter to the current document
-    fn apply_add_noise_filter(&mut self, noise_type: String, amount: f32, monochromatic: bool, seed: u32) {
+    fn apply_add_noise_filter(
+        &mut self,
+        noise_type: String,
+        amount: f32,
+        monochromatic: bool,
+        seed: u32,
+    ) {
         use crate::commands::ApplyAdjustmentCommand;
         use psoc_core::adjustment::{AdjustmentApplication, AdjustmentScope};
 
@@ -1747,7 +1779,8 @@ impl PsocApp {
 
                 let command = ApplyAdjustmentCommand::new(application);
                 if let Err(e) = command.execute(document) {
-                    self.error_message = Some(format!("Failed to apply reduce noise filter: {}", e));
+                    self.error_message =
+                        Some(format!("Failed to apply reduce noise filter: {}", e));
                 } else {
                     self.canvas.set_document(document.clone());
                     self.sync_canvas_state();
@@ -1865,5 +1898,91 @@ impl PsocApp {
         // TODO: Implement preview reset functionality
         // This would restore the original image state
         debug!("Resetting preview");
+    }
+
+    /// Handle Gaussian blur dialog messages
+    fn handle_gaussian_blur_message(&mut self, message: GaussianBlurMessage) {
+        match message {
+            GaussianBlurMessage::Show => {
+                self.gaussian_blur_dialog.show();
+            }
+            GaussianBlurMessage::Hide => {
+                self.gaussian_blur_dialog.hide();
+            }
+            GaussianBlurMessage::RadiusChanged(value) => {
+                self.gaussian_blur_dialog.set_radius(value);
+                if self.gaussian_blur_dialog.preview_enabled() {
+                    self.apply_gaussian_blur_preview(value, self.gaussian_blur_dialog.quality());
+                }
+            }
+            GaussianBlurMessage::QualityChanged(value) => {
+                self.gaussian_blur_dialog.set_quality(value);
+                if self.gaussian_blur_dialog.preview_enabled() {
+                    self.apply_gaussian_blur_preview(self.gaussian_blur_dialog.radius(), value);
+                }
+            }
+            GaussianBlurMessage::RadiusTextChanged(text) => {
+                self.gaussian_blur_dialog.set_radius_text(text);
+                if self.gaussian_blur_dialog.preview_enabled() {
+                    self.apply_gaussian_blur_preview(
+                        self.gaussian_blur_dialog.radius(),
+                        self.gaussian_blur_dialog.quality(),
+                    );
+                }
+            }
+            GaussianBlurMessage::QualityTextChanged(text) => {
+                self.gaussian_blur_dialog.set_quality_text(text);
+                if self.gaussian_blur_dialog.preview_enabled() {
+                    self.apply_gaussian_blur_preview(
+                        self.gaussian_blur_dialog.radius(),
+                        self.gaussian_blur_dialog.quality(),
+                    );
+                }
+            }
+            GaussianBlurMessage::TogglePreview => {
+                self.gaussian_blur_dialog.toggle_preview();
+                if self.gaussian_blur_dialog.preview_enabled() {
+                    // Apply current values as preview
+                    self.apply_gaussian_blur_preview(
+                        self.gaussian_blur_dialog.radius(),
+                        self.gaussian_blur_dialog.quality(),
+                    );
+                } else {
+                    // Remove preview by resetting to original
+                    self.reset_preview();
+                }
+            }
+            GaussianBlurMessage::Reset => {
+                self.gaussian_blur_dialog.reset();
+                if self.gaussian_blur_dialog.preview_enabled() {
+                    self.reset_preview();
+                }
+            }
+            GaussianBlurMessage::Apply => {
+                let radius = self.gaussian_blur_dialog.radius();
+                let quality = self.gaussian_blur_dialog.quality();
+
+                // Apply Gaussian blur filter permanently
+                self.apply_gaussian_blur_filter(radius, quality);
+
+                self.gaussian_blur_dialog.update(GaussianBlurMessage::Apply);
+                self.gaussian_blur_dialog.hide();
+            }
+            GaussianBlurMessage::Cancel => {
+                self.reset_preview();
+                self.gaussian_blur_dialog
+                    .update(GaussianBlurMessage::Cancel);
+            }
+        }
+    }
+
+    /// Apply Gaussian blur as preview (temporary)
+    fn apply_gaussian_blur_preview(&mut self, _radius: f32, _quality: f32) {
+        // TODO: Implement preview functionality
+        // This would apply the filter temporarily without modifying the document
+        debug!(
+            "Gaussian blur preview: radius={}, quality={}",
+            _radius, _quality
+        );
     }
 }
