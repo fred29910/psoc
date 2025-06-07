@@ -1,6 +1,6 @@
 [package]
 name = "psoc"
-version = "0.7.0"
+version = "0.8.1"
 edition = "2021"
 authors = ["PSOC Development Team <dev@psoc.project>"]
 description = "A Photoshop-like image editor built with Rust"
@@ -49,6 +49,12 @@ glam = "0.30.3"
 
 # Async runtime
 tokio = { version = "1.45.1", features = ["full"] }
+
+# Internationalization (i18n)
+fluent = "0.16.1"
+fluent-bundle = "0.15.3"
+unic-langid = { version = "0.9.5", features = ["unic-langid-macros"] }
+sys-locale = "0.3.1"
 
 # Icons and fonts (optional for now)
 # iced_aw = { version = "0.7", features = ["icons", "card", "tabs", "split"] }

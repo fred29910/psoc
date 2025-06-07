@@ -6,6 +6,7 @@ use iced::{
 };
 
 use super::icons::{icon_button, simple_icon_button, tool_button, Icon};
+use crate::i18n::{t, Language};
 use psoc_core::{HistoryEntry, RgbaPixel};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -1208,4 +1209,269 @@ impl ColorHistory {
             }
         }
     }
+}
+
+/// Create a language selector component
+pub fn language_selector<Message: Clone + 'static>(
+    current_language: Language,
+    on_language_change: impl Fn(Language) -> Message + 'static,
+) -> Element<'static, Message> {
+    use iced::widget::pick_list;
+
+    let languages = Language::all();
+
+    container(
+        column![
+            text(t("language-selector-title"))
+                .size(14.0)
+                .style(|_theme| iced::widget::text::Style {
+                    color: Some(iced::Color::WHITE)
+                }),
+            pick_list(languages, Some(current_language), move |language| {
+                on_language_change(language)
+            })
+            .placeholder(t("language-selector-placeholder"))
+            .width(Length::Fixed(150.0))
+        ]
+        .spacing(8.0),
+    )
+    .padding(8.0)
+    .into()
+}
+
+/// Create a localized menu bar with translation support
+#[allow(clippy::too_many_arguments)]
+pub fn localized_menu_bar<Message: Clone + 'static>(
+    new_doc: Message,
+    open_doc: Message,
+    save_doc: Message,
+    save_as_doc: Message,
+    undo: Message,
+    redo: Message,
+    brightness_contrast: Message,
+    hsl: Message,
+    grayscale: Message,
+    color_balance: Message,
+    curves: Message,
+    levels: Message,
+    gaussian_blur: Message,
+    unsharp_mask: Message,
+    add_noise: Message,
+    show_color_picker: Message,
+    show_color_palette: Message,
+    create_smart_object: Message,
+    toggle_rulers: Message,
+    toggle_grid: Message,
+    toggle_guides: Message,
+    show_about: Message,
+    exit_app: Message,
+    language_change: impl Fn(Language) -> Message + 'static,
+    current_language: Language,
+) -> Element<'static, Message> {
+    container(
+        row![
+            // File menu section
+            container(
+                row![
+                    icon_button(Icon::New, new_doc),
+                    icon_button(Icon::Open, open_doc),
+                    icon_button(Icon::Save, save_doc),
+                    icon_button(Icon::SaveAs, save_as_doc),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Edit menu section
+            container(
+                row![icon_button(Icon::Undo, undo), icon_button(Icon::Redo, redo),].spacing(8.0)
+            )
+            .padding(8.0),
+            // Image menu section
+            container(
+                row![
+                    button(
+                        text(t("menu-image-brightness-contrast"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(brightness_contrast)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-hsl")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(hsl)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-grayscale")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(grayscale)
+                    .padding([4.0, 8.0]),
+                    button(
+                        text(t("menu-image-color-balance"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(color_balance)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-curves")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(curves)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-image-levels")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(levels)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Filter menu section
+            container(
+                row![
+                    button(
+                        text(t("menu-filter-gaussian-blur"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(gaussian_blur)
+                    .padding([4.0, 8.0]),
+                    button(
+                        text(t("menu-filter-unsharp-mask"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(unsharp_mask)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-filter-add-noise")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(add_noise)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Color menu section
+            container(
+                row![
+                    button(
+                        text(t("menu-tools-color-picker"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(show_color_picker)
+                    .padding([4.0, 8.0]),
+                    button(
+                        text(t("menu-tools-color-palette"))
+                            .size(12.0)
+                            .style(|_theme| {
+                                iced::widget::text::Style {
+                                    color: Some(iced::Color::WHITE),
+                                }
+                            })
+                    )
+                    .on_press(show_color_palette)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Layer menu section
+            container(
+                row![button(text("Smart Object").size(12.0).style(|_theme| {
+                    iced::widget::text::Style {
+                        color: Some(iced::Color::WHITE),
+                    }
+                }))
+                .on_press(create_smart_object)
+                .padding([4.0, 8.0]),]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // View menu section
+            container(
+                row![
+                    button(text(t("menu-view-rulers")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_rulers)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-view-grid")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_grid)
+                    .padding([4.0, 8.0]),
+                    button(text(t("menu-view-guides")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_guides)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Language selector
+            language_selector(current_language, language_change),
+            // Spacer
+            Space::new(Length::Fill, Length::Shrink),
+            // Help menu section
+            container(
+                row![
+                    button(text(t("menu-help-about")).size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_about)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // App controls
+            container(simple_icon_button(Icon::Close, exit_app)).padding(8.0),
+        ]
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(16.0)
+    .width(Length::Fill)
+    .into()
 }

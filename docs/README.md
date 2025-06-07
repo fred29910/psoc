@@ -314,7 +314,7 @@ PSOC 项目已成功完成 MVP 目标！用户现在可以：
     *   [ ] 编写用户手册。
     *   [ ] 制作入门教程。
 *   **P8.5: 多语言支持 (Internationalization - i18n)**
-    *   [ ] 使用 `fluent-rs` 或类似库。
+    *   [x] 使用 `fluent-rs` 或类似库。
 *   **P8.6: 应用程序打包与分发**
     *   [ ] 为 Windows, macOS, Linux 创建安装包/可执行文件。
     *   [ ] (若使用 Tauri) Tauri内置打包工具。

@@ -19,6 +19,7 @@ use super::{
     icons::Icon,
     theme::{spacing, PsocTheme},
 };
+use crate::i18n::{Language, LocalizationManager};
 
 use crate::{
     shortcuts::{
@@ -95,6 +96,10 @@ pub struct AppState {
     pub mask_editing_mode: bool,
     /// Index of layer whose mask is being edited
     pub mask_editing_layer: Option<usize>,
+    /// Current language setting
+    pub current_language: Language,
+    /// Localization manager
+    pub localization_manager: LocalizationManager,
 }
 
 /// Status information for display
@@ -183,6 +188,8 @@ pub enum Message {
     Shortcut(ShortcutAction),
     /// History panel messages
     History(HistoryMessage),
+    /// Language changed
+    LanguageChanged(Language),
     /// Error occurred
     Error(String),
 }
@@ -410,6 +417,12 @@ impl Default for PsocApp {
 
 impl Default for AppState {
     fn default() -> Self {
+        let mut localization_manager = LocalizationManager::new();
+        if let Err(e) = localization_manager.initialize() {
+            tracing::error!("Failed to initialize localization: {}", e);
+        }
+        let current_language = localization_manager.current_language();
+
         Self {
             document_open: false,
             current_document: None,
@@ -426,6 +439,8 @@ impl Default for AppState {
             color_history: ColorHistory::new(),
             mask_editing_mode: false,
             mask_editing_layer: None,
+            current_language,
+            localization_manager,
         }
     }
 }
@@ -463,12 +478,16 @@ impl StatusInfo {
 
         let document_status = if state.document_open {
             if state.current_file_path.is_some() {
-                "Saved".to_string()
+                state
+                    .localization_manager
+                    .translate("status-document-saved")
             } else {
-                "Unsaved".to_string()
+                state
+                    .localization_manager
+                    .translate("status-document-unsaved")
             }
         } else {
-            "No document".to_string()
+            state.localization_manager.translate("status-no-document")
         };
 
         Self {
@@ -508,6 +527,12 @@ impl PsocApp {
     #[allow(dead_code)]
     fn new() -> (Self, Task<Message>) {
         debug!("Initializing PSOC application");
+
+        // Initialize localization
+        if let Err(e) = crate::i18n::init_localization() {
+            error!("Failed to initialize localization: {}", e);
+        }
+
         (
             Self {
                 state: AppState::default(),
@@ -527,19 +552,21 @@ impl PsocApp {
     }
 
     fn title(&self) -> String {
-        let base_title = "PSOC Image Editor";
+        let base_title = self.state.localization_manager.translate("app-title");
         if self.state.document_open {
             if let Some(ref path) = self.state.current_file_path {
+                let untitled = self.state.localization_manager.translate("untitled");
                 let filename = path
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .unwrap_or("Untitled");
+                    .unwrap_or(&untitled);
                 format!("{} - {}", base_title, filename)
             } else {
-                format!("{} - Untitled", base_title)
+                let untitled = self.state.localization_manager.translate("untitled");
+                format!("{} - {}", base_title, untitled)
             }
         } else {
-            base_title.to_string()
+            base_title
         }
     }
 
@@ -875,6 +902,10 @@ impl PsocApp {
                 debug!("History message: {:?}", history_msg);
                 self.handle_history_message(history_msg);
             }
+            Message::LanguageChanged(language) => {
+                debug!("Language changed to: {:?}", language);
+                self.handle_language_change(language);
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
@@ -1146,7 +1177,7 @@ impl PsocApp {
 
     /// Create the menu bar
     fn menu_bar(&self) -> Element<Message> {
-        components::menu_bar(
+        components::localized_menu_bar(
             Message::NewDocument,
             Message::OpenDocument,
             Message::SaveDocument,
@@ -1170,6 +1201,8 @@ impl PsocApp {
             Message::View(ViewMessage::ToggleGuides),
             Message::ShowAbout,
             Message::Exit,
+            Message::LanguageChanged,
+            self.state.current_language,
         )
     }
 
@@ -1340,16 +1373,24 @@ impl PsocApp {
         } else {
             container(
                 column![
-                    iced::widget::text("No Document Open")
-                        .size(24.0)
-                        .style(|_theme| iced::widget::text::Style {
-                            color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7))
-                        }),
-                    iced::widget::text("Click 'Open' to load an image")
-                        .size(16.0)
-                        .style(|_theme| iced::widget::text::Style {
-                            color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
-                        }),
+                    iced::widget::text(
+                        self.state
+                            .localization_manager
+                            .translate("canvas-no-document")
+                    )
+                    .size(24.0)
+                    .style(|_theme| iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7))
+                    }),
+                    iced::widget::text(
+                        self.state
+                            .localization_manager
+                            .translate("canvas-click-open")
+                    )
+                    .size(16.0)
+                    .style(|_theme| iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                    }),
                 ]
                 .align_x(iced::alignment::Horizontal::Center)
                 .spacing(spacing::LG),
@@ -1805,6 +1846,30 @@ impl PsocApp {
                 Message::Error("No document open".to_string()),
             )
         }
+    }
+
+    /// Handle language change
+    fn handle_language_change(&mut self, language: Language) {
+        info!("Changing language to: {:?}", language);
+
+        // Update the localization manager
+        if let Err(e) = self.state.localization_manager.set_language(language) {
+            error!("Failed to set language: {}", e);
+            self.error_message = Some(format!("Failed to change language: {}", e));
+            return;
+        }
+
+        // Update the current language in state
+        self.state.current_language = language;
+
+        // Update global localization manager if available
+        if let Some(global_manager) = crate::i18n::localization_manager_mut() {
+            if let Err(e) = global_manager.set_language(language) {
+                error!("Failed to update global localization manager: {}", e);
+            }
+        }
+
+        info!("Language successfully changed to: {:?}", language);
     }
 
     /// Handle history-specific messages
