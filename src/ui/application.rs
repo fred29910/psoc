@@ -197,6 +197,8 @@ pub enum LayerMessage {
     AddEmptyLayer,
     /// Add a layer from file
     AddLayerFromFile,
+    /// Add an adjustment layer
+    AddAdjustmentLayer(String), // adjustment type
     /// Delete layer at index
     DeleteLayer(usize),
     /// Duplicate layer at index
@@ -1653,6 +1655,7 @@ impl PsocApp {
                 bool,
                 f32,
                 psoc_core::BlendMode,
+                Option<String>,
                 Message,
                 Message,
                 Message,
@@ -1664,12 +1667,19 @@ impl PsocApp {
                 .rev() // Display in reverse order (top to bottom in UI)
                 .map(|(index, layer)| {
                     let is_selected = document.active_layer_index == Some(index);
+                    let layer_type = match &layer.layer_type {
+                        psoc_core::LayerType::Adjustment {
+                            adjustment_type, ..
+                        } => Some(adjustment_type.clone()),
+                        _ => None,
+                    };
                     (
                         layer.name.clone(),
                         layer.visible,
                         is_selected,
                         layer.opacity,
                         layer.blend_mode,
+                        layer_type,
                         Message::Layer(LayerMessage::ToggleLayerVisibility(index)),
                         Message::Layer(LayerMessage::SelectLayer(index)),
                         Message::Layer(LayerMessage::ChangeLayerOpacity(index, layer.opacity)),
@@ -1797,6 +1807,52 @@ impl PsocApp {
                 info!("Adding layer from file");
                 // TODO: Implement file dialog for layer import
                 self.error_message = Some("Layer import from file not yet implemented".to_string());
+            }
+            LayerMessage::AddAdjustmentLayer(adjustment_type) => {
+                info!("Adding adjustment layer of type: {}", adjustment_type);
+
+                // Create default parameters for the adjustment type
+                let parameters = match adjustment_type.as_str() {
+                    "brightness" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("brightness".to_string(), 0.0);
+                        params
+                    }
+                    "contrast" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("contrast".to_string(), 0.0);
+                        params
+                    }
+                    "hsl" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("hue".to_string(), 0.0);
+                        params.insert("saturation".to_string(), 0.0);
+                        params.insert("lightness".to_string(), 0.0);
+                        params
+                    }
+                    "grayscale" => {
+                        let mut params = std::collections::HashMap::new();
+                        params.insert("method".to_string(), 0.0); // 0 = Average
+                        params
+                    }
+                    _ => {
+                        self.error_message =
+                            Some(format!("Unknown adjustment type: {}", adjustment_type));
+                        return;
+                    }
+                };
+
+                let layer_name = format!("{} Adjustment", adjustment_type.to_uppercase());
+                let layer = Layer::new_adjustment(layer_name, adjustment_type, parameters);
+                document.add_layer(layer);
+
+                // Set the new layer as active
+                if let Err(e) = document.set_active_layer(document.layer_count() - 1) {
+                    self.error_message = Some(format!("Failed to set active layer: {}", e));
+                }
+
+                // Update canvas with new document state
+                self.canvas.set_document(document.clone());
             }
             LayerMessage::DeleteLayer(index) => {
                 info!("Deleting layer at index: {}", index);

@@ -562,6 +562,7 @@ pub fn layer_item_simple<Message: Clone + 'static>(
     is_selected: bool,
     opacity: f32,
     blend_mode: psoc_core::BlendMode,
+    layer_type: Option<String>, // For adjustment layers, show the adjustment type
     toggle_visibility: Message,
     select_layer: Message,
 ) -> Element<'static, Message> {
@@ -571,14 +572,21 @@ pub fn layer_item_simple<Message: Clone + 'static>(
         Icon::LayerHidden
     };
 
+    // Create layer name with type indicator for adjustment layers
+    let display_name = if let Some(adj_type) = layer_type {
+        format!("{} [{}]", name, adj_type)
+    } else {
+        name
+    };
+
     // Create layer item with selection highlighting
     let layer_button = if is_selected {
-        button(text(name).size(12.0))
+        button(text(display_name).size(12.0))
             .on_press(select_layer)
             .width(Length::Fill)
             .style(button::primary)
     } else {
-        button(text(name).size(12.0))
+        button(text(display_name).size(12.0))
             .on_press(select_layer)
             .width(Length::Fill)
     };
@@ -650,11 +658,12 @@ pub fn layer_panel<Message: Clone + 'static>(
         bool,
         f32,
         psoc_core::BlendMode,
+        Option<String>,
         Message,
         Message,
         Message,
         Message,
-    )>, // (name, visible, selected, opacity, blend_mode, toggle_vis, select, opacity_change, blend_change)
+    )>, // (name, visible, selected, opacity, blend_mode, layer_type, toggle_vis, select, opacity_change, blend_change)
     add_layer: Message,
     delete_layer: Option<Message>,
     duplicate_layer: Option<Message>,
@@ -666,8 +675,12 @@ pub fn layer_panel<Message: Clone + 'static>(
     // Layer controls
     let controls = row![
         button(text("Add").size(10.0))
-            .on_press(add_layer)
+            .on_press(add_layer.clone())
             .padding([4.0, 8.0]),
+        button(text("Adj").size(10.0))
+            .on_press(add_layer) // For now, use the same as Add - will be enhanced later
+            .padding([4.0, 8.0])
+            .style(button::secondary),
         button(text("Del").size(10.0))
             .on_press_maybe(delete_layer)
             .padding([4.0, 8.0]),
@@ -711,6 +724,7 @@ pub fn layer_panel<Message: Clone + 'static>(
                 is_selected,
                 opacity,
                 blend_mode,
+                layer_type,
                 toggle_visibility,
                 select_layer,
                 _opacity_change,
@@ -726,6 +740,7 @@ pub fn layer_panel<Message: Clone + 'static>(
                 is_selected,
                 opacity,
                 blend_mode,
+                layer_type,
                 toggle_visibility,
                 select_layer,
             ));
