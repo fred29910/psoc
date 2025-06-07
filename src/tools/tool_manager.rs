@@ -64,6 +64,9 @@ impl ToolManager {
         use super::tools::*;
 
         self.register_tool(ToolType::Select, Box::new(SelectTool::new()));
+        self.register_tool(ToolType::EllipseSelect, Box::new(EllipseTool::new()));
+        self.register_tool(ToolType::LassoSelect, Box::new(LassoTool::new()));
+        self.register_tool(ToolType::MagicWand, Box::new(MagicWandTool::new()));
         self.register_tool(ToolType::Brush, Box::new(BrushTool::new()));
         self.register_tool(ToolType::Eraser, Box::new(EraserTool::new()));
         self.register_tool(ToolType::Move, Box::new(MoveTool::new()));
@@ -192,6 +195,9 @@ impl ToolManager {
 
         let tool: Box<dyn Tool> = match tool_type {
             ToolType::Select => Box::new(SelectTool::new()),
+            ToolType::EllipseSelect => Box::new(EllipseTool::new()),
+            ToolType::LassoSelect => Box::new(LassoTool::new()),
+            ToolType::MagicWand => Box::new(MagicWandTool::new()),
             ToolType::Brush => Box::new(BrushTool::new()),
             ToolType::Eraser => Box::new(EraserTool::new()),
             ToolType::Move => Box::new(MoveTool::new()),
@@ -308,7 +314,7 @@ mod tests {
     fn test_tool_manager_creation() {
         let manager = ToolManager::new();
         assert!(manager.active_tool_type.is_some());
-        assert_eq!(manager.available_tools().len(), 5); // Select, Brush, Eraser, Move, Transform
+        assert_eq!(manager.available_tools().len(), 8); // Select, EllipseSelect, LassoSelect, MagicWand, Brush, Eraser, Move, Transform
     }
 
     #[test]

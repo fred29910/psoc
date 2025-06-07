@@ -15,6 +15,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToolType {
     Select,
+    EllipseSelect,
+    LassoSelect,
+    MagicWand,
     Brush,
     Eraser,
     Move,
@@ -25,6 +28,9 @@ impl std::fmt::Display for ToolType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ToolType::Select => write!(f, "Select"),
+            ToolType::EllipseSelect => write!(f, "Ellipse Select"),
+            ToolType::LassoSelect => write!(f, "Lasso Select"),
+            ToolType::MagicWand => write!(f, "Magic Wand"),
             ToolType::Brush => write!(f, "Brush"),
             ToolType::Eraser => write!(f, "Eraser"),
             ToolType::Move => write!(f, "Move"),
@@ -112,6 +118,144 @@ impl Tool for SelectTool {
                     if let Some(start) = self.selection_start {
                         let selection = Selection::rectangle_from_points(start, position);
                         debug!("Created selection: {}", selection);
+                        document.set_selection(selection);
+                    }
+
+                    self.selection_start = None;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "feather".to_string(),
+                display_name: "Feather Radius".to_string(),
+                description: "Softness of selection edges in pixels".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 0.0,
+                    max: 50.0,
+                },
+                default_value: ToolOptionValue::Float(self.feather_radius),
+            },
+            ToolOption {
+                name: "anti_alias".to_string(),
+                display_name: "Anti-alias".to_string(),
+                description: "Smooth selection edges".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.anti_alias),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "feather" => {
+                if let ToolOptionValue::Float(radius) = value {
+                    self.feather_radius = radius.clamp(0.0, 50.0);
+                }
+            }
+            "anti_alias" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.anti_alias = enabled;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "feather" => Some(ToolOptionValue::Float(self.feather_radius)),
+            "anti_alias" => Some(ToolOptionValue::Bool(self.anti_alias)),
+            _ => None,
+        }
+    }
+}
+
+/// Ellipse selection tool for making elliptical selections
+#[derive(Debug)]
+pub struct EllipseTool {
+    selection_start: Option<Point>,
+    is_selecting: bool,
+    feather_radius: f32,
+    anti_alias: bool,
+}
+
+impl EllipseTool {
+    pub fn new() -> Self {
+        Self {
+            selection_start: None,
+            is_selecting: false,
+            feather_radius: 0.0,
+            anti_alias: true,
+        }
+    }
+}
+
+impl Default for EllipseTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for EllipseTool {
+    fn id(&self) -> &'static str {
+        "ellipse_select"
+    }
+
+    fn name(&self) -> &'static str {
+        "Ellipse Select Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Make elliptical selections"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed { position, .. } => {
+                debug!("Ellipse selection started at: {:?}", position);
+                self.selection_start = Some(position);
+                self.is_selecting = true;
+                state.is_active = true;
+                state.last_position = Some(position);
+            }
+            ToolEvent::MouseDragged { position, .. } => {
+                if self.is_selecting {
+                    debug!("Ellipse selection dragged to: {:?}", position);
+                    state.last_position = Some(position);
+
+                    // Update preview selection
+                    if let Some(start) = self.selection_start {
+                        let selection = Selection::ellipse_from_points(start, position);
+                        document.set_selection(selection);
+                    }
+                }
+            }
+            ToolEvent::MouseReleased { position, .. } => {
+                if self.is_selecting {
+                    debug!("Ellipse selection completed at: {:?}", position);
+                    self.is_selecting = false;
+                    state.is_active = false;
+
+                    // Finalize selection
+                    if let Some(start) = self.selection_start {
+                        let selection = Selection::ellipse_from_points(start, position);
+                        debug!("Created ellipse selection: {}", selection);
                         document.set_selection(selection);
                     }
 
@@ -806,6 +950,176 @@ impl EraserTool {
     }
 }
 
+/// Lasso selection tool for making freeform selections
+#[derive(Debug)]
+pub struct LassoTool {
+    current_path: Vec<Point>,
+    is_selecting: bool,
+    feather_radius: f32,
+    anti_alias: bool,
+}
+
+impl LassoTool {
+    pub fn new() -> Self {
+        Self {
+            current_path: Vec::new(),
+            is_selecting: false,
+            feather_radius: 0.0,
+            anti_alias: true,
+        }
+    }
+}
+
+impl Default for LassoTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for LassoTool {
+    fn id(&self) -> &'static str {
+        "lasso_select"
+    }
+
+    fn name(&self) -> &'static str {
+        "Lasso Select Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Make freeform selections by drawing"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed { position, .. } => {
+                debug!("Lasso selection started at: {:?}", position);
+                self.current_path.clear();
+                self.current_path.push(position);
+                self.is_selecting = true;
+                state.is_active = true;
+                state.last_position = Some(position);
+            }
+            ToolEvent::MouseDragged { position, .. } => {
+                if self.is_selecting {
+                    debug!("Lasso selection continued to: {:?}", position);
+
+                    // Add point to path if it's far enough from the last point
+                    if let Some(last_point) = self.current_path.last() {
+                        let distance = last_point.distance_to(&position);
+                        if distance > 2.0 { // Minimum distance to avoid too many points
+                            self.current_path.push(position);
+                        }
+                    } else {
+                        self.current_path.push(position);
+                    }
+
+                    state.last_position = Some(position);
+
+                    // Update preview selection if we have enough points
+                    if self.current_path.len() >= 3 {
+                        let mut preview_path = self.current_path.clone();
+                        // Close the path for preview
+                        if let Some(first_point) = self.current_path.first() {
+                            preview_path.push(*first_point);
+                        }
+                        let selection = Selection::lasso(preview_path);
+                        document.set_selection(selection);
+                    }
+                }
+            }
+            ToolEvent::MouseReleased { position, .. } => {
+                if self.is_selecting {
+                    debug!("Lasso selection completed at: {:?}", position);
+                    self.is_selecting = false;
+                    state.is_active = false;
+
+                    // Add final point if different from last
+                    if let Some(last_point) = self.current_path.last() {
+                        if last_point.distance_to(&position) > 1.0 {
+                            self.current_path.push(position);
+                        }
+                    }
+
+                    // Finalize selection if we have enough points
+                    if self.current_path.len() >= 3 {
+                        let mut final_path = self.current_path.clone();
+                        // Close the path
+                        if let Some(first_point) = self.current_path.first() {
+                            final_path.push(*first_point);
+                        }
+                        let selection = Selection::lasso(final_path);
+                        debug!("Created lasso selection: {}", selection);
+                        document.set_selection(selection);
+                    } else {
+                        // Not enough points, clear selection
+                        document.set_selection(Selection::None);
+                    }
+
+                    self.current_path.clear();
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "feather".to_string(),
+                display_name: "Feather Radius".to_string(),
+                description: "Softness of selection edges in pixels".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 0.0,
+                    max: 50.0,
+                },
+                default_value: ToolOptionValue::Float(self.feather_radius),
+            },
+            ToolOption {
+                name: "anti_alias".to_string(),
+                display_name: "Anti-alias".to_string(),
+                description: "Smooth selection edges".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.anti_alias),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "feather" => {
+                if let ToolOptionValue::Float(radius) = value {
+                    self.feather_radius = radius.clamp(0.0, 50.0);
+                }
+            }
+            "anti_alias" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.anti_alias = enabled;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "feather" => Some(ToolOptionValue::Float(self.feather_radius)),
+            "anti_alias" => Some(ToolOptionValue::Bool(self.anti_alias)),
+            _ => None,
+        }
+    }
+}
+
 /// Move tool for moving layers and selections
 #[derive(Debug)]
 pub struct MoveTool {
@@ -997,6 +1311,295 @@ impl MoveTool {
         self.move_active_layer(delta_x, delta_y, document)?;
         debug!("Moved selection content by ({}, {})", delta_x, delta_y);
         Ok(())
+    }
+}
+
+/// Magic Wand selection tool for selecting similar colors
+#[derive(Debug)]
+pub struct MagicWandTool {
+    tolerance: f32,
+    contiguous: bool,
+    anti_alias: bool,
+    sample_merged: bool,
+}
+
+impl MagicWandTool {
+    pub fn new() -> Self {
+        Self {
+            tolerance: 32.0,
+            contiguous: true,
+            anti_alias: true,
+            sample_merged: false,
+        }
+    }
+}
+
+impl Default for MagicWandTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tool for MagicWandTool {
+    fn id(&self) -> &'static str {
+        "magic_wand"
+    }
+
+    fn name(&self) -> &'static str {
+        "Magic Wand Tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Select areas of similar color"
+    }
+
+    fn cursor(&self) -> ToolCursor {
+        ToolCursor::Crosshair
+    }
+
+    fn handle_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        state: &mut ToolState,
+    ) -> ToolResult<()> {
+        match event {
+            ToolEvent::MousePressed { position, .. } => {
+                debug!("Magic wand selection at: {:?}", position);
+                state.is_active = true;
+                state.last_position = Some(position);
+
+                // Perform magic wand selection
+                self.perform_magic_wand_selection(position, document)?;
+            }
+            ToolEvent::MouseReleased { .. } => {
+                if state.is_active {
+                    debug!("Magic wand selection completed");
+                    state.is_active = false;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn options(&self) -> Vec<ToolOption> {
+        vec![
+            ToolOption {
+                name: "tolerance".to_string(),
+                display_name: "Tolerance".to_string(),
+                description: "How similar colors must be to be selected".to_string(),
+                option_type: ToolOptionType::Float {
+                    min: 0.0,
+                    max: 255.0,
+                },
+                default_value: ToolOptionValue::Float(self.tolerance),
+            },
+            ToolOption {
+                name: "contiguous".to_string(),
+                display_name: "Contiguous".to_string(),
+                description: "Only select connected areas".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.contiguous),
+            },
+            ToolOption {
+                name: "anti_alias".to_string(),
+                display_name: "Anti-alias".to_string(),
+                description: "Smooth selection edges".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.anti_alias),
+            },
+            ToolOption {
+                name: "sample_merged".to_string(),
+                display_name: "Sample Merged".to_string(),
+                description: "Sample from all visible layers".to_string(),
+                option_type: ToolOptionType::Bool,
+                default_value: ToolOptionValue::Bool(self.sample_merged),
+            },
+        ]
+    }
+
+    fn set_option(&mut self, name: &str, value: ToolOptionValue) -> ToolResult<()> {
+        match name {
+            "tolerance" => {
+                if let ToolOptionValue::Float(tolerance) = value {
+                    self.tolerance = tolerance.clamp(0.0, 255.0);
+                }
+            }
+            "contiguous" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.contiguous = enabled;
+                }
+            }
+            "anti_alias" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.anti_alias = enabled;
+                }
+            }
+            "sample_merged" => {
+                if let ToolOptionValue::Bool(enabled) = value {
+                    self.sample_merged = enabled;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_option(&self, name: &str) -> Option<ToolOptionValue> {
+        match name {
+            "tolerance" => Some(ToolOptionValue::Float(self.tolerance)),
+            "contiguous" => Some(ToolOptionValue::Bool(self.contiguous)),
+            "anti_alias" => Some(ToolOptionValue::Bool(self.anti_alias)),
+            "sample_merged" => Some(ToolOptionValue::Bool(self.sample_merged)),
+            _ => None,
+        }
+    }
+}
+
+impl MagicWandTool {
+    /// Perform magic wand selection at the given position
+    fn perform_magic_wand_selection(
+        &self,
+        position: Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        // Get the active layer
+        let active_layer = document.active_layer();
+        if active_layer.is_none() {
+            debug!("No active layer for magic wand selection");
+            return Ok(());
+        }
+
+        let layer = active_layer.unwrap();
+        if !layer.has_pixel_data() {
+            debug!("Active layer has no pixel data");
+            return Ok(());
+        }
+
+        let layer_dims = layer.dimensions();
+        if layer_dims.is_none() {
+            return Ok(());
+        }
+
+        let (width, height) = layer_dims.unwrap();
+        let x = position.x as u32;
+        let y = position.y as u32;
+
+        // Check bounds
+        if x >= width || y >= height {
+            debug!("Magic wand position out of bounds");
+            return Ok(());
+        }
+
+        // Get the target color at the clicked position
+        let target_color = layer.get_pixel(x, y).unwrap_or(psoc_core::RgbaPixel::transparent());
+        debug!("Magic wand target color: {:?}", target_color);
+
+        // Create a mask for the selection
+        let mut mask_data = vec![0u8; (width * height) as usize];
+
+        if self.contiguous {
+            // Flood fill algorithm for contiguous selection
+            self.flood_fill_selection(x, y, target_color, layer, &mut mask_data, width, height)?;
+        } else {
+            // Select all similar colors regardless of connectivity
+            self.select_all_similar(target_color, layer, &mut mask_data, width, height)?;
+        }
+
+        // Create mask selection
+        let selection = Selection::mask(width, height, mask_data);
+        debug!("Created magic wand selection: {}", selection);
+        document.set_selection(selection);
+
+        Ok(())
+    }
+
+    /// Flood fill algorithm for contiguous selection
+    fn flood_fill_selection(
+        &self,
+        start_x: u32,
+        start_y: u32,
+        target_color: psoc_core::RgbaPixel,
+        layer: &psoc_core::Layer,
+        mask_data: &mut [u8],
+        width: u32,
+        height: u32,
+    ) -> ToolResult<()> {
+        let mut stack = Vec::new();
+        stack.push((start_x, start_y));
+
+        while let Some((x, y)) = stack.pop() {
+            if x >= width || y >= height {
+                continue;
+            }
+
+            let index = (y * width + x) as usize;
+            if index >= mask_data.len() || mask_data[index] > 0 {
+                continue; // Already processed
+            }
+
+            let pixel = layer.get_pixel(x, y).unwrap_or(psoc_core::RgbaPixel::transparent());
+            if !self.colors_similar(pixel, target_color) {
+                continue;
+            }
+
+            // Mark as selected
+            mask_data[index] = 255;
+
+            // Add neighbors to stack
+            if x > 0 {
+                stack.push((x - 1, y));
+            }
+            if x < width - 1 {
+                stack.push((x + 1, y));
+            }
+            if y > 0 {
+                stack.push((x, y - 1));
+            }
+            if y < height - 1 {
+                stack.push((x, y + 1));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Select all similar colors regardless of connectivity
+    fn select_all_similar(
+        &self,
+        target_color: psoc_core::RgbaPixel,
+        layer: &psoc_core::Layer,
+        mask_data: &mut [u8],
+        width: u32,
+        height: u32,
+    ) -> ToolResult<()> {
+        for y in 0..height {
+            for x in 0..width {
+                let pixel = layer.get_pixel(x, y).unwrap_or(psoc_core::RgbaPixel::transparent());
+                if self.colors_similar(pixel, target_color) {
+                    let index = (y * width + x) as usize;
+                    if index < mask_data.len() {
+                        mask_data[index] = 255;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if two colors are similar within tolerance
+    fn colors_similar(&self, color1: psoc_core::RgbaPixel, color2: psoc_core::RgbaPixel) -> bool {
+        let dr = (color1.r as f32 - color2.r as f32).abs();
+        let dg = (color1.g as f32 - color2.g as f32).abs();
+        let db = (color1.b as f32 - color2.b as f32).abs();
+        let da = (color1.a as f32 - color2.a as f32).abs();
+
+        // Calculate color distance (simple Euclidean distance in RGBA space)
+        let distance = (dr * dr + dg * dg + db * db + da * da).sqrt();
+
+        distance <= self.tolerance
     }
 }
 
@@ -2198,5 +2801,248 @@ impl Tool for TransformTool {
             }
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod new_selection_tools_tests {
+    use super::*;
+    use crate::tools::tool_trait::{KeyModifiers, MouseButton};
+    use psoc_core::{Document, Point, Selection};
+
+    #[test]
+    fn test_ellipse_tool_creation() {
+        let tool = EllipseTool::new();
+        assert_eq!(tool.id(), "ellipse_select");
+        assert_eq!(tool.name(), "Ellipse Select Tool");
+        assert!(!tool.is_selecting);
+        assert_eq!(tool.feather_radius, 0.0);
+        assert!(tool.anti_alias);
+    }
+
+    #[test]
+    fn test_ellipse_tool_options() {
+        let tool = EllipseTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 2);
+
+        let feather_option = &options[0];
+        assert_eq!(feather_option.name, "feather");
+        assert_eq!(feather_option.display_name, "Feather Radius");
+
+        let anti_alias_option = &options[1];
+        assert_eq!(anti_alias_option.name, "anti_alias");
+        assert_eq!(anti_alias_option.display_name, "Anti-alias");
+    }
+
+    #[test]
+    fn test_ellipse_tool_event_handling() {
+        let mut tool = EllipseTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Test mouse press
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(20.0, 30.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+        tool.handle_event(press_event, &mut document, &mut state).unwrap();
+        assert!(tool.is_selecting);
+        assert!(state.is_active);
+
+        // Test mouse drag
+        let drag_event = ToolEvent::MouseDragged {
+            position: Point::new(60.0, 70.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+        tool.handle_event(drag_event, &mut document, &mut state).unwrap();
+        assert!(tool.is_selecting);
+
+        // Test mouse release
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(60.0, 70.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+        tool.handle_event(release_event, &mut document, &mut state).unwrap();
+        assert!(!tool.is_selecting);
+        assert!(!state.is_active);
+
+        // Check that ellipse selection was created
+        assert!(document.has_selection());
+        if let Selection::Ellipse(ellipse) = &document.selection {
+            assert_eq!(ellipse.center.x, 40.0); // (20 + 60) / 2
+            assert_eq!(ellipse.center.y, 50.0); // (30 + 70) / 2
+            assert_eq!(ellipse.radius_x, 20.0); // |60 - 20| / 2
+            assert_eq!(ellipse.radius_y, 20.0); // |70 - 30| / 2
+        } else {
+            panic!("Expected ellipse selection");
+        }
+    }
+
+    #[test]
+    fn test_lasso_tool_creation() {
+        let tool = LassoTool::new();
+        assert_eq!(tool.id(), "lasso_select");
+        assert_eq!(tool.name(), "Lasso Select Tool");
+        assert!(tool.current_path.is_empty());
+        assert!(!tool.is_selecting);
+        assert_eq!(tool.feather_radius, 0.0);
+        assert!(tool.anti_alias);
+    }
+
+    #[test]
+    fn test_lasso_tool_options() {
+        let tool = LassoTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 2);
+
+        let feather_option = &options[0];
+        assert_eq!(feather_option.name, "feather");
+        assert_eq!(feather_option.display_name, "Feather Radius");
+
+        let anti_alias_option = &options[1];
+        assert_eq!(anti_alias_option.name, "anti_alias");
+        assert_eq!(anti_alias_option.display_name, "Anti-alias");
+    }
+
+    #[test]
+    fn test_lasso_tool_event_handling() {
+        let mut tool = LassoTool::new();
+        let mut document = Document::new("Test".to_string(), 100, 100);
+        let mut state = ToolState::default();
+
+        // Test mouse press
+        let press_event = ToolEvent::MousePressed {
+            position: Point::new(10.0, 10.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+        tool.handle_event(press_event, &mut document, &mut state).unwrap();
+        assert!(tool.is_selecting);
+        assert!(state.is_active);
+        assert_eq!(tool.current_path.len(), 1);
+
+        // Test mouse drag (multiple points)
+        let drag_event1 = ToolEvent::MouseDragged {
+            position: Point::new(15.0, 20.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+        tool.handle_event(drag_event1, &mut document, &mut state).unwrap();
+        assert_eq!(tool.current_path.len(), 2);
+
+        let drag_event2 = ToolEvent::MouseDragged {
+            position: Point::new(25.0, 15.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+        tool.handle_event(drag_event2, &mut document, &mut state).unwrap();
+        assert_eq!(tool.current_path.len(), 3);
+
+        // Test mouse release
+        let release_event = ToolEvent::MouseReleased {
+            position: Point::new(30.0, 10.0),
+            button: MouseButton::Left,
+            modifiers: KeyModifiers::default(),
+        };
+        tool.handle_event(release_event, &mut document, &mut state).unwrap();
+        assert!(!tool.is_selecting);
+        assert!(!state.is_active);
+        assert!(tool.current_path.is_empty()); // Path should be cleared after completion
+
+        // Check that lasso selection was created
+        assert!(document.has_selection());
+        if let Selection::Lasso(lasso) = &document.selection {
+            assert!(lasso.points.len() >= 4); // At least 4 points (3 drawn + closing point)
+        } else {
+            panic!("Expected lasso selection");
+        }
+    }
+
+    #[test]
+    fn test_magic_wand_tool_creation() {
+        let tool = MagicWandTool::new();
+        assert_eq!(tool.id(), "magic_wand");
+        assert_eq!(tool.name(), "Magic Wand Tool");
+        assert_eq!(tool.tolerance, 32.0);
+        assert!(tool.contiguous);
+        assert!(tool.anti_alias);
+        assert!(!tool.sample_merged);
+    }
+
+    #[test]
+    fn test_magic_wand_tool_options() {
+        let tool = MagicWandTool::new();
+        let options = tool.options();
+        assert_eq!(options.len(), 4);
+
+        let tolerance_option = &options[0];
+        assert_eq!(tolerance_option.name, "tolerance");
+        assert_eq!(tolerance_option.display_name, "Tolerance");
+
+        let contiguous_option = &options[1];
+        assert_eq!(contiguous_option.name, "contiguous");
+        assert_eq!(contiguous_option.display_name, "Contiguous");
+
+        let anti_alias_option = &options[2];
+        assert_eq!(anti_alias_option.name, "anti_alias");
+        assert_eq!(anti_alias_option.display_name, "Anti-alias");
+
+        let sample_merged_option = &options[3];
+        assert_eq!(sample_merged_option.name, "sample_merged");
+        assert_eq!(sample_merged_option.display_name, "Sample Merged");
+    }
+
+    #[test]
+    fn test_magic_wand_tool_set_options() {
+        let mut tool = MagicWandTool::new();
+
+        // Test tolerance setting
+        tool.set_option("tolerance", ToolOptionValue::Float(50.0)).unwrap();
+        assert_eq!(tool.tolerance, 50.0);
+
+        // Test contiguous setting
+        tool.set_option("contiguous", ToolOptionValue::Bool(false)).unwrap();
+        assert!(!tool.contiguous);
+
+        // Test anti_alias setting
+        tool.set_option("anti_alias", ToolOptionValue::Bool(false)).unwrap();
+        assert!(!tool.anti_alias);
+
+        // Test sample_merged setting
+        tool.set_option("sample_merged", ToolOptionValue::Bool(true)).unwrap();
+        assert!(tool.sample_merged);
+    }
+
+    #[test]
+    fn test_magic_wand_tool_get_options() {
+        let tool = MagicWandTool::new();
+
+        assert_eq!(tool.get_option("tolerance"), Some(ToolOptionValue::Float(32.0)));
+        assert_eq!(tool.get_option("contiguous"), Some(ToolOptionValue::Bool(true)));
+        assert_eq!(tool.get_option("anti_alias"), Some(ToolOptionValue::Bool(true)));
+        assert_eq!(tool.get_option("sample_merged"), Some(ToolOptionValue::Bool(false)));
+        assert_eq!(tool.get_option("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_magic_wand_colors_similar() {
+        let tool = MagicWandTool::new();
+
+        let color1 = psoc_core::RgbaPixel::new(100, 100, 100, 255);
+        let color2 = psoc_core::RgbaPixel::new(110, 110, 110, 255);
+        let color3 = psoc_core::RgbaPixel::new(200, 200, 200, 255);
+
+        // Similar colors within tolerance
+        assert!(tool.colors_similar(color1, color2));
+
+        // Different colors outside tolerance
+        assert!(!tool.colors_similar(color1, color3));
+
+        // Same color
+        assert!(tool.colors_similar(color1, color1));
     }
 }

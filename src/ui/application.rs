@@ -1354,6 +1354,9 @@ impl PsocApp {
 
         let tool_name = match self.state.current_tool {
             ToolType::Select => "Selection",
+            ToolType::EllipseSelect => "Ellipse Selection",
+            ToolType::LassoSelect => "Lasso Selection",
+            ToolType::MagicWand => "Magic Wand",
             ToolType::Brush => "Brush",
             ToolType::Eraser => "Eraser",
             ToolType::Move => "Move",

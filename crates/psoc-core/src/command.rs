@@ -456,10 +456,10 @@ mod tests {
 
         history.execute_command(command, &mut document).unwrap();
 
-        // In simplified implementation, undo/redo are not available
-        assert!(!history.can_undo());
+        // After executing a command, undo should be available
+        assert!(history.can_undo());
         assert!(!history.can_redo());
-        assert_eq!(history.undo_count(), 0);
+        assert_eq!(history.undo_count(), 1);
 
         // Safety: We know the command was executed
         unsafe {
@@ -477,16 +477,17 @@ mod tests {
         // Execute command
         history.execute_command(command, &mut document).unwrap();
 
-        // Undo (simplified implementation returns false)
+        // Should be able to undo
+        assert!(history.can_undo());
         let undone = history.undo(&mut document).unwrap();
-        assert!(!undone);
+        assert!(undone);
         assert!(!history.can_undo());
-        assert!(!history.can_redo());
+        assert!(history.can_redo());
 
-        // Redo (simplified implementation returns false)
+        // Should be able to redo
         let redone = history.redo(&mut document).unwrap();
-        assert!(!redone);
-        assert!(!history.can_undo());
+        assert!(redone);
+        assert!(history.can_undo());
         assert!(!history.can_redo());
     }
 
@@ -498,13 +499,13 @@ mod tests {
         let command = Box::new(MockCommand::new("Test Command"));
         history.execute_command(command, &mut document).unwrap();
 
-        // Simplified implementation returns None for descriptions
-        assert_eq!(history.undo_description(), None);
+        // Should return command description for undo
+        assert_eq!(history.undo_description(), Some("Test Command"));
         assert_eq!(history.redo_description(), None);
 
         history.undo(&mut document).unwrap();
         assert_eq!(history.undo_description(), None);
-        assert_eq!(history.redo_description(), None);
+        assert_eq!(history.redo_description(), Some("Test Command"));
     }
 
     #[test]
@@ -518,9 +519,9 @@ mod tests {
             history.execute_command(command, &mut document).unwrap();
         }
 
-        // Simplified implementation doesn't track individual commands
-        assert_eq!(history.undo_count(), 0);
-        assert_eq!(history.undo_description(), None);
+        // Should only keep 2 commands due to limit
+        assert_eq!(history.undo_count(), 2);
+        assert_eq!(history.undo_description(), Some("Command 2"));
     }
 
     #[test]
@@ -531,8 +532,8 @@ mod tests {
         let command = Box::new(MockCommand::new("Test Command"));
         history.execute_command(command, &mut document).unwrap();
 
-        // Simplified implementation doesn't support undo
-        assert!(!history.can_undo());
+        // Should support undo after command execution
+        assert!(history.can_undo());
         history.clear();
         assert!(!history.can_undo());
         assert!(!history.can_redo());

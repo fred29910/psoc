@@ -977,27 +977,51 @@ impl ImageCanvas {
 
     /// Draw selection overlay
     fn draw_selection(&self, frame: &mut Frame, bounds: Rectangle, document: &Document) {
+        use psoc_core::Selection;
+
         // Only draw selection if there's an active selection
         if document.has_selection() {
-            if let Some(selection_bounds) = document.selection_bounds() {
-                // Transform selection coordinates to canvas coordinates
-                let doc_width = document.size.width * self.state.zoom;
-                let doc_height = document.size.height * self.state.zoom;
+            // Transform coordinates helper
+            let doc_width = document.size.width * self.state.zoom;
+            let doc_height = document.size.height * self.state.zoom;
+            let doc_x = (bounds.width - doc_width) / 2.0 + self.state.pan_offset.x;
+            let doc_y = (bounds.height - doc_height) / 2.0 + self.state.pan_offset.y;
 
-                let doc_x = (bounds.width - doc_width) / 2.0 + self.state.pan_offset.x;
-                let doc_y = (bounds.height - doc_height) / 2.0 + self.state.pan_offset.y;
+            match &document.selection {
+                Selection::Rectangle(_) => {
+                    if let Some(selection_bounds) = document.selection_bounds() {
+                        // Convert selection bounds to canvas coordinates
+                        let sel_x = doc_x + selection_bounds.x * self.state.zoom;
+                        let sel_y = doc_y + selection_bounds.y * self.state.zoom;
+                        let sel_width = selection_bounds.width * self.state.zoom;
+                        let sel_height = selection_bounds.height * self.state.zoom;
 
-                // Convert selection bounds to canvas coordinates
-                let sel_x = doc_x + selection_bounds.x * self.state.zoom;
-                let sel_y = doc_y + selection_bounds.y * self.state.zoom;
-                let sel_width = selection_bounds.width * self.state.zoom;
-                let sel_height = selection_bounds.height * self.state.zoom;
+                        // Draw selection border with marching ants effect
+                        self.draw_marching_ants(frame, sel_x, sel_y, sel_width, sel_height);
 
-                // Draw selection border with marching ants effect
-                self.draw_marching_ants(frame, sel_x, sel_y, sel_width, sel_height);
+                        // Draw selection handles at corners
+                        self.draw_selection_handles(frame, sel_x, sel_y, sel_width, sel_height);
+                    }
+                }
+                Selection::Ellipse(ellipse) => {
+                    self.draw_ellipse_selection(frame, doc_x, doc_y, ellipse);
+                }
+                Selection::Lasso(lasso) => {
+                    self.draw_lasso_selection(frame, doc_x, doc_y, lasso);
+                }
+                Selection::Mask(_mask) => {
+                    // For mask selections, draw the bounding box for now
+                    if let Some(selection_bounds) = document.selection_bounds() {
+                        let sel_x = doc_x + selection_bounds.x * self.state.zoom;
+                        let sel_y = doc_y + selection_bounds.y * self.state.zoom;
+                        let sel_width = selection_bounds.width * self.state.zoom;
+                        let sel_height = selection_bounds.height * self.state.zoom;
 
-                // Draw selection handles at corners
-                self.draw_selection_handles(frame, sel_x, sel_y, sel_width, sel_height);
+                        self.draw_marching_ants(frame, sel_x, sel_y, sel_width, sel_height);
+                        self.draw_selection_handles(frame, sel_x, sel_y, sel_width, sel_height);
+                    }
+                }
+                Selection::None => {} // No selection to draw
             }
         }
     }
@@ -1064,6 +1088,105 @@ impl ImageCanvas {
                 Stroke::default().with_width(1.0).with_color(Color::BLACK),
             );
         }
+    }
+
+    /// Draw ellipse selection
+    fn draw_ellipse_selection(&self, frame: &mut Frame, doc_x: f32, doc_y: f32, ellipse: &psoc_core::EllipseSelection) {
+        // Transform ellipse coordinates to canvas coordinates
+        let center_x = doc_x + ellipse.center.x * self.state.zoom;
+        let center_y = doc_y + ellipse.center.y * self.state.zoom;
+        let radius_x = ellipse.radius_x * self.state.zoom;
+        let radius_y = ellipse.radius_y * self.state.zoom;
+
+        // Create ellipse path (approximated with multiple line segments)
+        let ellipse_path = Path::new(|builder| {
+            let segments = 64; // Number of segments to approximate the ellipse
+
+            for i in 0..=segments {
+                let angle = 2.0 * std::f32::consts::PI * i as f32 / segments as f32;
+                let x = center_x + radius_x * angle.cos();
+                let y = center_y + radius_y * angle.sin();
+
+                if i == 0 {
+                    builder.move_to(Point::new(x, y));
+                } else {
+                    builder.line_to(Point::new(x, y));
+                }
+            }
+            builder.close();
+        });
+
+        // Draw outer border (white)
+        frame.stroke(
+            &ellipse_path,
+            Stroke::default()
+                .with_width(3.0)
+                .with_color(Color::WHITE),
+        );
+
+        // Draw inner border (black)
+        frame.stroke(
+            &ellipse_path,
+            Stroke::default()
+                .with_width(1.0)
+                .with_color(Color::BLACK),
+        );
+
+        // Draw bounding box handles
+        let bounds_x = center_x - radius_x;
+        let bounds_y = center_y - radius_y;
+        let bounds_width = radius_x * 2.0;
+        let bounds_height = radius_y * 2.0;
+        self.draw_selection_handles(frame, bounds_x, bounds_y, bounds_width, bounds_height);
+    }
+
+    /// Draw lasso selection
+    fn draw_lasso_selection(&self, frame: &mut Frame, doc_x: f32, doc_y: f32, lasso: &psoc_core::LassoSelection) {
+        if lasso.points.len() < 2 {
+            return;
+        }
+
+        // Create path from lasso points
+        let lasso_path = Path::new(|builder| {
+            for (i, point) in lasso.points.iter().enumerate() {
+                let x = doc_x + point.x * self.state.zoom;
+                let y = doc_y + point.y * self.state.zoom;
+
+                if i == 0 {
+                    builder.move_to(Point::new(x, y));
+                } else {
+                    builder.line_to(Point::new(x, y));
+                }
+            }
+
+            if lasso.points.len() > 2 {
+                builder.close();
+            }
+        });
+
+        // Draw outer border (white)
+        frame.stroke(
+            &lasso_path,
+            Stroke::default()
+                .with_width(3.0)
+                .with_color(Color::WHITE),
+        );
+
+        // Draw inner border (black)
+        frame.stroke(
+            &lasso_path,
+            Stroke::default()
+                .with_width(1.0)
+                .with_color(Color::BLACK),
+        );
+
+        // Draw bounding box handles
+        let bounds = lasso.bounds();
+        let bounds_x = doc_x + bounds.x * self.state.zoom;
+        let bounds_y = doc_y + bounds.y * self.state.zoom;
+        let bounds_width = bounds.width * self.state.zoom;
+        let bounds_height = bounds.height * self.state.zoom;
+        self.draw_selection_handles(frame, bounds_x, bounds_y, bounds_width, bounds_height);
     }
 }
 
