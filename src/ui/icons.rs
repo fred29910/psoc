@@ -29,10 +29,19 @@ pub enum Icon {
     Move,
     Brush,
     Eraser,
+    Transform,
     Eyedropper,
     Bucket,
     Text,
     Shape,
+    Gradient,
+    Crop,
+
+    // Shape tools
+    Rectangle,
+    Ellipse,
+    Line,
+    Polygon,
 
     // View operations
     ZoomIn,
@@ -113,10 +122,19 @@ impl Icon {
             Icon::Move => '↔',
             Icon::Brush => 'B',
             Icon::Eraser => 'E',
+            Icon::Transform => '⟲',
             Icon::Eyedropper => '●',
             Icon::Bucket => 'F',
             Icon::Text => 'T',
             Icon::Shape => '◇',
+            Icon::Gradient => '▦',
+            Icon::Crop => '✂',
+
+            // Shape tools
+            Icon::Rectangle => '▭',
+            Icon::Ellipse => '○',
+            Icon::Line => '/',
+            Icon::Polygon => '⬟',
 
             // View operations
             Icon::ZoomIn => '+',
@@ -207,10 +225,17 @@ impl Icon {
             Icon::Move => "Move",
             Icon::Brush => "Brush",
             Icon::Eraser => "Eraser",
+            Icon::Transform => "Transform",
             Icon::Eyedropper => "Eyedropper",
             Icon::Bucket => "Bucket Fill",
             Icon::Text => "Text",
             Icon::Shape => "Shape",
+            Icon::Gradient => "Gradient",
+            Icon::Crop => "Crop",
+            Icon::Rectangle => "Rectangle",
+            Icon::Ellipse => "Ellipse",
+            Icon::Line => "Line",
+            Icon::Polygon => "Polygon",
             Icon::ZoomIn => "Zoom In",
             Icon::ZoomOut => "Zoom Out",
             Icon::ZoomFit => "Zoom to Fit",

@@ -1,6 +1,6 @@
 [package]
 name = "psoc"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["PSOC Development Team <dev@psoc.project>"]
 description = "A Photoshop-like image editor built with Rust"
@@ -37,6 +37,9 @@ iced = { version = "0.13.1", features = ["canvas", "image", "svg", "tokio", "adv
 
 # Image processing
 image = { version = "0.25.6", features = ["png", "jpeg", "tiff", "webp"] }
+
+# Text rendering
+ab_glyph = "0.2.29"
 
 # File dialogs (optional for GUI)
 rfd = { version = "0.15.3", optional = true }

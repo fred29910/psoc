@@ -3,9 +3,10 @@
 //! This module defines the document structure for the PSOC image editor,
 //! including document metadata, layer management, and document operations.
 
-use crate::color::ColorSpace;
+use crate::color::ColorSpace as DocumentColorSpace;
 use crate::command::CommandHistory;
 use crate::geometry::{Point, Rect, Size};
+use crate::icc::IccProfile;
 use crate::layer::Layer;
 use crate::pixel::{PixelData, RgbaPixel};
 use crate::selection::Selection;
@@ -155,7 +156,9 @@ pub struct Document {
     /// Color mode
     pub color_mode: ColorMode,
     /// Color space
-    pub color_space: ColorSpace,
+    pub color_space: DocumentColorSpace,
+    /// ICC color profile (optional)
+    pub icc_profile: Option<IccProfile>,
     /// Background color
     pub background_color: RgbaPixel,
     /// Document layers (ordered from bottom to top)
@@ -189,7 +192,8 @@ impl Document {
             size,
             resolution: Resolution::default(),
             color_mode: ColorMode::default(),
-            color_space: ColorSpace::default(),
+            color_space: DocumentColorSpace::default(),
+            icc_profile: None,
             background_color: RgbaPixel::white(),
             layers: Vec::new(),
             active_layer_index: None,
@@ -203,8 +207,20 @@ impl Document {
 
     /// Create document from image
     pub fn from_image(title: String, image: &DynamicImage) -> Result<Self> {
+        Self::from_image_with_profile(title, image, None)
+    }
+
+    /// Create document from image with ICC profile
+    pub fn from_image_with_profile(
+        title: String,
+        image: &DynamicImage,
+        icc_profile: Option<IccProfile>,
+    ) -> Result<Self> {
         let (width, height) = image.dimensions();
         let mut document = Self::new(title, width, height);
+
+        // Set ICC profile if provided
+        document.icc_profile = icc_profile;
 
         // Create a layer from the image
         let pixel_data =
@@ -565,6 +581,31 @@ impl Document {
         &self.selection
     }
 
+    /// Navigate to a specific position in command history
+    pub fn navigate_to_history_position(&mut self, position: usize) -> Result<bool> {
+        if let Some(direction) = self.command_history.should_navigate_to_position(position) {
+            match direction {
+                crate::NavigationDirection::Backward(steps) => {
+                    for _ in 0..steps {
+                        if !self.undo()? {
+                            break;
+                        }
+                    }
+                }
+                crate::NavigationDirection::Forward(steps) => {
+                    for _ in 0..steps {
+                        if !self.redo()? {
+                            break;
+                        }
+                    }
+                }
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     /// Clear the current selection (select all)
     pub fn clear_selection(&mut self) {
         self.selection = Selection::None;
@@ -739,5 +780,58 @@ mod tests {
         doc.clear_selection();
         assert!(doc.get_selection().is_select_all());
         assert!(!doc.has_selection());
+    }
+
+    #[test]
+    fn test_document_icc_profile() {
+        let mut doc = Document::new("Test".to_string(), 100, 100);
+
+        // Initially no ICC profile
+        assert!(doc.icc_profile.is_none());
+
+        // Test that we can set an ICC profile (even if None for now)
+        doc.icc_profile = None;
+        assert!(doc.icc_profile.is_none());
+    }
+
+    #[test]
+    fn test_document_from_image_with_profile() {
+        use image::{ImageBuffer, Rgb};
+
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(50, 50);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
+
+        // Test without profile
+        let doc1 =
+            Document::from_image_with_profile("Test1".to_string(), &dynamic_img, None).unwrap();
+        assert!(doc1.icc_profile.is_none());
+        assert_eq!(doc1.layers.len(), 1);
+        assert_eq!(doc1.dimensions(), (50, 50));
+
+        // Test with profile (None for now, but structure is there)
+        let doc2 =
+            Document::from_image_with_profile("Test2".to_string(), &dynamic_img, None).unwrap();
+        assert!(doc2.icc_profile.is_none());
+        assert_eq!(doc2.layers.len(), 1);
+    }
+
+    #[test]
+    fn test_document_from_image_compatibility() {
+        use image::{ImageBuffer, Rgb};
+
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(30, 30);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
+
+        // Test that old method still works
+        let doc1 = Document::from_image("Test1".to_string(), &dynamic_img).unwrap();
+
+        // Test that new method with None profile produces same result
+        let doc2 =
+            Document::from_image_with_profile("Test2".to_string(), &dynamic_img, None).unwrap();
+
+        assert_eq!(doc1.dimensions(), doc2.dimensions());
+        assert_eq!(doc1.layers.len(), doc2.layers.len());
+        assert!(doc1.icc_profile.is_none());
+        assert!(doc2.icc_profile.is_none());
     }
 }

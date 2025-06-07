@@ -2,8 +2,8 @@
 
 use iced::{
     mouse::Cursor,
-    widget::canvas::{self, Canvas, Event, Frame, Geometry, Path, Stroke},
-    Color, Element, Length, Point, Rectangle, Size, Vector,
+    widget::canvas::{self, Canvas, Event, Frame, Geometry, Path, Stroke, Text},
+    Color, Element, Font, Length, Point, Rectangle, Size, Vector,
 };
 use tracing::{debug, trace};
 
@@ -37,6 +37,20 @@ pub struct CanvasState {
     pub last_mouse_pos: Option<Point>,
     /// Canvas bounds
     pub bounds: Rectangle,
+    /// Whether rulers are visible
+    pub show_rulers: bool,
+    /// Whether grid is visible
+    pub show_grid: bool,
+    /// Whether guides are visible
+    pub show_guides: bool,
+    /// Grid size in pixels
+    pub grid_size: f32,
+    /// Ruler size in pixels
+    pub ruler_size: f32,
+    /// Horizontal guides (y-coordinates in image space)
+    pub horizontal_guides: Vec<f32>,
+    /// Vertical guides (x-coordinates in image space)
+    pub vertical_guides: Vec<f32>,
 }
 
 /// Image data for rendering
@@ -76,6 +90,13 @@ impl ImageCanvas {
                 is_dragging: false,
                 last_mouse_pos: None,
                 bounds: Rectangle::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
+                show_rulers: true,
+                show_grid: false,
+                show_guides: true,
+                grid_size: 20.0,
+                ruler_size: 20.0,
+                horizontal_guides: Vec::new(),
+                vertical_guides: Vec::new(),
             },
             image_data: None,
             document: None,
@@ -116,6 +137,88 @@ impl ImageCanvas {
     pub fn set_zoom(&mut self, zoom: f32) {
         self.state.zoom = zoom.clamp(0.1, 10.0);
         debug!("Canvas zoom set to: {:.2}", self.state.zoom);
+    }
+
+    /// Toggle ruler visibility
+    pub fn toggle_rulers(&mut self) {
+        self.state.show_rulers = !self.state.show_rulers;
+        debug!("Rulers visibility: {}", self.state.show_rulers);
+    }
+
+    /// Set ruler visibility
+    pub fn set_rulers_visible(&mut self, visible: bool) {
+        self.state.show_rulers = visible;
+        debug!("Rulers visibility set to: {}", visible);
+    }
+
+    /// Toggle grid visibility
+    pub fn toggle_grid(&mut self) {
+        self.state.show_grid = !self.state.show_grid;
+        debug!("Grid visibility: {}", self.state.show_grid);
+    }
+
+    /// Set grid visibility
+    pub fn set_grid_visible(&mut self, visible: bool) {
+        self.state.show_grid = visible;
+        debug!("Grid visibility set to: {}", visible);
+    }
+
+    /// Set grid size
+    pub fn set_grid_size(&mut self, size: f32) {
+        self.state.grid_size = size.clamp(5.0, 100.0);
+        debug!("Grid size set to: {:.1}", self.state.grid_size);
+    }
+
+    /// Toggle guides visibility
+    pub fn toggle_guides(&mut self) {
+        self.state.show_guides = !self.state.show_guides;
+        debug!("Guides visibility: {}", self.state.show_guides);
+    }
+
+    /// Set guides visibility
+    pub fn set_guides_visible(&mut self, visible: bool) {
+        self.state.show_guides = visible;
+        debug!("Guides visibility set to: {}", visible);
+    }
+
+    /// Add horizontal guide at y position (in image coordinates)
+    pub fn add_horizontal_guide(&mut self, y: f32) {
+        self.state.horizontal_guides.push(y);
+        debug!("Added horizontal guide at y: {:.1}", y);
+    }
+
+    /// Add vertical guide at x position (in image coordinates)
+    pub fn add_vertical_guide(&mut self, x: f32) {
+        self.state.vertical_guides.push(x);
+        debug!("Added vertical guide at x: {:.1}", x);
+    }
+
+    /// Remove horizontal guide at index
+    pub fn remove_horizontal_guide(&mut self, index: usize) {
+        if index < self.state.horizontal_guides.len() {
+            let y = self.state.horizontal_guides.remove(index);
+            debug!("Removed horizontal guide at y: {:.1}", y);
+        }
+    }
+
+    /// Remove vertical guide at index
+    pub fn remove_vertical_guide(&mut self, index: usize) {
+        if index < self.state.vertical_guides.len() {
+            let x = self.state.vertical_guides.remove(index);
+            debug!("Removed vertical guide at x: {:.1}", x);
+        }
+    }
+
+    /// Clear all guides
+    pub fn clear_guides(&mut self) {
+        self.state.horizontal_guides.clear();
+        self.state.vertical_guides.clear();
+        debug!("Cleared all guides");
+    }
+
+    /// Get canvas state (for testing)
+    pub fn state(&self) -> &CanvasState {
+        &self.state
     }
 
     /// Set pan offset
@@ -279,22 +382,46 @@ impl canvas::Program<Message> for ImageCanvas {
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
 
+        // Calculate content area (excluding rulers)
+        let content_bounds = if self.state.show_rulers {
+            Rectangle::new(
+                Point::new(self.state.ruler_size, self.state.ruler_size),
+                Size::new(
+                    bounds.width - self.state.ruler_size,
+                    bounds.height - self.state.ruler_size,
+                ),
+            )
+        } else {
+            bounds
+        };
+
         // Draw background
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::from_rgb(0.2, 0.2, 0.2));
 
-        // Draw grid
-        self.draw_grid(&mut frame, bounds);
+        // Draw rulers first (behind content)
+        if self.state.show_rulers {
+            self.draw_rulers(&mut frame, bounds, content_bounds);
+        }
+
+        // Draw grid in content area
+        if self.state.show_grid {
+            self.draw_grid(&mut frame, content_bounds);
+        }
 
         // Draw document or image if available
         if let Some(ref document) = self.document {
-            self.draw_document(&mut frame, bounds, document);
+            self.draw_document(&mut frame, content_bounds, document);
             // Draw selection overlay
-            self.draw_selection(&mut frame, bounds, document);
+            self.draw_selection(&mut frame, content_bounds, document);
+            // Draw guides
+            if self.state.show_guides {
+                self.draw_guides(&mut frame, content_bounds, document);
+            }
         } else if let Some(ref image_data) = self.image_data {
-            self.draw_image(&mut frame, bounds, image_data);
+            self.draw_image(&mut frame, content_bounds, image_data);
         } else {
             // Draw placeholder
-            self.draw_placeholder(&mut frame, bounds);
+            self.draw_placeholder(&mut frame, content_bounds);
         }
 
         // Draw canvas border
@@ -312,16 +439,19 @@ impl canvas::Program<Message> for ImageCanvas {
 impl ImageCanvas {
     /// Draw the grid background
     fn draw_grid(&self, frame: &mut Frame, bounds: Rectangle) {
-        let grid_size = 20.0 * self.state.zoom;
-        let grid_color = Color::from_rgba(1.0, 1.0, 1.0, 0.1);
+        let grid_size = self.state.grid_size * self.state.zoom;
+        let grid_color = Color::from_rgba(1.0, 1.0, 1.0, 0.15);
 
         if grid_size > 5.0 {
             // Draw vertical lines
-            let mut x = (self.state.pan_offset.x % grid_size) - grid_size;
-            while x < bounds.width {
-                if x >= 0.0 {
+            let mut x = (self.state.pan_offset.x % grid_size) - grid_size + bounds.x;
+            while x < bounds.x + bounds.width {
+                if x >= bounds.x {
                     frame.stroke(
-                        &Path::line(Point::new(x, 0.0), Point::new(x, bounds.height)),
+                        &Path::line(
+                            Point::new(x, bounds.y),
+                            Point::new(x, bounds.y + bounds.height),
+                        ),
                         Stroke::default().with_width(0.5).with_color(grid_color),
                     );
                 }
@@ -329,15 +459,226 @@ impl ImageCanvas {
             }
 
             // Draw horizontal lines
-            let mut y = (self.state.pan_offset.y % grid_size) - grid_size;
-            while y < bounds.height {
-                if y >= 0.0 {
+            let mut y = (self.state.pan_offset.y % grid_size) - grid_size + bounds.y;
+            while y < bounds.y + bounds.height {
+                if y >= bounds.y {
                     frame.stroke(
-                        &Path::line(Point::new(0.0, y), Point::new(bounds.width, y)),
+                        &Path::line(
+                            Point::new(bounds.x, y),
+                            Point::new(bounds.x + bounds.width, y),
+                        ),
                         Stroke::default().with_width(0.5).with_color(grid_color),
                     );
                 }
                 y += grid_size;
+            }
+        }
+    }
+
+    /// Draw rulers on the edges of the canvas
+    fn draw_rulers(&self, frame: &mut Frame, canvas_bounds: Rectangle, content_bounds: Rectangle) {
+        let ruler_color = Color::from_rgb(0.3, 0.3, 0.3);
+        let ruler_text_color = Color::from_rgb(0.9, 0.9, 0.9);
+        let tick_color = Color::from_rgb(0.6, 0.6, 0.6);
+
+        // Draw ruler backgrounds
+        // Top ruler
+        frame.fill_rectangle(
+            Point::new(0.0, 0.0),
+            Size::new(canvas_bounds.width, self.state.ruler_size),
+            ruler_color,
+        );
+
+        // Left ruler
+        frame.fill_rectangle(
+            Point::new(0.0, 0.0),
+            Size::new(self.state.ruler_size, canvas_bounds.height),
+            ruler_color,
+        );
+
+        // Draw ruler ticks and labels
+        self.draw_horizontal_ruler(frame, content_bounds, ruler_text_color, tick_color);
+        self.draw_vertical_ruler(frame, content_bounds, ruler_text_color, tick_color);
+    }
+
+    /// Draw horizontal ruler (top)
+    fn draw_horizontal_ruler(
+        &self,
+        frame: &mut Frame,
+        content_bounds: Rectangle,
+        text_color: Color,
+        tick_color: Color,
+    ) {
+        let tick_spacing = 50.0 * self.state.zoom; // 50 pixels in image space
+        let minor_tick_spacing = 10.0 * self.state.zoom; // 10 pixels in image space
+
+        if tick_spacing > 5.0 {
+            // Calculate starting position
+            let start_x = content_bounds.x + self.state.pan_offset.x;
+            let mut x = start_x - (start_x % tick_spacing);
+
+            while x < content_bounds.x + content_bounds.width {
+                if x >= content_bounds.x {
+                    // Calculate image coordinate
+                    let image_x =
+                        (x - content_bounds.x - self.state.pan_offset.x) / self.state.zoom;
+
+                    // Draw major tick
+                    frame.stroke(
+                        &Path::line(
+                            Point::new(x, self.state.ruler_size - 8.0),
+                            Point::new(x, self.state.ruler_size),
+                        ),
+                        Stroke::default().with_width(1.0).with_color(tick_color),
+                    );
+
+                    // Draw label
+                    if image_x >= 0.0 {
+                        let label = format!("{:.0}", image_x);
+                        frame.fill_text(Text {
+                            content: label,
+                            position: Point::new(x + 2.0, 2.0),
+                            color: text_color,
+                            size: iced::Pixels(10.0),
+                            font: Font::default(),
+                            horizontal_alignment: iced::alignment::Horizontal::Left,
+                            vertical_alignment: iced::alignment::Vertical::Top,
+                            line_height: iced::widget::text::LineHeight::default(),
+                            shaping: iced::widget::text::Shaping::default(),
+                        });
+                    }
+                }
+
+                // Draw minor ticks
+                if minor_tick_spacing > 2.0 {
+                    for i in 1..5 {
+                        let minor_x = x + i as f32 * minor_tick_spacing;
+                        if minor_x >= content_bounds.x
+                            && minor_x < content_bounds.x + content_bounds.width
+                        {
+                            frame.stroke(
+                                &Path::line(
+                                    Point::new(minor_x, self.state.ruler_size - 4.0),
+                                    Point::new(minor_x, self.state.ruler_size),
+                                ),
+                                Stroke::default().with_width(0.5).with_color(tick_color),
+                            );
+                        }
+                    }
+                }
+
+                x += tick_spacing;
+            }
+        }
+    }
+
+    /// Draw vertical ruler (left)
+    fn draw_vertical_ruler(
+        &self,
+        frame: &mut Frame,
+        content_bounds: Rectangle,
+        text_color: Color,
+        tick_color: Color,
+    ) {
+        let tick_spacing = 50.0 * self.state.zoom; // 50 pixels in image space
+        let minor_tick_spacing = 10.0 * self.state.zoom; // 10 pixels in image space
+
+        if tick_spacing > 5.0 {
+            // Calculate starting position
+            let start_y = content_bounds.y + self.state.pan_offset.y;
+            let mut y = start_y - (start_y % tick_spacing);
+
+            while y < content_bounds.y + content_bounds.height {
+                if y >= content_bounds.y {
+                    // Calculate image coordinate
+                    let image_y =
+                        (y - content_bounds.y - self.state.pan_offset.y) / self.state.zoom;
+
+                    // Draw major tick
+                    frame.stroke(
+                        &Path::line(
+                            Point::new(self.state.ruler_size - 8.0, y),
+                            Point::new(self.state.ruler_size, y),
+                        ),
+                        Stroke::default().with_width(1.0).with_color(tick_color),
+                    );
+
+                    // Draw label (rotated text is complex in iced, so we'll skip for now)
+                    if image_y >= 0.0 {
+                        let label = format!("{:.0}", image_y);
+                        frame.fill_text(Text {
+                            content: label,
+                            position: Point::new(2.0, y - 6.0),
+                            color: text_color,
+                            size: iced::Pixels(10.0),
+                            font: Font::default(),
+                            horizontal_alignment: iced::alignment::Horizontal::Left,
+                            vertical_alignment: iced::alignment::Vertical::Top,
+                            line_height: iced::widget::text::LineHeight::default(),
+                            shaping: iced::widget::text::Shaping::default(),
+                        });
+                    }
+                }
+
+                // Draw minor ticks
+                if minor_tick_spacing > 2.0 {
+                    for i in 1..5 {
+                        let minor_y = y + i as f32 * minor_tick_spacing;
+                        if minor_y >= content_bounds.y
+                            && minor_y < content_bounds.y + content_bounds.height
+                        {
+                            frame.stroke(
+                                &Path::line(
+                                    Point::new(self.state.ruler_size - 4.0, minor_y),
+                                    Point::new(self.state.ruler_size, minor_y),
+                                ),
+                                Stroke::default().with_width(0.5).with_color(tick_color),
+                            );
+                        }
+                    }
+                }
+
+                y += tick_spacing;
+            }
+        }
+    }
+
+    /// Draw guides (reference lines)
+    fn draw_guides(&self, frame: &mut Frame, bounds: Rectangle, document: &Document) {
+        let guide_color = Color::from_rgba(0.0, 1.0, 1.0, 0.8); // Cyan color
+        let guide_stroke = Stroke::default().with_width(1.0).with_color(guide_color);
+
+        // Calculate document position and size
+        let doc_width = document.size.width * self.state.zoom;
+        let doc_height = document.size.height * self.state.zoom;
+        let doc_x = (bounds.width - doc_width) / 2.0 + self.state.pan_offset.x + bounds.x;
+        let doc_y = (bounds.height - doc_height) / 2.0 + self.state.pan_offset.y + bounds.y;
+
+        // Draw horizontal guides
+        for &guide_y in &self.state.horizontal_guides {
+            let canvas_y = doc_y + guide_y * self.state.zoom;
+            if canvas_y >= bounds.y && canvas_y <= bounds.y + bounds.height {
+                frame.stroke(
+                    &Path::line(
+                        Point::new(bounds.x, canvas_y),
+                        Point::new(bounds.x + bounds.width, canvas_y),
+                    ),
+                    guide_stroke,
+                );
+            }
+        }
+
+        // Draw vertical guides
+        for &guide_x in &self.state.vertical_guides {
+            let canvas_x = doc_x + guide_x * self.state.zoom;
+            if canvas_x >= bounds.x && canvas_x <= bounds.x + bounds.width {
+                frame.stroke(
+                    &Path::line(
+                        Point::new(canvas_x, bounds.y),
+                        Point::new(canvas_x, bounds.y + bounds.height),
+                    ),
+                    guide_stroke,
+                );
             }
         }
     }
@@ -636,27 +977,51 @@ impl ImageCanvas {
 
     /// Draw selection overlay
     fn draw_selection(&self, frame: &mut Frame, bounds: Rectangle, document: &Document) {
+        use psoc_core::Selection;
+
         // Only draw selection if there's an active selection
         if document.has_selection() {
-            if let Some(selection_bounds) = document.selection_bounds() {
-                // Transform selection coordinates to canvas coordinates
-                let doc_width = document.size.width * self.state.zoom;
-                let doc_height = document.size.height * self.state.zoom;
+            // Transform coordinates helper
+            let doc_width = document.size.width * self.state.zoom;
+            let doc_height = document.size.height * self.state.zoom;
+            let doc_x = (bounds.width - doc_width) / 2.0 + self.state.pan_offset.x;
+            let doc_y = (bounds.height - doc_height) / 2.0 + self.state.pan_offset.y;
 
-                let doc_x = (bounds.width - doc_width) / 2.0 + self.state.pan_offset.x;
-                let doc_y = (bounds.height - doc_height) / 2.0 + self.state.pan_offset.y;
+            match &document.selection {
+                Selection::Rectangle(_) => {
+                    if let Some(selection_bounds) = document.selection_bounds() {
+                        // Convert selection bounds to canvas coordinates
+                        let sel_x = doc_x + selection_bounds.x * self.state.zoom;
+                        let sel_y = doc_y + selection_bounds.y * self.state.zoom;
+                        let sel_width = selection_bounds.width * self.state.zoom;
+                        let sel_height = selection_bounds.height * self.state.zoom;
 
-                // Convert selection bounds to canvas coordinates
-                let sel_x = doc_x + selection_bounds.x * self.state.zoom;
-                let sel_y = doc_y + selection_bounds.y * self.state.zoom;
-                let sel_width = selection_bounds.width * self.state.zoom;
-                let sel_height = selection_bounds.height * self.state.zoom;
+                        // Draw selection border with marching ants effect
+                        self.draw_marching_ants(frame, sel_x, sel_y, sel_width, sel_height);
 
-                // Draw selection border with marching ants effect
-                self.draw_marching_ants(frame, sel_x, sel_y, sel_width, sel_height);
+                        // Draw selection handles at corners
+                        self.draw_selection_handles(frame, sel_x, sel_y, sel_width, sel_height);
+                    }
+                }
+                Selection::Ellipse(ellipse) => {
+                    self.draw_ellipse_selection(frame, doc_x, doc_y, ellipse);
+                }
+                Selection::Lasso(lasso) => {
+                    self.draw_lasso_selection(frame, doc_x, doc_y, lasso);
+                }
+                Selection::Mask(_mask) => {
+                    // For mask selections, draw the bounding box for now
+                    if let Some(selection_bounds) = document.selection_bounds() {
+                        let sel_x = doc_x + selection_bounds.x * self.state.zoom;
+                        let sel_y = doc_y + selection_bounds.y * self.state.zoom;
+                        let sel_width = selection_bounds.width * self.state.zoom;
+                        let sel_height = selection_bounds.height * self.state.zoom;
 
-                // Draw selection handles at corners
-                self.draw_selection_handles(frame, sel_x, sel_y, sel_width, sel_height);
+                        self.draw_marching_ants(frame, sel_x, sel_y, sel_width, sel_height);
+                        self.draw_selection_handles(frame, sel_x, sel_y, sel_width, sel_height);
+                    }
+                }
+                Selection::None => {} // No selection to draw
             }
         }
     }
@@ -723,6 +1088,109 @@ impl ImageCanvas {
                 Stroke::default().with_width(1.0).with_color(Color::BLACK),
             );
         }
+    }
+
+    /// Draw ellipse selection
+    fn draw_ellipse_selection(
+        &self,
+        frame: &mut Frame,
+        doc_x: f32,
+        doc_y: f32,
+        ellipse: &psoc_core::EllipseSelection,
+    ) {
+        // Transform ellipse coordinates to canvas coordinates
+        let center_x = doc_x + ellipse.center.x * self.state.zoom;
+        let center_y = doc_y + ellipse.center.y * self.state.zoom;
+        let radius_x = ellipse.radius_x * self.state.zoom;
+        let radius_y = ellipse.radius_y * self.state.zoom;
+
+        // Create ellipse path (approximated with multiple line segments)
+        let ellipse_path = Path::new(|builder| {
+            let segments = 64; // Number of segments to approximate the ellipse
+
+            for i in 0..=segments {
+                let angle = 2.0 * std::f32::consts::PI * i as f32 / segments as f32;
+                let x = center_x + radius_x * angle.cos();
+                let y = center_y + radius_y * angle.sin();
+
+                if i == 0 {
+                    builder.move_to(Point::new(x, y));
+                } else {
+                    builder.line_to(Point::new(x, y));
+                }
+            }
+            builder.close();
+        });
+
+        // Draw outer border (white)
+        frame.stroke(
+            &ellipse_path,
+            Stroke::default().with_width(3.0).with_color(Color::WHITE),
+        );
+
+        // Draw inner border (black)
+        frame.stroke(
+            &ellipse_path,
+            Stroke::default().with_width(1.0).with_color(Color::BLACK),
+        );
+
+        // Draw bounding box handles
+        let bounds_x = center_x - radius_x;
+        let bounds_y = center_y - radius_y;
+        let bounds_width = radius_x * 2.0;
+        let bounds_height = radius_y * 2.0;
+        self.draw_selection_handles(frame, bounds_x, bounds_y, bounds_width, bounds_height);
+    }
+
+    /// Draw lasso selection
+    fn draw_lasso_selection(
+        &self,
+        frame: &mut Frame,
+        doc_x: f32,
+        doc_y: f32,
+        lasso: &psoc_core::LassoSelection,
+    ) {
+        if lasso.points.len() < 2 {
+            return;
+        }
+
+        // Create path from lasso points
+        let lasso_path = Path::new(|builder| {
+            for (i, point) in lasso.points.iter().enumerate() {
+                let x = doc_x + point.x * self.state.zoom;
+                let y = doc_y + point.y * self.state.zoom;
+
+                if i == 0 {
+                    builder.move_to(Point::new(x, y));
+                } else {
+                    builder.line_to(Point::new(x, y));
+                }
+            }
+
+            if lasso.points.len() > 2 {
+                builder.close();
+            }
+        });
+
+        // Draw outer border (white)
+        frame.stroke(
+            &lasso_path,
+            Stroke::default().with_width(3.0).with_color(Color::WHITE),
+        );
+
+        // Draw inner border (black)
+        frame.stroke(
+            &lasso_path,
+            Stroke::default().with_width(1.0).with_color(Color::BLACK),
+        );
+
+        // Draw bounding box handles
+        let bounds = lasso.bounds();
+        let bounds_x = doc_x + bounds.x * self.state.zoom;
+        let bounds_y = doc_y + bounds.y * self.state.zoom;
+        let bounds_width = bounds.width * self.state.zoom;
+        let bounds_height = bounds.height * self.state.zoom;
+        self.draw_selection_handles(frame, bounds_x, bounds_y, bounds_width, bounds_height);
     }
 }
 

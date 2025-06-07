@@ -104,6 +104,7 @@ impl Command for ClearSelectionCommand {
 
 /// Command to move selection contents
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct MoveSelectionCommand {
     metadata: CommandMetadata,
     layer_index: usize,
@@ -122,6 +123,22 @@ impl MoveSelectionCommand {
                 new_rect.rect.x += offset.x;
                 new_rect.rect.y += offset.y;
                 Selection::Rectangle(new_rect)
+            }
+            Selection::Ellipse(ellipse_sel) => {
+                let mut new_ellipse = ellipse_sel.clone();
+                new_ellipse.center.x += offset.x;
+                new_ellipse.center.y += offset.y;
+                Selection::Ellipse(new_ellipse)
+            }
+            Selection::Lasso(lasso_sel) => {
+                let mut new_lasso = lasso_sel.clone();
+                new_lasso.translate(offset.x, offset.y);
+                Selection::Lasso(new_lasso)
+            }
+            Selection::Mask(mask_sel) => {
+                let mut new_mask = mask_sel.clone();
+                new_mask.translate(offset.x, offset.y);
+                Selection::Mask(new_mask)
             }
             Selection::None => Selection::None,
         };
@@ -233,7 +250,10 @@ impl Command for InvertSelectionCommand {
                 };
                 document.set_selection(Selection::Rectangle(full_rect));
             }
-            Selection::Rectangle(_) => {
+            Selection::Rectangle(_)
+            | Selection::Ellipse(_)
+            | Selection::Lasso(_)
+            | Selection::Mask(_) => {
                 // If there's a selection, clear it (simplified inversion)
                 document.set_selection(Selection::None);
             }
@@ -313,6 +333,7 @@ impl Command for SelectAllCommand {
 
 /// Command to transform a selection (resize, rotate, etc.)
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct TransformSelectionCommand {
     metadata: CommandMetadata,
     old_selection: Selection,

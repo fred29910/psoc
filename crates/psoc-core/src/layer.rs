@@ -619,6 +619,16 @@ impl Layer {
         self.move_by(dx, dy);
     }
 
+    /// Get current transformation
+    pub fn transform(&self) -> Transform {
+        self.transform
+    }
+
+    /// Set transformation
+    pub fn set_transform(&mut self, transform: Transform) {
+        self.transform = transform;
+    }
+
     /// Apply transformation to layer
     pub fn apply_transform(&mut self, transform: Transform) {
         self.transform = self.transform.then(&transform);

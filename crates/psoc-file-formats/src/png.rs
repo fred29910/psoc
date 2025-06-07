@@ -1,17 +1,37 @@
 //! PNG format support
 //!
-//! This module provides PNG image loading and saving functionality.
+//! This module provides PNG image loading and saving functionality with ICC profile support.
 
 use anyhow::{Context, Result};
+use psoc_core::{ColorManager, IccProfile};
+use std::fs::File;
+use std::io::{BufReader, Read};
 use std::path::Path;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
+
+/// PNG loading result with optional ICC profile
+#[derive(Debug)]
+pub struct PngLoadResult {
+    /// The loaded image
+    pub image: image::DynamicImage,
+    /// Embedded ICC profile, if any
+    pub icc_profile: Option<IccProfile>,
+}
 
 /// Load a PNG image from a file path
 #[instrument(skip_all, fields(path = %path.as_ref().display()))]
 pub fn load_png<P: AsRef<Path>>(path: P) -> Result<image::DynamicImage> {
-    let path = path.as_ref();
-    debug!("Loading PNG image from: {}", path.display());
+    let result = load_png_with_profile(path)?;
+    Ok(result.image)
+}
 
+/// Load a PNG image with ICC profile from a file path
+#[instrument(skip_all, fields(path = %path.as_ref().display()))]
+pub fn load_png_with_profile<P: AsRef<Path>>(path: P) -> Result<PngLoadResult> {
+    let path = path.as_ref();
+    debug!("Loading PNG image with profile from: {}", path.display());
+
+    // Load the image using the standard image crate
     let image = image::open(path)
         .with_context(|| format!("Failed to load PNG image from: {}", path.display()))?;
 
@@ -26,7 +46,136 @@ pub fn load_png<P: AsRef<Path>>(path: P) -> Result<image::DynamicImage> {
         debug!("Converting image color type for PNG compatibility");
     }
 
-    Ok(image)
+    // Try to extract ICC profile from PNG file
+    let icc_profile = extract_png_icc_profile(path)?;
+
+    Ok(PngLoadResult { image, icc_profile })
+}
+
+/// Extract ICC profile from PNG file
+fn extract_png_icc_profile<P: AsRef<Path>>(path: P) -> Result<Option<IccProfile>> {
+    let path = path.as_ref();
+
+    let file =
+        File::open(path).with_context(|| format!("Failed to open PNG file: {}", path.display()))?;
+    let mut reader = BufReader::new(file);
+
+    // Read PNG signature
+    let mut signature = [0u8; 8];
+    reader
+        .read_exact(&mut signature)
+        .context("Failed to read PNG signature")?;
+
+    if signature != [137, 80, 78, 71, 13, 10, 26, 10] {
+        return Ok(None); // Not a valid PNG file
+    }
+
+    // Read chunks to find iCCP chunk
+    loop {
+        let mut length_bytes = [0u8; 4];
+        if reader.read_exact(&mut length_bytes).is_err() {
+            break; // End of file
+        }
+
+        let length = u32::from_be_bytes(length_bytes);
+
+        let mut chunk_type = [0u8; 4];
+        reader
+            .read_exact(&mut chunk_type)
+            .context("Failed to read chunk type")?;
+
+        if &chunk_type == b"iCCP" {
+            // Found ICC profile chunk
+            debug!("Found iCCP chunk with length: {}", length);
+
+            let mut chunk_data = vec![0u8; length as usize];
+            reader
+                .read_exact(&mut chunk_data)
+                .context("Failed to read iCCP chunk data")?;
+
+            // Skip CRC
+            let mut crc = [0u8; 4];
+            reader
+                .read_exact(&mut crc)
+                .context("Failed to read chunk CRC")?;
+
+            return parse_iccp_chunk(&chunk_data);
+        } else {
+            // Skip this chunk
+            let skip_size = length as usize + 4; // data + CRC
+            let mut skip_buffer = vec![0u8; skip_size.min(8192)];
+            let mut remaining = skip_size;
+
+            while remaining > 0 {
+                let to_read = remaining.min(skip_buffer.len());
+                reader
+                    .read_exact(&mut skip_buffer[..to_read])
+                    .context("Failed to skip chunk data")?;
+                remaining -= to_read;
+            }
+        }
+
+        // Check for critical chunks that indicate end of metadata
+        if &chunk_type == b"IDAT" {
+            break; // Image data started, no more metadata
+        }
+    }
+
+    Ok(None)
+}
+
+/// Parse iCCP chunk data to extract ICC profile
+fn parse_iccp_chunk(data: &[u8]) -> Result<Option<IccProfile>> {
+    // iCCP chunk format:
+    // Profile name (null-terminated string)
+    // Compression method (1 byte, should be 0 for deflate)
+    // Compressed profile data
+
+    // Find null terminator for profile name
+    let null_pos = data
+        .iter()
+        .position(|&b| b == 0)
+        .context("Invalid iCCP chunk: no null terminator found")?;
+
+    if null_pos + 2 >= data.len() {
+        return Err(anyhow::anyhow!("Invalid iCCP chunk: insufficient data"));
+    }
+
+    let profile_name = String::from_utf8_lossy(&data[..null_pos]).to_string();
+    let compression_method = data[null_pos + 1];
+
+    if compression_method != 0 {
+        warn!(
+            "Unsupported iCCP compression method: {}",
+            compression_method
+        );
+        return Ok(None);
+    }
+
+    let compressed_data = &data[null_pos + 2..];
+
+    // Decompress the profile data
+    use std::io::Cursor;
+    let mut decoder = flate2::read::ZlibDecoder::new(Cursor::new(compressed_data));
+    let mut profile_data = Vec::new();
+    decoder
+        .read_to_end(&mut profile_data)
+        .context("Failed to decompress ICC profile data")?;
+
+    debug!(
+        "Extracted ICC profile '{}' with {} bytes",
+        profile_name,
+        profile_data.len()
+    );
+
+    // Create ICC profile using ColorManager
+    let mut color_manager = ColorManager::new().context("Failed to create color manager")?;
+
+    let icc_profile = color_manager
+        .load_profile_from_data(&profile_data, profile_name)
+        .context("Failed to load ICC profile from data")?;
+
+    Ok(Some(icc_profile))
 }
 
 /// Save a PNG image to a file path
@@ -49,6 +198,8 @@ pub struct PngOptions {
     pub compression_level: u8,
     /// Whether to use filtering
     pub use_filtering: bool,
+    /// ICC profile to embed (optional)
+    pub icc_profile: Option<IccProfile>,
 }
 
 impl Default for PngOptions {
@@ -56,6 +207,7 @@ impl Default for PngOptions {
         Self {
             compression_level: 6, // Default compression level
             use_filtering: true,
+            icc_profile: None,
         }
     }
 }
@@ -65,13 +217,32 @@ impl Default for PngOptions {
 pub fn save_png_with_options<P: AsRef<Path>>(
     image: &image::DynamicImage,
     path: P,
-    _options: &PngOptions,
+    options: &PngOptions,
 ) -> Result<()> {
     let path = path.as_ref();
     debug!("Saving PNG image with options to: {}", path.display());
 
-    // For now, use the standard save method
-    // TODO: Implement custom PNG encoding with options when needed
+    if options.icc_profile.is_some() {
+        // Use custom PNG encoding with ICC profile
+        save_png_with_icc_profile(image, path, options)
+    } else {
+        // Use standard save method
+        save_png(image, path)
+    }
+}
+
+/// Save a PNG image with embedded ICC profile
+fn save_png_with_icc_profile<P: AsRef<Path>>(
+    image: &image::DynamicImage,
+    path: P,
+    _options: &PngOptions,
+) -> Result<()> {
+    let path = path.as_ref();
+
+    // For now, save without ICC profile and log a warning
+    // TODO: Implement custom PNG encoding with ICC profile embedding
+    warn!("ICC profile embedding in PNG not yet implemented, saving without profile");
+
     save_png(image, path)
 }
 
@@ -126,6 +297,7 @@ mod tests {
         let options = PngOptions {
             compression_level: 9,
             use_filtering: false,
+            icc_profile: None,
         };
 
         // Save the image with options
@@ -135,5 +307,64 @@ mod tests {
         assert!(file_path.exists());
 
         Ok(())
+    }
+
+    #[test]
+    fn test_png_load_result_creation() {
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(10, 10);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
+
+        let result = PngLoadResult {
+            image: dynamic_img,
+            icc_profile: None,
+        };
+
+        assert_eq!(result.image.width(), 10);
+        assert_eq!(result.image.height(), 10);
+        assert!(result.icc_profile.is_none());
+    }
+
+    #[test]
+    fn test_png_options_with_profile() {
+        let mut options = PngOptions::default();
+        assert!(options.icc_profile.is_none());
+
+        // Test that we can set an ICC profile (even if None for now)
+        options.icc_profile = None;
+        assert!(options.icc_profile.is_none());
+    }
+
+    #[test]
+    fn test_load_png_with_profile_fallback() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let file_path = temp_dir.path().join("test_no_profile.png");
+
+        // Create and save a simple test image without profile
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(20, 20);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
+        save_png(&dynamic_img, &file_path)?;
+
+        // Load with profile function - should work even without embedded profile
+        let result = load_png_with_profile(&file_path)?;
+
+        assert_eq!(result.image.width(), 20);
+        assert_eq!(result.image.height(), 20);
+        assert!(result.icc_profile.is_none()); // No profile embedded
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_png_icc_profile_invalid_file() {
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("not_a_png.txt");
+
+        // Create a non-PNG file
+        std::fs::write(&file_path, "This is not a PNG file").unwrap();
+
+        let result = extract_png_icc_profile(&file_path);
+        // Should not panic and should return Ok(None) for invalid PNG
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

@@ -5,15 +5,19 @@
 //! be executed and undone.
 
 pub mod adjustment_commands;
+pub mod crop_commands;
 pub mod layer_commands;
 pub mod paint_commands;
 pub mod selection_commands;
+pub mod transform_commands;
 
 // Re-export commonly used command types
 pub use adjustment_commands::*;
+pub use crop_commands::*;
 pub use layer_commands::*;
 pub use paint_commands::*;
 pub use selection_commands::*;
+pub use transform_commands::*;
 
 use anyhow::Result;
 use psoc_core::{Command, CommandMetadata, Document};

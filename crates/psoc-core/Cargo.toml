@@ -19,6 +19,9 @@ nalgebra = "0.33"
 # Image processing
 image = { version = "0.25.6", features = ["png", "jpeg", "tiff", "webp"] }
 
+# Color management
+lcms2 = "6.1.0"
+
 # Error handling
 anyhow = "1.0.98"
 thiserror = "2.0.12"

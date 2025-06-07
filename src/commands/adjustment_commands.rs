@@ -123,6 +123,7 @@ impl Command for ApplyAdjustmentCommand {
 
 /// Command to create an adjustment layer
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct CreateAdjustmentLayerCommand {
     metadata: CommandMetadata,
     layer_name: String,
@@ -198,6 +199,7 @@ impl Command for CreateAdjustmentLayerCommand {
 
 /// Command to modify adjustment layer parameters
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ModifyAdjustmentCommand {
     metadata: CommandMetadata,
     layer_index: usize,
@@ -274,6 +276,21 @@ fn get_global_adjustment_registry() -> psoc_core::adjustment::AdjustmentRegistry
     // Register built-in adjustments
     registry.register(Box::new(psoc_core::BrightnessAdjustment::identity()));
     registry.register(Box::new(psoc_core::ContrastAdjustment::identity()));
+    registry.register(Box::new(psoc_core::HslAdjustment::identity()));
+    registry.register(Box::new(psoc_core::GrayscaleAdjustment::new()));
+    registry.register(Box::new(psoc_core::ColorBalanceAdjustment::new()));
+
+    // Register P4.4 advanced adjustments
+    registry.register(Box::new(psoc_core::CurvesAdjustment::identity()));
+    registry.register(Box::new(psoc_core::LevelsAdjustment::identity()));
+
+    // Register filters
+    registry.register(Box::new(psoc_core::GaussianBlurFilter::identity()));
+    registry.register(Box::new(psoc_core::MotionBlurFilter::identity()));
+    registry.register(Box::new(psoc_core::UnsharpMaskFilter::identity()));
+    registry.register(Box::new(psoc_core::SharpenFilter::identity()));
+    registry.register(Box::new(psoc_core::AddNoiseFilter::identity()));
+    registry.register(Box::new(psoc_core::ReduceNoiseFilter::identity()));
 
     registry
 }

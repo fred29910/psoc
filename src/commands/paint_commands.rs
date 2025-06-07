@@ -45,6 +45,7 @@ impl BrushStrokeCommand {
     }
 
     /// Calculate the affected region for this stroke
+    #[allow(dead_code)]
     fn calculate_affected_region(&self) -> Option<(u32, u32, u32, u32)> {
         if self.stroke_points.is_empty() {
             return None;
@@ -72,6 +73,7 @@ impl BrushStrokeCommand {
     }
 
     /// Backup the affected region before applying the stroke
+    #[allow(dead_code)]
     fn backup_region(&mut self, document: &Document) -> Result<()> {
         if let Some(layer) = document.get_layer(self.layer_index) {
             if let Some(pixel_data) = &layer.pixel_data {
@@ -239,6 +241,7 @@ impl Command for BrushStrokeCommand {
 
 /// Command to apply an eraser stroke to a layer
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct EraserStrokeCommand {
     metadata: CommandMetadata,
     layer_index: usize,

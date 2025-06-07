@@ -1,11 +1,14 @@
 //! Modern UI components for PSOC Image Editor
 
 use iced::{
-    widget::{button, column, container, row, text, Space},
+    widget::{button, checkbox, column, container, row, slider, text, text_input, Row, Space},
     Element, Length,
 };
 
 use super::icons::{icon_button, simple_icon_button, tool_button, Icon};
+use psoc_core::{HistoryEntry, RgbaPixel};
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 /// Create a modern toolbar with icons and proper spacing
 pub fn toolbar<Message: Clone + 'static>(
@@ -51,6 +54,7 @@ pub fn toolbar<Message: Clone + 'static>(
 }
 
 /// Create a modern menu bar
+#[allow(clippy::too_many_arguments)]
 pub fn menu_bar<Message: Clone + 'static>(
     new_doc: Message,
     open_doc: Message,
@@ -59,6 +63,19 @@ pub fn menu_bar<Message: Clone + 'static>(
     undo: Message,
     redo: Message,
     brightness_contrast: Message,
+    hsl: Message,
+    grayscale: Message,
+    color_balance: Message,
+    curves: Message,
+    levels: Message,
+    gaussian_blur: Message,
+    unsharp_mask: Message,
+    add_noise: Message,
+    show_color_picker: Message,
+    show_color_palette: Message,
+    toggle_rulers: Message,
+    toggle_grid: Message,
+    toggle_guides: Message,
     show_about: Message,
     exit_app: Message,
 ) -> Element<'static, Message> {
@@ -89,6 +106,118 @@ pub fn menu_bar<Message: Clone + 'static>(
                         }
                     }))
                     .on_press(brightness_contrast)
+                    .padding([4.0, 8.0]),
+                    button(text("HSL").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(hsl)
+                    .padding([4.0, 8.0]),
+                    button(text("Grayscale").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(grayscale)
+                    .padding([4.0, 8.0]),
+                    button(text("Color Balance").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(color_balance)
+                    .padding([4.0, 8.0]),
+                    button(text("Curves").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(curves)
+                    .padding([4.0, 8.0]),
+                    button(text("Levels").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(levels)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Filter menu section
+            container(
+                row![
+                    button(text("Gaussian Blur").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(gaussian_blur)
+                    .padding([4.0, 8.0]),
+                    button(text("Unsharp Mask").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(unsharp_mask)
+                    .padding([4.0, 8.0]),
+                    button(text("Add Noise").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(add_noise)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // Color menu section
+            container(
+                row![
+                    button(text("Color Picker").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_color_picker)
+                    .padding([4.0, 8.0]),
+                    button(text("Color Palette").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(show_color_palette)
+                    .padding([4.0, 8.0]),
+                ]
+                .spacing(8.0)
+            )
+            .padding(8.0),
+            // View menu section
+            container(
+                row![
+                    button(text("Rulers").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_rulers)
+                    .padding([4.0, 8.0]),
+                    button(text("Grid").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_grid)
+                    .padding([4.0, 8.0]),
+                    button(text("Guides").size(12.0).style(|_theme| {
+                        iced::widget::text::Style {
+                            color: Some(iced::Color::WHITE),
+                        }
+                    }))
+                    .on_press(toggle_guides)
                     .padding([4.0, 8.0]),
                 ]
                 .spacing(8.0)
@@ -147,7 +276,7 @@ pub fn side_panel<Message: 'static>(
     .into()
 }
 
-/// Create a modern status bar
+/// Create a modern status bar with comprehensive information
 pub fn status_bar<Message: 'static>(
     status_text: String,
     zoom_level: f32,
@@ -162,6 +291,73 @@ pub fn status_bar<Message: 'static>(
             text(format!("Zoom: {:.0}%", zoom_level * 100.0)).size(12.0),
         ]
         .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(8.0)
+    .width(Length::Fill)
+    .into()
+}
+
+/// Create an enhanced status bar with detailed information
+pub fn enhanced_status_bar<Message: 'static>(
+    status_info: &crate::ui::application::StatusInfo,
+) -> Element<'static, Message> {
+    let mut status_elements = Vec::new();
+
+    // Document status
+    status_elements.push(
+        text(format!("Status: {}", status_info.document_status))
+            .size(12.0)
+            .into(),
+    );
+
+    // Image dimensions
+    if let Some((width, height)) = status_info.image_size {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(
+            text(format!("Size: {}×{}", width, height))
+                .size(12.0)
+                .into(),
+        );
+    }
+
+    // Color mode
+    if let Some(ref color_mode) = status_info.color_mode {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(text(format!("Mode: {}", color_mode)).size(12.0).into());
+    }
+
+    // Mouse coordinates
+    if let Some((x, y)) = status_info.mouse_position {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(text(format!("Pos: ({:.0}, {:.0})", x, y)).size(12.0).into());
+    }
+
+    // Pixel color
+    if let Some(color) = status_info.pixel_color {
+        status_elements.push(text(" | ").size(12.0).into());
+        status_elements.push(
+            text(format!("RGB: ({}, {}, {})", color.r, color.g, color.b))
+                .size(12.0)
+                .into(),
+        );
+
+        if color.a < 255 {
+            status_elements.push(text(format!(" A: {}", color.a)).size(12.0).into());
+        }
+    }
+
+    // Add spacer and zoom
+    status_elements.push(Space::new(Length::Fill, Length::Shrink).into());
+    status_elements.push(
+        text(format!("Zoom: {:.0}%", status_info.zoom_level * 100.0))
+            .size(12.0)
+            .into(),
+    );
+
+    container(
+        Row::with_children(status_elements)
+            .align_y(iced::alignment::Vertical::Center)
+            .spacing(0),
     )
     .padding(8.0)
     .width(Length::Fill)
@@ -270,9 +466,195 @@ pub fn layer_item<Message: Clone + 'static>(
     layer_container.into()
 }
 
+/// Create an advanced layer item with blend mode and opacity controls
+pub fn layer_item_advanced<Message: Clone + 'static>(
+    name: String,
+    is_visible: bool,
+    is_selected: bool,
+    opacity: f32,
+    blend_mode: psoc_core::BlendMode,
+    toggle_visibility: Message,
+    select_layer: Message,
+    opacity_change_fn: impl Fn(f32) -> Message + 'static,
+    blend_change_fn: impl Fn(psoc_core::BlendMode) -> Message + 'static,
+) -> Element<'static, Message> {
+    use iced::widget::slider;
+
+    let visibility_icon = if is_visible {
+        Icon::LayerVisible
+    } else {
+        Icon::LayerHidden
+    };
+
+    // Create layer item with selection highlighting
+    let layer_button = if is_selected {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+            .style(button::primary)
+    } else {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+    };
+
+    // Blend mode options
+    let _blend_modes = psoc_core::BlendMode::all();
+
+    // Create the layer content with controls
+    let layer_content = column![
+        // Top row: visibility and name
+        row![
+            simple_icon_button(visibility_icon, toggle_visibility),
+            layer_button,
+        ]
+        .spacing(8.0)
+        .align_y(iced::alignment::Vertical::Center),
+        // Controls row (only show if selected)
+        if is_selected {
+            column![
+                // Opacity control
+                row![
+                    text("Opacity:").size(10.0).width(Length::Fixed(50.0)),
+                    slider(0.0..=1.0, opacity, opacity_change_fn)
+                        .width(Length::Fill)
+                        .step(0.01),
+                    text(format!("{:.0}%", opacity * 100.0))
+                        .size(10.0)
+                        .width(Length::Fixed(35.0)),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+                // Blend mode control - show current mode and cycle through with buttons
+                row![
+                    text("Blend:").size(10.0).width(Length::Fixed(50.0)),
+                    button(text(blend_mode.name()).size(10.0))
+                        .on_press(blend_change_fn(get_next_blend_mode(blend_mode)))
+                        .style(button::secondary),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+            ]
+            .spacing(4.0)
+            .padding([4.0, 8.0])
+        } else {
+            column![]
+        }
+    ]
+    .spacing(4.0);
+
+    let layer_container = if is_selected {
+        container(layer_content)
+            .padding(8.0)
+            .width(Length::Fill)
+            .style(container::bordered_box)
+    } else {
+        container(layer_content).padding(8.0).width(Length::Fill)
+    };
+
+    layer_container.into()
+}
+
+/// Create a simple layer item with blend mode and opacity display (no interactive controls)
+pub fn layer_item_simple<Message: Clone + 'static>(
+    name: String,
+    is_visible: bool,
+    is_selected: bool,
+    opacity: f32,
+    blend_mode: psoc_core::BlendMode,
+    toggle_visibility: Message,
+    select_layer: Message,
+) -> Element<'static, Message> {
+    let visibility_icon = if is_visible {
+        Icon::LayerVisible
+    } else {
+        Icon::LayerHidden
+    };
+
+    // Create layer item with selection highlighting
+    let layer_button = if is_selected {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+            .style(button::primary)
+    } else {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+    };
+
+    // Create the layer content with controls
+    let layer_content = column![
+        // Top row: visibility and name
+        row![
+            simple_icon_button(visibility_icon, toggle_visibility),
+            layer_button,
+        ]
+        .spacing(8.0)
+        .align_y(iced::alignment::Vertical::Center),
+        // Properties row (only show if selected)
+        if is_selected {
+            column![
+                // Opacity display
+                row![
+                    text("Opacity:").size(10.0).width(Length::Fixed(50.0)),
+                    text(format!("{:.0}%", opacity * 100.0)).size(10.0),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+                // Blend mode display
+                row![
+                    text("Blend:").size(10.0).width(Length::Fixed(50.0)),
+                    text(blend_mode.name())
+                        .size(10.0)
+                        .style(|_theme| iced::widget::text::Style {
+                            color: Some(iced::Color::from_rgb(0.3, 0.6, 1.0)),
+                        }),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+            ]
+            .spacing(4.0)
+            .padding([4.0, 8.0])
+        } else {
+            column![]
+        }
+    ]
+    .spacing(4.0);
+
+    let layer_container = if is_selected {
+        container(layer_content)
+            .padding(8.0)
+            .width(Length::Fill)
+            .style(container::bordered_box)
+    } else {
+        container(layer_content).padding(8.0).width(Length::Fill)
+    };
+
+    layer_container.into()
+}
+
+/// Get the next blend mode in the list (for cycling through modes)
+fn get_next_blend_mode(current: psoc_core::BlendMode) -> psoc_core::BlendMode {
+    let modes = psoc_core::BlendMode::all();
+    let current_index = modes.iter().position(|&mode| mode == current).unwrap_or(0);
+    let next_index = (current_index + 1) % modes.len();
+    modes[next_index]
+}
+
 /// Create an advanced layer panel with controls
 pub fn layer_panel<Message: Clone + 'static>(
-    layers: Vec<(String, bool, bool, Message, Message)>, // (name, visible, selected, toggle_vis, select)
+    layers: Vec<(
+        String,
+        bool,
+        bool,
+        f32,
+        psoc_core::BlendMode,
+        Message,
+        Message,
+        Message,
+        Message,
+    )>, // (name, visible, selected, opacity, blend_mode, toggle_vis, select, opacity_change, blend_change)
     add_layer: Message,
     delete_layer: Option<Message>,
     duplicate_layer: Option<Message>,
@@ -320,11 +702,30 @@ pub fn layer_panel<Message: Clone + 'static>(
             .into(),
         );
     } else {
-        for (name, is_visible, is_selected, toggle_visibility, select_layer) in layers {
-            content.push(layer_item(
+        let layer_count = layers.len();
+        for (
+            index,
+            (
                 name,
                 is_visible,
                 is_selected,
+                opacity,
+                blend_mode,
+                toggle_visibility,
+                select_layer,
+                _opacity_change,
+                _blend_change,
+            ),
+        ) in layers.into_iter().enumerate()
+        {
+            // Calculate the actual layer index (reverse order)
+            let _layer_index = layer_count - 1 - index;
+            content.push(layer_item_simple(
+                name,
+                is_visible,
+                is_selected,
+                opacity,
+                blend_mode,
                 toggle_visibility,
                 select_layer,
             ));
@@ -367,4 +768,401 @@ pub fn canvas_placeholder<Message: 'static>(
     .center_x(Length::Fill)
     .center_y(Length::Fill)
     .into()
+}
+
+/// Create a tool options panel
+pub fn tool_options_panel<Message: Clone + 'static>(
+    tool_name: String,
+    options: Vec<ToolOptionControl<Message>>,
+) -> Element<'static, Message> {
+    let mut content = vec![section_header(format!("{} Options", tool_name))];
+
+    if options.is_empty() {
+        content.push(
+            container(text("No options available").size(12.0).style(|_theme| {
+                iced::widget::text::Style {
+                    color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                }
+            }))
+            .padding(16.0)
+            .center_x(Length::Fill)
+            .into(),
+        );
+    } else {
+        for option in options {
+            content.push(option.into_element());
+        }
+    }
+
+    side_panel("Tool Options".to_string(), content, 250.0)
+}
+
+/// Create a history panel showing command history
+pub fn history_panel<Message: Clone + 'static>(
+    history_entries: Vec<HistoryEntry>,
+    navigate_to: impl Fn(usize) -> Message + 'static,
+    clear_history: Message,
+) -> Element<'static, Message> {
+    let mut content = vec![section_header("History".to_string())];
+
+    // Add clear history button
+    content.push(
+        container(
+            button(text("Clear History").size(12.0))
+                .on_press(clear_history)
+                .style(|theme: &iced::Theme, status| {
+                    let palette = theme.extended_palette();
+                    button::Style {
+                        background: Some(iced::Background::Color(palette.danger.base.color)),
+                        text_color: iced::Color::WHITE,
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
+                        ..button::primary(theme, status)
+                    }
+                }),
+        )
+        .padding(8.0)
+        .width(Length::Fill)
+        .into(),
+    );
+
+    if history_entries.is_empty() {
+        content.push(
+            container(
+                text("No history")
+                    .size(12.0)
+                    .style(|_theme| iced::widget::text::Style {
+                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                    }),
+            )
+            .padding(16.0)
+            .center_x(Length::Fill)
+            .into(),
+        );
+    } else {
+        // Add history entries
+        for entry in history_entries {
+            content.push(history_entry_item(
+                entry.description.clone(),
+                entry.is_current,
+                navigate_to(entry.index + 1), // +1 because we want to navigate to the position after this command
+            ));
+        }
+    }
+
+    side_panel("History".to_string(), content, 250.0)
+}
+
+/// Create a single history entry item
+fn history_entry_item<Message: Clone + 'static>(
+    description: String,
+    is_current: bool,
+    navigate_message: Message,
+) -> Element<'static, Message> {
+    let text_color = if is_current {
+        iced::Color::from_rgb(0.2, 0.6, 1.0) // Blue for current
+    } else {
+        iced::Color::WHITE
+    };
+
+    let entry_content = button(
+        text(description)
+            .size(12.0)
+            .style(move |_theme: &iced::Theme| iced::widget::text::Style {
+                color: Some(text_color),
+            }),
+    )
+    .on_press(navigate_message)
+    .style(move |theme: &iced::Theme, status| {
+        let palette = theme.extended_palette();
+        if is_current {
+            button::Style {
+                background: Some(iced::Background::Color(palette.primary.weak.color)),
+                text_color,
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
+                ..button::secondary(theme, status)
+            }
+        } else {
+            button::Style {
+                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                text_color,
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
+                ..button::text(theme, status)
+            }
+        }
+    })
+    .width(Length::Fill);
+
+    container(entry_content)
+        .padding(2.0)
+        .width(Length::Fill)
+        .into()
+}
+
+/// Tool option control types
+pub enum ToolOptionControl<Message> {
+    FloatSlider {
+        label: String,
+        value: f32,
+        min: f32,
+        max: f32,
+        step: f32,
+        on_change: Box<dyn Fn(f32) -> Message + 'static>,
+    },
+    IntSlider {
+        label: String,
+        value: i32,
+        min: i32,
+        max: i32,
+        on_change: Box<dyn Fn(i32) -> Message + 'static>,
+    },
+    ColorPicker {
+        label: String,
+        value: [u8; 4], // RGBA
+        on_change: Box<dyn Fn([u8; 4]) -> Message + 'static>,
+    },
+    Checkbox {
+        label: String,
+        value: bool,
+        on_change: Box<dyn Fn(bool) -> Message + 'static>,
+    },
+    TextInput {
+        label: String,
+        value: String,
+        placeholder: String,
+        on_change: Box<dyn Fn(String) -> Message + 'static>,
+    },
+    Dropdown {
+        label: String,
+        options: Vec<String>,
+        selected: String,
+        on_change: Box<dyn Fn(String) -> Message + 'static>,
+    },
+}
+
+impl<Message: Clone + 'static> ToolOptionControl<Message> {
+    /// Convert the control to an iced Element
+    pub fn into_element(self) -> Element<'static, Message> {
+        match self {
+            ToolOptionControl::FloatSlider {
+                label,
+                value,
+                min,
+                max,
+                step,
+                on_change,
+            } => {
+                let slider = slider(min..=max, value, move |v| on_change(v)).step(step);
+
+                column![
+                    row![
+                        text(label.clone()).size(12.0),
+                        Space::new(Length::Fill, Length::Shrink),
+                        text(format!("{:.2}", value)).size(12.0),
+                    ]
+                    .align_y(iced::alignment::Vertical::Center),
+                    slider,
+                ]
+                .spacing(4.0)
+                .padding(8.0)
+                .into()
+            }
+            ToolOptionControl::IntSlider {
+                label,
+                value,
+                min,
+                max,
+                on_change,
+            } => {
+                let slider = slider(min..=max, value, move |v| on_change(v));
+
+                column![
+                    row![
+                        text(label.clone()).size(12.0),
+                        Space::new(Length::Fill, Length::Shrink),
+                        text(value.to_string()).size(12.0),
+                    ]
+                    .align_y(iced::alignment::Vertical::Center),
+                    slider,
+                ]
+                .spacing(4.0)
+                .padding(8.0)
+                .into()
+            }
+            ToolOptionControl::ColorPicker {
+                label,
+                value,
+                on_change: _,
+            } => {
+                // Simple color display for now - full color picker would be more complex
+                let color_display = container(Space::new(Length::Fixed(20.0), Length::Fixed(20.0)))
+                    .style(move |_theme| container::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba8(
+                            value[0],
+                            value[1],
+                            value[2],
+                            value[3] as f32 / 255.0,
+                        ))),
+                        border: iced::Border {
+                            color: iced::Color::BLACK,
+                            width: 1.0,
+                            radius: 2.0.into(),
+                        },
+                        ..Default::default()
+                    });
+
+                row![
+                    text(label.clone()).size(12.0),
+                    Space::new(Length::Fill, Length::Shrink),
+                    color_display,
+                ]
+                .align_y(iced::alignment::Vertical::Center)
+                .padding(8.0)
+                .into()
+            }
+            ToolOptionControl::Checkbox {
+                label,
+                value,
+                on_change,
+            } => row![checkbox(label.clone(), value).on_toggle(on_change),]
+                .align_y(iced::alignment::Vertical::Center)
+                .padding(8.0)
+                .into(),
+            ToolOptionControl::TextInput {
+                label,
+                value,
+                placeholder,
+                on_change,
+            } => column![
+                text(label.clone()).size(12.0),
+                text_input(&placeholder, &value).on_input(on_change),
+            ]
+            .spacing(4.0)
+            .padding(8.0)
+            .into(),
+            ToolOptionControl::Dropdown {
+                label,
+                options: _,
+                selected,
+                on_change: _,
+            } => {
+                // For now, create a simple text display since iced doesn't have a built-in dropdown
+                // In a real implementation, you'd use a pick_list or custom dropdown
+                column![
+                    text(label.clone()).size(12.0),
+                    row![
+                        text("Current: ").size(10.0),
+                        text(selected.clone()).size(10.0).style(|_theme| {
+                            iced::widget::text::Style {
+                                color: Some(iced::Color::from_rgb(0.3, 0.6, 1.0)),
+                            }
+                        }),
+                    ]
+                    .align_y(iced::alignment::Vertical::Center),
+                    // TODO: Replace with actual dropdown/pick_list when available
+                    text("(Use keyboard shortcuts to change)")
+                        .size(8.0)
+                        .style(|_theme| iced::widget::text::Style {
+                            color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                        }),
+                ]
+                .spacing(4.0)
+                .padding(8.0)
+                .into()
+            }
+        }
+    }
+}
+
+/// Maximum number of colors to keep in history
+const MAX_HISTORY_SIZE: usize = 20;
+
+/// Color history messages
+#[derive(Debug, Clone)]
+pub enum ColorHistoryMessage {
+    /// Select a color from history
+    SelectColor(RgbaPixel),
+    /// Clear all history
+    ClearHistory,
+}
+
+/// Color history component
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColorHistory {
+    /// Recently used colors (most recent first)
+    colors: VecDeque<RgbaPixel>,
+}
+
+impl Default for ColorHistory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ColorHistory {
+    /// Create a new color history
+    pub fn new() -> Self {
+        Self {
+            colors: VecDeque::new(),
+        }
+    }
+
+    /// Add a color to the history
+    pub fn add_color(&mut self, color: RgbaPixel) {
+        // Remove the color if it already exists
+        self.colors.retain(|&c| c != color);
+
+        // Add to front
+        self.colors.push_front(color);
+
+        // Limit size
+        if self.colors.len() > MAX_HISTORY_SIZE {
+            self.colors.pop_back();
+        }
+    }
+
+    /// Get all colors in history (most recent first)
+    pub fn colors(&self) -> &VecDeque<RgbaPixel> {
+        &self.colors
+    }
+
+    /// Get the most recent color
+    pub fn most_recent(&self) -> Option<RgbaPixel> {
+        self.colors.front().copied()
+    }
+
+    /// Clear all history
+    pub fn clear(&mut self) {
+        self.colors.clear();
+    }
+
+    /// Check if history is empty
+    pub fn is_empty(&self) -> bool {
+        self.colors.is_empty()
+    }
+
+    /// Get the number of colors in history
+    pub fn len(&self) -> usize {
+        self.colors.len()
+    }
+
+    /// Handle color history messages
+    pub fn update(&mut self, message: ColorHistoryMessage) {
+        match message {
+            ColorHistoryMessage::SelectColor(_color) => {
+                // Color selection will be handled by parent
+            }
+            ColorHistoryMessage::ClearHistory => {
+                self.clear();
+            }
+        }
+    }
 }

@@ -19,6 +19,18 @@ pub use project::*;
 // Re-export image types for convenience
 pub use image::{DynamicImage, ImageFormat};
 
+// Re-export ICC profile types
+pub use psoc_core::{ColorManager, IccProfile};
+
+/// Image loading result with optional ICC profile
+#[derive(Debug)]
+pub struct ImageLoadResult {
+    /// The loaded image
+    pub image: image::DynamicImage,
+    /// Embedded ICC profile, if any
+    pub icc_profile: Option<IccProfile>,
+}
+
 /// Supported image formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportedFormat {
@@ -135,25 +147,45 @@ impl ImageIO {
     /// Load an image from a file path
     #[instrument(skip_all, fields(path = %path.as_ref().display()))]
     pub fn load_image<P: AsRef<Path>>(path: P) -> Result<image::DynamicImage> {
+        let result = Self::load_image_with_profile(path)?;
+        Ok(result.image)
+    }
+
+    /// Load an image with ICC profile from a file path
+    #[instrument(skip_all, fields(path = %path.as_ref().display()))]
+    pub fn load_image_with_profile<P: AsRef<Path>>(path: P) -> Result<ImageLoadResult> {
         let path = path.as_ref();
-        debug!("Loading image from: {}", path.display());
+        debug!("Loading image with profile from: {}", path.display());
 
         let format = SupportedFormat::from_path(path)
             .ok_or_else(|| anyhow::anyhow!("Unsupported file format: {}", path.display()))?;
 
-        let image = match format {
-            SupportedFormat::Png => png::load_png(path)?,
-            SupportedFormat::Jpeg => jpeg::load_jpeg(path)?,
+        let result = match format {
+            SupportedFormat::Png => {
+                let png_result = png::load_png_with_profile(path)?;
+                ImageLoadResult {
+                    image: png_result.image,
+                    icc_profile: png_result.icc_profile,
+                }
+            }
+            SupportedFormat::Jpeg => {
+                let jpeg_result = jpeg::load_jpeg_with_profile(path)?;
+                ImageLoadResult {
+                    image: jpeg_result.image,
+                    icc_profile: jpeg_result.icc_profile,
+                }
+            }
         };
 
         info!(
-            width = image.width(),
-            height = image.height(),
+            width = result.image.width(),
+            height = result.image.height(),
             format = ?format,
+            has_profile = result.icc_profile.is_some(),
             "Successfully loaded image"
         );
 
-        Ok(image)
+        Ok(result)
     }
 
     /// Save an image to a file path
@@ -231,14 +263,14 @@ impl FileIO {
         let document = match format {
             FileFormat::Project => project::load_project(path)?,
             FileFormat::Png | FileFormat::Jpeg => {
-                // Load as image and convert to document
-                let image = ImageIO::load_image(path)?;
+                // Load as image with ICC profile and convert to document
+                let result = ImageIO::load_image_with_profile(path)?;
                 let title = path
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("Untitled")
                     .to_string();
-                Document::from_image(title, &image)?
+                Document::from_image_with_profile(title, &result.image, result.icc_profile)?
             }
         };
 
@@ -283,5 +315,49 @@ impl FileIO {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_image_load_result_creation() {
+        use image::{ImageBuffer, Rgb};
+
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(40, 40);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
+
+        let result = ImageLoadResult {
+            image: dynamic_img,
+            icc_profile: None,
+        };
+
+        assert_eq!(result.image.width(), 40);
+        assert_eq!(result.image.height(), 40);
+        assert!(result.icc_profile.is_none());
+    }
+
+    #[test]
+    fn test_load_image_with_profile_compatibility() {
+        use image::{ImageBuffer, Rgb};
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("test_compat.png");
+
+        // Create and save a test image
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(35, 35);
+        let dynamic_img = image::DynamicImage::ImageRgb8(img);
+        png::save_png(&dynamic_img, &file_path).unwrap();
+
+        // Test that both methods work
+        let image1 = ImageIO::load_image(&file_path).unwrap();
+        let result2 = ImageIO::load_image_with_profile(&file_path).unwrap();
+
+        assert_eq!(image1.width(), result2.image.width());
+        assert_eq!(image1.height(), result2.image.height());
+        assert!(result2.icc_profile.is_none()); // No profile in test image
     }
 }
