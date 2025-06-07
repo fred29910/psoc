@@ -181,7 +181,7 @@ impl RenderEngine {
         &self,
         result: &mut PixelData,
         layer: &Layer,
-        layer_data: &PixelData,
+        _layer_data: &PixelData,
         params: &CompositionParams,
     ) -> Result<()> {
         // Create tiles for parallel processing
@@ -215,7 +215,8 @@ impl RenderEngine {
                             continue;
                         }
 
-                        if let Some(layer_pixel) = layer_data.get_pixel(x, y) {
+                        // Get pixel with mask applied
+                        if let Some(layer_pixel) = layer.get_masked_pixel(x, y) {
                             if let Some(base_pixel) = result.get_pixel(doc_x as u32, doc_y as u32) {
                                 let blended = blend_mode.blend(base_pixel, layer_pixel, opacity);
                                 tile_updates.push((doc_x as u32, doc_y as u32, blended));
@@ -324,7 +325,8 @@ impl RenderEngine {
                     continue;
                 }
 
-                if let Some(layer_pixel) = layer_data.get_pixel(layer_x as u32, layer_y as u32) {
+                // Get pixel with mask applied
+                if let Some(layer_pixel) = layer.get_masked_pixel(layer_x as u32, layer_y as u32) {
                     if let Some(base_pixel) = result.get_pixel(x, y) {
                         let blended = layer.blend_mode.blend(
                             base_pixel,

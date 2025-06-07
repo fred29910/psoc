@@ -91,6 +91,10 @@ pub struct AppState {
     pub current_pixel_color: Option<psoc_core::RgbaPixel>,
     /// Color history for recently used colors
     pub color_history: ColorHistory,
+    /// Whether we're currently editing a mask
+    pub mask_editing_mode: bool,
+    /// Index of layer whose mask is being edited
+    pub mask_editing_layer: Option<usize>,
 }
 
 /// Status information for display
@@ -217,6 +221,18 @@ pub enum LayerMessage {
     MoveLayerDown(usize),
     /// Rename layer
     RenameLayer(usize, String),
+    /// Add mask to layer
+    AddLayerMask(usize),
+    /// Remove mask from layer
+    RemoveLayerMask(usize),
+    /// Toggle mask editing mode
+    ToggleMaskEditing(usize),
+    /// Invert layer mask
+    InvertLayerMask(usize),
+    /// Clear layer mask (fill with black)
+    ClearLayerMask(usize),
+    /// Fill layer mask (fill with white)
+    FillLayerMask(usize),
 }
 
 /// Canvas-specific messages
@@ -398,6 +414,8 @@ impl Default for AppState {
             mouse_position: None,
             current_pixel_color: None,
             color_history: ColorHistory::new(),
+            mask_editing_mode: false,
+            mask_editing_layer: None,
         }
     }
 }
@@ -1656,6 +1674,7 @@ impl PsocApp {
                 f32,
                 psoc_core::BlendMode,
                 Option<String>,
+                bool,
                 Message,
                 Message,
                 Message,
@@ -1680,6 +1699,7 @@ impl PsocApp {
                         layer.opacity,
                         layer.blend_mode,
                         layer_type,
+                        layer.has_mask(),
                         Message::Layer(LayerMessage::ToggleLayerVisibility(index)),
                         Message::Layer(LayerMessage::SelectLayer(index)),
                         Message::Layer(LayerMessage::ChangeLayerOpacity(index, layer.opacity)),
@@ -1974,6 +1994,111 @@ impl PsocApp {
                 if let Some(layer) = document.layers.get_mut(index) {
                     layer.name = new_name;
                     document.mark_dirty();
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::AddLayerMask(index) => {
+                info!("Adding mask to layer at index: {}", index);
+                // Get dimensions first to avoid borrowing conflicts
+                let (width, height) = document.dimensions();
+
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if layer.has_mask() {
+                        self.error_message = Some("Layer already has a mask".to_string());
+                    } else {
+                        if let Err(e) = layer.create_mask(width, height) {
+                            self.error_message = Some(format!("Failed to create mask: {}", e));
+                        } else {
+                            document.mark_dirty();
+                            self.canvas.set_document(document.clone());
+                            self.error_message = None;
+                        }
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::RemoveLayerMask(index) => {
+                info!("Removing mask from layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if layer.has_mask() {
+                        layer.remove_mask();
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        // Exit mask editing mode if we were editing this layer's mask
+                        if self.state.mask_editing_layer == Some(index) {
+                            self.state.mask_editing_mode = false;
+                            self.state.mask_editing_layer = None;
+                        }
+                        self.error_message = None;
+                    } else {
+                        self.error_message = Some("Layer has no mask to remove".to_string());
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::ToggleMaskEditing(index) => {
+                debug!("Toggling mask editing for layer at index: {}", index);
+                if let Some(layer) = document.layers.get(index) {
+                    if layer.has_mask() {
+                        if self.state.mask_editing_layer == Some(index) {
+                            // Exit mask editing mode
+                            self.state.mask_editing_mode = false;
+                            self.state.mask_editing_layer = None;
+                            info!("Exited mask editing mode");
+                        } else {
+                            // Enter mask editing mode
+                            self.state.mask_editing_mode = true;
+                            self.state.mask_editing_layer = Some(index);
+                            info!("Entered mask editing mode for layer {}", index);
+                        }
+                    } else {
+                        self.error_message = Some("Layer has no mask to edit".to_string());
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::InvertLayerMask(index) => {
+                info!("Inverting mask for layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if let Err(e) = layer.invert_mask() {
+                        self.error_message = Some(format!("Failed to invert mask: {}", e));
+                    } else {
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::ClearLayerMask(index) => {
+                info!("Clearing mask for layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if let Err(e) = layer.clear_mask() {
+                        self.error_message = Some(format!("Failed to clear mask: {}", e));
+                    } else {
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::FillLayerMask(index) => {
+                info!("Filling mask for layer at index: {}", index);
+                if let Some(layer) = document.layers.get_mut(index) {
+                    if let Err(e) = layer.fill_mask(psoc_core::RgbaPixel::white()) {
+                        self.error_message = Some(format!("Failed to fill mask: {}", e));
+                    } else {
+                        document.mark_dirty();
+                        self.canvas.set_document(document.clone());
+                        self.error_message = None;
+                    }
                 } else {
                     self.error_message = Some("Layer index out of bounds".to_string());
                 }

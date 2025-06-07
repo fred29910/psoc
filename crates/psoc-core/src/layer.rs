@@ -652,6 +652,92 @@ impl Layer {
         self.visible && self.effective_opacity() > 0.0
     }
 
+    /// Check if layer has a mask
+    pub fn has_mask(&self) -> bool {
+        self.mask.is_some()
+    }
+
+    /// Get mask dimensions
+    pub fn mask_dimensions(&self) -> Option<(u32, u32)> {
+        self.mask.as_ref().map(|mask| mask.dimensions())
+    }
+
+    /// Create a new mask for this layer
+    pub fn create_mask(&mut self, width: u32, height: u32) -> Result<()> {
+        let mut mask = PixelData::new_grayscale(width, height);
+        // Initialize mask to fully opaque (white)
+        mask.fill(RgbaPixel::white());
+        self.mask = Some(mask);
+        Ok(())
+    }
+
+    /// Remove the mask from this layer
+    pub fn remove_mask(&mut self) {
+        self.mask = None;
+    }
+
+    /// Get mask pixel at coordinates
+    pub fn get_mask_pixel(&self, x: u32, y: u32) -> Option<RgbaPixel> {
+        self.mask.as_ref()?.get_pixel(x, y)
+    }
+
+    /// Set mask pixel at coordinates
+    pub fn set_mask_pixel(&mut self, x: u32, y: u32, pixel: RgbaPixel) -> Result<()> {
+        if let Some(ref mut mask) = self.mask {
+            mask.set_pixel(x, y, pixel)
+        } else {
+            Err(anyhow::anyhow!("Layer has no mask"))
+        }
+    }
+
+    /// Fill mask with color
+    pub fn fill_mask(&mut self, color: RgbaPixel) -> Result<()> {
+        if let Some(ref mut mask) = self.mask {
+            mask.fill(color);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer has no mask"))
+        }
+    }
+
+    /// Clear mask (fill with black - fully transparent)
+    pub fn clear_mask(&mut self) -> Result<()> {
+        self.fill_mask(RgbaPixel::black())
+    }
+
+    /// Invert mask
+    pub fn invert_mask(&mut self) -> Result<()> {
+        if let Some(ref mut mask) = self.mask {
+            let (width, height) = mask.dimensions();
+            for y in 0..height {
+                for x in 0..width {
+                    if let Some(pixel) = mask.get_pixel(x, y) {
+                        let inverted =
+                            RgbaPixel::new(255 - pixel.r, 255 - pixel.g, 255 - pixel.b, pixel.a);
+                        mask.set_pixel(x, y, inverted)?;
+                    }
+                }
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Layer has no mask"))
+        }
+    }
+
+    /// Apply mask to get effective pixel opacity
+    pub fn get_masked_pixel(&self, x: u32, y: u32) -> Option<RgbaPixel> {
+        let mut pixel = self.get_pixel(x, y)?;
+
+        if let Some(mask_pixel) = self.get_mask_pixel(x, y) {
+            // Use the red channel of the mask as the mask value (grayscale)
+            let mask_value = mask_pixel.r as f32 / 255.0;
+            let new_alpha = (pixel.a as f32 * mask_value) as u8;
+            pixel.a = new_alpha;
+        }
+
+        Some(pixel)
+    }
+
     /// Get layer bounds in document coordinates
     pub fn document_bounds(&self) -> Rect {
         self.transform
@@ -941,5 +1027,92 @@ mod tests {
             results_different,
             "HSL blend modes should produce at least some different results"
         );
+    }
+
+    #[test]
+    fn test_layer_mask_creation() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 100, 50);
+
+        assert!(!layer.has_mask());
+        assert!(layer.mask_dimensions().is_none());
+
+        // Create a mask
+        layer.create_mask(100, 50).unwrap();
+
+        assert!(layer.has_mask());
+        assert_eq!(layer.mask_dimensions(), Some((100, 50)));
+    }
+
+    #[test]
+    fn test_layer_mask_removal() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 100, 50);
+
+        // Create and then remove mask
+        layer.create_mask(100, 50).unwrap();
+        assert!(layer.has_mask());
+
+        layer.remove_mask();
+        assert!(!layer.has_mask());
+        assert!(layer.mask_dimensions().is_none());
+    }
+
+    #[test]
+    fn test_layer_mask_pixel_operations() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+        layer.create_mask(10, 10).unwrap();
+
+        // Test setting and getting mask pixels
+        let white_pixel = RgbaPixel::white();
+        let black_pixel = RgbaPixel::black();
+
+        layer.set_mask_pixel(5, 5, black_pixel).unwrap();
+        assert_eq!(layer.get_mask_pixel(5, 5), Some(black_pixel));
+
+        // Test mask fill
+        layer.fill_mask(white_pixel).unwrap();
+        assert_eq!(layer.get_mask_pixel(5, 5), Some(white_pixel));
+
+        // Test mask clear
+        layer.clear_mask().unwrap();
+        assert_eq!(layer.get_mask_pixel(5, 5), Some(black_pixel));
+    }
+
+    #[test]
+    fn test_layer_mask_inversion() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+        layer.create_mask(10, 10).unwrap();
+
+        // Fill with white, then invert to black
+        layer.fill_mask(RgbaPixel::white()).unwrap();
+        layer.invert_mask().unwrap();
+
+        let pixel = layer.get_mask_pixel(5, 5).unwrap();
+        assert_eq!(pixel.r, 0); // Should be black after inversion
+        assert_eq!(pixel.g, 0);
+        assert_eq!(pixel.b, 0);
+    }
+
+    #[test]
+    fn test_masked_pixel_retrieval() {
+        let mut layer = Layer::new_pixel("Test Layer".to_string(), 10, 10);
+
+        // Set a red pixel
+        let red_pixel = RgbaPixel::new(255, 0, 0, 255);
+        layer.set_pixel(5, 5, red_pixel).unwrap();
+
+        // Without mask, should get full opacity
+        assert_eq!(layer.get_masked_pixel(5, 5), Some(red_pixel));
+
+        // Create mask and set to half opacity (gray)
+        layer.create_mask(10, 10).unwrap();
+        let gray_pixel = RgbaPixel::new(128, 128, 128, 255);
+        layer.set_mask_pixel(5, 5, gray_pixel).unwrap();
+
+        // Should get pixel with reduced alpha
+        let masked_pixel = layer.get_masked_pixel(5, 5).unwrap();
+        assert_eq!(masked_pixel.r, 255); // Color unchanged
+        assert_eq!(masked_pixel.g, 0);
+        assert_eq!(masked_pixel.b, 0);
+        assert!(masked_pixel.a < 255); // Alpha reduced by mask
     }
 }

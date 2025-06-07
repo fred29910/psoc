@@ -563,6 +563,7 @@ pub fn layer_item_simple<Message: Clone + 'static>(
     opacity: f32,
     blend_mode: psoc_core::BlendMode,
     layer_type: Option<String>, // For adjustment layers, show the adjustment type
+    has_mask: bool,
     toggle_visibility: Message,
     select_layer: Message,
 ) -> Element<'static, Message> {
@@ -572,9 +573,15 @@ pub fn layer_item_simple<Message: Clone + 'static>(
         Icon::LayerHidden
     };
 
-    // Create layer name with type indicator for adjustment layers
+    // Create layer name with type indicator for adjustment layers and mask indicator
     let display_name = if let Some(adj_type) = layer_type {
-        format!("{} [{}]", name, adj_type)
+        if has_mask {
+            format!("{} [{}] 🎭", name, adj_type)
+        } else {
+            format!("{} [{}]", name, adj_type)
+        }
+    } else if has_mask {
+        format!("{} 🎭", name)
     } else {
         name
     };
@@ -659,11 +666,12 @@ pub fn layer_panel<Message: Clone + 'static>(
         f32,
         psoc_core::BlendMode,
         Option<String>,
+        bool,
         Message,
         Message,
         Message,
         Message,
-    )>, // (name, visible, selected, opacity, blend_mode, layer_type, toggle_vis, select, opacity_change, blend_change)
+    )>, // (name, visible, selected, opacity, blend_mode, layer_type, has_mask, toggle_vis, select, opacity_change, blend_change)
     add_layer: Message,
     delete_layer: Option<Message>,
     duplicate_layer: Option<Message>,
@@ -725,6 +733,7 @@ pub fn layer_panel<Message: Clone + 'static>(
                 opacity,
                 blend_mode,
                 layer_type,
+                has_mask,
                 toggle_visibility,
                 select_layer,
                 _opacity_change,
@@ -741,6 +750,7 @@ pub fn layer_panel<Message: Clone + 'static>(
                 opacity,
                 blend_mode,
                 layer_type,
+                has_mask,
                 toggle_visibility,
                 select_layer,
             ));

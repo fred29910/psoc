@@ -155,6 +155,12 @@ impl PixelData {
         Self::Rgba(array)
     }
 
+    /// Create new grayscale pixel data with given dimensions (stored as RGBA for consistency)
+    pub fn new_grayscale(width: u32, height: u32) -> Self {
+        let array = Array3::zeros((height as usize, width as usize, 4));
+        Self::Rgba(array)
+    }
+
     /// Create pixel data from image
     pub fn from_image(image: &DynamicImage) -> Result<Self> {
         let rgba_image = image.to_rgba8();

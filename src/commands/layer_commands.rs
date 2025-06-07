@@ -346,6 +346,166 @@ impl Command for DuplicateLayerCommand {
     }
 }
 
+/// Command to add a mask to a layer
+#[derive(Debug)]
+pub struct AddLayerMaskCommand {
+    metadata: CommandMetadata,
+    layer_index: usize,
+    mask_width: u32,
+    mask_height: u32,
+}
+
+impl AddLayerMaskCommand {
+    /// Create a new add layer mask command
+    pub fn new(layer_index: usize, mask_width: u32, mask_height: u32) -> Self {
+        Self {
+            metadata: CommandMetadata::new(format!("Add Mask to Layer {}", layer_index)),
+            layer_index,
+            mask_width,
+            mask_height,
+        }
+    }
+}
+
+impl Command for AddLayerMaskCommand {
+    fn id(&self) -> Uuid {
+        self.metadata.id
+    }
+
+    fn description(&self) -> &str {
+        &self.metadata.description
+    }
+
+    fn execute(&self, document: &mut Document) -> Result<()> {
+        if let Some(layer) = document.get_layer_mut(self.layer_index) {
+            layer.create_mask(self.mask_width, self.mask_height)?;
+            document.mark_dirty();
+        }
+        Ok(())
+    }
+
+    fn undo(&self, document: &mut Document) -> Result<()> {
+        if let Some(layer) = document.get_layer_mut(self.layer_index) {
+            layer.remove_mask();
+            document.mark_dirty();
+        }
+        Ok(())
+    }
+
+    fn timestamp(&self) -> std::time::SystemTime {
+        self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+/// Command to remove a mask from a layer
+#[derive(Debug)]
+pub struct RemoveLayerMaskCommand {
+    metadata: CommandMetadata,
+    layer_index: usize,
+    old_mask: Option<psoc_core::PixelData>,
+}
+
+impl RemoveLayerMaskCommand {
+    /// Create a new remove layer mask command
+    pub fn new(layer_index: usize, old_mask: Option<psoc_core::PixelData>) -> Self {
+        Self {
+            metadata: CommandMetadata::new(format!("Remove Mask from Layer {}", layer_index)),
+            layer_index,
+            old_mask,
+        }
+    }
+}
+
+impl Command for RemoveLayerMaskCommand {
+    fn id(&self) -> Uuid {
+        self.metadata.id
+    }
+
+    fn description(&self) -> &str {
+        &self.metadata.description
+    }
+
+    fn execute(&self, document: &mut Document) -> Result<()> {
+        if let Some(layer) = document.get_layer_mut(self.layer_index) {
+            layer.remove_mask();
+            document.mark_dirty();
+        }
+        Ok(())
+    }
+
+    fn undo(&self, document: &mut Document) -> Result<()> {
+        if let Some(layer) = document.get_layer_mut(self.layer_index) {
+            layer.mask = self.old_mask.clone();
+            document.mark_dirty();
+        }
+        Ok(())
+    }
+
+    fn timestamp(&self) -> std::time::SystemTime {
+        self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+/// Command to invert a layer mask
+#[derive(Debug)]
+pub struct InvertLayerMaskCommand {
+    metadata: CommandMetadata,
+    layer_index: usize,
+}
+
+impl InvertLayerMaskCommand {
+    /// Create a new invert layer mask command
+    pub fn new(layer_index: usize) -> Self {
+        Self {
+            metadata: CommandMetadata::new(format!("Invert Mask on Layer {}", layer_index)),
+            layer_index,
+        }
+    }
+}
+
+impl Command for InvertLayerMaskCommand {
+    fn id(&self) -> Uuid {
+        self.metadata.id
+    }
+
+    fn description(&self) -> &str {
+        &self.metadata.description
+    }
+
+    fn execute(&self, document: &mut Document) -> Result<()> {
+        if let Some(layer) = document.get_layer_mut(self.layer_index) {
+            layer.invert_mask()?;
+            document.mark_dirty();
+        }
+        Ok(())
+    }
+
+    fn undo(&self, document: &mut Document) -> Result<()> {
+        // Inverting is its own inverse
+        if let Some(layer) = document.get_layer_mut(self.layer_index) {
+            layer.invert_mask()?;
+            document.mark_dirty();
+        }
+        Ok(())
+    }
+
+    fn timestamp(&self) -> std::time::SystemTime {
+        self.metadata.timestamp
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

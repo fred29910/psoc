@@ -505,6 +505,10 @@ impl BrushTool {
         }
 
         let layer = active_layer.unwrap();
+
+        // Check if we should paint on the mask or the layer
+        // For now, we'll always paint on the layer data
+        // TODO: Add mask editing support based on application state
         if !layer.has_pixel_data() {
             debug!("Active layer has no pixel data");
             return Ok(());
