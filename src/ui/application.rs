@@ -206,6 +206,8 @@ pub enum LayerMessage {
     ToggleLayerVisibility(usize),
     /// Change layer opacity
     ChangeLayerOpacity(usize, f32),
+    /// Change layer blend mode
+    ChangeLayerBlendMode(usize, psoc_core::BlendMode),
     /// Move layer up
     MoveLayerUp(usize),
     /// Move layer down
@@ -1594,7 +1596,17 @@ impl PsocApp {
     fn create_layers_content(&self) -> Vec<Element<'static, Message>> {
         if let Some(ref document) = self.state.current_document {
             // Create layer data for the panel
-            let layers: Vec<(String, bool, bool, Message, Message)> = document
+            let layers: Vec<(
+                String,
+                bool,
+                bool,
+                f32,
+                psoc_core::BlendMode,
+                Message,
+                Message,
+                Message,
+                Message,
+            )> = document
                 .layers
                 .iter()
                 .enumerate()
@@ -1605,8 +1617,12 @@ impl PsocApp {
                         layer.name.clone(),
                         layer.visible,
                         is_selected,
+                        layer.opacity,
+                        layer.blend_mode,
                         Message::Layer(LayerMessage::ToggleLayerVisibility(index)),
                         Message::Layer(LayerMessage::SelectLayer(index)),
+                        Message::Layer(LayerMessage::ChangeLayerOpacity(index, layer.opacity)),
+                        Message::Layer(LayerMessage::ChangeLayerBlendMode(index, layer.blend_mode)),
                     )
                 })
                 .collect();
@@ -1788,6 +1804,22 @@ impl PsocApp {
                 if let Some(layer) = document.layers.get_mut(index) {
                     layer.opacity = opacity.clamp(0.0, 1.0);
                     document.mark_dirty();
+                    // Update canvas with new document state
+                    self.canvas.set_document(document.clone());
+                } else {
+                    self.error_message = Some("Layer index out of bounds".to_string());
+                }
+            }
+            LayerMessage::ChangeLayerBlendMode(index, blend_mode) => {
+                debug!(
+                    "Changing blend mode for layer at index: {} to {:?}",
+                    index, blend_mode
+                );
+                if let Some(layer) = document.layers.get_mut(index) {
+                    layer.blend_mode = blend_mode;
+                    document.mark_dirty();
+                    // Update canvas with new document state
+                    self.canvas.set_document(document.clone());
                 } else {
                     self.error_message = Some("Layer index out of bounds".to_string());
                 }

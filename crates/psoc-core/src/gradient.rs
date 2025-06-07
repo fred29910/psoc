@@ -191,8 +191,8 @@ impl Gradient {
 
     /// Update a color stop
     pub fn update_stop(&mut self, key: u32, stop: ColorStop) -> bool {
-        if self.stops.contains_key(&key) {
-            self.stops.insert(key, stop);
+        if let std::collections::btree_map::Entry::Occupied(mut e) = self.stops.entry(key) {
+            e.insert(stop);
             true
         } else {
             false

@@ -64,7 +64,7 @@ impl GaussianBlurFilter {
         let size = (self.radius * self.quality * 2.0).ceil() as usize;
         // Ensure odd size and minimum of 3
         let size = if size % 2 == 0 { size + 1 } else { size };
-        size.max(3).min(201) // Cap at reasonable maximum
+        size.clamp(3, 201) // Cap at reasonable maximum
     }
 
     /// Apply horizontal blur pass
@@ -82,12 +82,11 @@ impl GaussianBlurFilter {
                 let mut a_sum = 0.0f32;
                 let mut weight_sum = 0.0f32;
 
-                for i in 0..kernel_size {
+                for (i, &weight) in kernel.iter().enumerate().take(kernel_size) {
                     let sample_x = x as i32 + i as i32 - half_kernel as i32;
 
                     if sample_x >= 0 && sample_x < width as i32 {
                         if let Some(pixel) = input.get_pixel(sample_x as u32, y) {
-                            let weight = kernel[i];
                             r_sum += pixel.r as f32 * weight;
                             g_sum += pixel.g as f32 * weight;
                             b_sum += pixel.b as f32 * weight;
@@ -127,12 +126,11 @@ impl GaussianBlurFilter {
                 let mut a_sum = 0.0f32;
                 let mut weight_sum = 0.0f32;
 
-                for i in 0..kernel_size {
+                for (i, &weight) in kernel.iter().enumerate().take(kernel_size) {
                     let sample_y = y as i32 + i as i32 - half_kernel as i32;
 
                     if sample_y >= 0 && sample_y < height as i32 {
                         if let Some(pixel) = input.get_pixel(x, sample_y as u32) {
-                            let weight = kernel[i];
                             r_sum += pixel.r as f32 * weight;
                             g_sum += pixel.g as f32 * weight;
                             b_sum += pixel.b as f32 * weight;

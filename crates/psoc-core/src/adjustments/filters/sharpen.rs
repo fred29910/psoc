@@ -294,8 +294,8 @@ impl Adjustment for SharpenFilter {
                 let mut b_sum = 0.0f32;
                 let mut a_sum = 0.0f32;
 
-                for ky in 0..3 {
-                    for kx in 0..3 {
+                for (ky, kernel_row) in kernel.iter().enumerate() {
+                    for (kx, &weight) in kernel_row.iter().enumerate() {
                         let sample_x = x as i32 + kx as i32 - 1;
                         let sample_y = y as i32 + ky as i32 - 1;
 
@@ -314,7 +314,6 @@ impl Adjustment for SharpenFilter {
                                 .unwrap_or_else(|| RgbaPixel::new(0, 0, 0, 0))
                         };
 
-                        let weight = kernel[ky][kx];
                         r_sum += pixel.r as f32 * weight;
                         g_sum += pixel.g as f32 * weight;
                         b_sum += pixel.b as f32 * weight;

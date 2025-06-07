@@ -466,9 +466,195 @@ pub fn layer_item<Message: Clone + 'static>(
     layer_container.into()
 }
 
+/// Create an advanced layer item with blend mode and opacity controls
+pub fn layer_item_advanced<Message: Clone + 'static>(
+    name: String,
+    is_visible: bool,
+    is_selected: bool,
+    opacity: f32,
+    blend_mode: psoc_core::BlendMode,
+    toggle_visibility: Message,
+    select_layer: Message,
+    opacity_change_fn: impl Fn(f32) -> Message + 'static,
+    blend_change_fn: impl Fn(psoc_core::BlendMode) -> Message + 'static,
+) -> Element<'static, Message> {
+    use iced::widget::slider;
+
+    let visibility_icon = if is_visible {
+        Icon::LayerVisible
+    } else {
+        Icon::LayerHidden
+    };
+
+    // Create layer item with selection highlighting
+    let layer_button = if is_selected {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+            .style(button::primary)
+    } else {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+    };
+
+    // Blend mode options
+    let _blend_modes = psoc_core::BlendMode::all();
+
+    // Create the layer content with controls
+    let layer_content = column![
+        // Top row: visibility and name
+        row![
+            simple_icon_button(visibility_icon, toggle_visibility),
+            layer_button,
+        ]
+        .spacing(8.0)
+        .align_y(iced::alignment::Vertical::Center),
+        // Controls row (only show if selected)
+        if is_selected {
+            column![
+                // Opacity control
+                row![
+                    text("Opacity:").size(10.0).width(Length::Fixed(50.0)),
+                    slider(0.0..=1.0, opacity, opacity_change_fn)
+                        .width(Length::Fill)
+                        .step(0.01),
+                    text(format!("{:.0}%", opacity * 100.0))
+                        .size(10.0)
+                        .width(Length::Fixed(35.0)),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+                // Blend mode control - show current mode and cycle through with buttons
+                row![
+                    text("Blend:").size(10.0).width(Length::Fixed(50.0)),
+                    button(text(blend_mode.name()).size(10.0))
+                        .on_press(blend_change_fn(get_next_blend_mode(blend_mode)))
+                        .style(button::secondary),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+            ]
+            .spacing(4.0)
+            .padding([4.0, 8.0])
+        } else {
+            column![]
+        }
+    ]
+    .spacing(4.0);
+
+    let layer_container = if is_selected {
+        container(layer_content)
+            .padding(8.0)
+            .width(Length::Fill)
+            .style(container::bordered_box)
+    } else {
+        container(layer_content).padding(8.0).width(Length::Fill)
+    };
+
+    layer_container.into()
+}
+
+/// Create a simple layer item with blend mode and opacity display (no interactive controls)
+pub fn layer_item_simple<Message: Clone + 'static>(
+    name: String,
+    is_visible: bool,
+    is_selected: bool,
+    opacity: f32,
+    blend_mode: psoc_core::BlendMode,
+    toggle_visibility: Message,
+    select_layer: Message,
+) -> Element<'static, Message> {
+    let visibility_icon = if is_visible {
+        Icon::LayerVisible
+    } else {
+        Icon::LayerHidden
+    };
+
+    // Create layer item with selection highlighting
+    let layer_button = if is_selected {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+            .style(button::primary)
+    } else {
+        button(text(name).size(12.0))
+            .on_press(select_layer)
+            .width(Length::Fill)
+    };
+
+    // Create the layer content with controls
+    let layer_content = column![
+        // Top row: visibility and name
+        row![
+            simple_icon_button(visibility_icon, toggle_visibility),
+            layer_button,
+        ]
+        .spacing(8.0)
+        .align_y(iced::alignment::Vertical::Center),
+        // Properties row (only show if selected)
+        if is_selected {
+            column![
+                // Opacity display
+                row![
+                    text("Opacity:").size(10.0).width(Length::Fixed(50.0)),
+                    text(format!("{:.0}%", opacity * 100.0)).size(10.0),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+                // Blend mode display
+                row![
+                    text("Blend:").size(10.0).width(Length::Fixed(50.0)),
+                    text(blend_mode.name())
+                        .size(10.0)
+                        .style(|_theme| iced::widget::text::Style {
+                            color: Some(iced::Color::from_rgb(0.3, 0.6, 1.0)),
+                        }),
+                ]
+                .spacing(4.0)
+                .align_y(iced::alignment::Vertical::Center),
+            ]
+            .spacing(4.0)
+            .padding([4.0, 8.0])
+        } else {
+            column![]
+        }
+    ]
+    .spacing(4.0);
+
+    let layer_container = if is_selected {
+        container(layer_content)
+            .padding(8.0)
+            .width(Length::Fill)
+            .style(container::bordered_box)
+    } else {
+        container(layer_content).padding(8.0).width(Length::Fill)
+    };
+
+    layer_container.into()
+}
+
+/// Get the next blend mode in the list (for cycling through modes)
+fn get_next_blend_mode(current: psoc_core::BlendMode) -> psoc_core::BlendMode {
+    let modes = psoc_core::BlendMode::all();
+    let current_index = modes.iter().position(|&mode| mode == current).unwrap_or(0);
+    let next_index = (current_index + 1) % modes.len();
+    modes[next_index]
+}
+
 /// Create an advanced layer panel with controls
 pub fn layer_panel<Message: Clone + 'static>(
-    layers: Vec<(String, bool, bool, Message, Message)>, // (name, visible, selected, toggle_vis, select)
+    layers: Vec<(
+        String,
+        bool,
+        bool,
+        f32,
+        psoc_core::BlendMode,
+        Message,
+        Message,
+        Message,
+        Message,
+    )>, // (name, visible, selected, opacity, blend_mode, toggle_vis, select, opacity_change, blend_change)
     add_layer: Message,
     delete_layer: Option<Message>,
     duplicate_layer: Option<Message>,
@@ -516,11 +702,30 @@ pub fn layer_panel<Message: Clone + 'static>(
             .into(),
         );
     } else {
-        for (name, is_visible, is_selected, toggle_visibility, select_layer) in layers {
-            content.push(layer_item(
+        let layer_count = layers.len();
+        for (
+            index,
+            (
                 name,
                 is_visible,
                 is_selected,
+                opacity,
+                blend_mode,
+                toggle_visibility,
+                select_layer,
+                _opacity_change,
+                _blend_change,
+            ),
+        ) in layers.into_iter().enumerate()
+        {
+            // Calculate the actual layer index (reverse order)
+            let _layer_index = layer_count - 1 - index;
+            content.push(layer_item_simple(
+                name,
+                is_visible,
+                is_selected,
+                opacity,
+                blend_mode,
                 toggle_visibility,
                 select_layer,
             ));

@@ -409,10 +409,10 @@ impl Adjustment for LevelsAdjustment {
             self.gamma = (value as f32).clamp(0.1, 9.99);
         }
         if let Some(value) = parameters.get("output_black").and_then(|v| v.as_u64()) {
-            self.output_black = (value as u8).min(255);
+            self.output_black = value as u8;
         }
         if let Some(value) = parameters.get("output_white").and_then(|v| v.as_u64()) {
-            self.output_white = (value as u8).min(255);
+            self.output_white = value as u8;
         }
         if let Some(value) = parameters.get("per_channel").and_then(|v| v.as_bool()) {
             self.per_channel = value;
@@ -420,27 +420,27 @@ impl Adjustment for LevelsAdjustment {
 
         // Red channel parameters
         if let Some(value) = parameters.get("red_input_black").and_then(|v| v.as_u64()) {
-            self.red_input_black = (value as u8).min(255);
+            self.red_input_black = value as u8;
         }
         if let Some(value) = parameters.get("red_input_white").and_then(|v| v.as_u64()) {
-            self.red_input_white = (value as u8).min(255);
+            self.red_input_white = value as u8;
         }
         if let Some(value) = parameters.get("red_gamma").and_then(|v| v.as_f64()) {
             self.red_gamma = (value as f32).clamp(0.1, 9.99);
         }
         if let Some(value) = parameters.get("red_output_black").and_then(|v| v.as_u64()) {
-            self.red_output_black = (value as u8).min(255);
+            self.red_output_black = value as u8;
         }
         if let Some(value) = parameters.get("red_output_white").and_then(|v| v.as_u64()) {
-            self.red_output_white = (value as u8).min(255);
+            self.red_output_white = value as u8;
         }
 
         // Green channel parameters
         if let Some(value) = parameters.get("green_input_black").and_then(|v| v.as_u64()) {
-            self.green_input_black = (value as u8).min(255);
+            self.green_input_black = value as u8;
         }
         if let Some(value) = parameters.get("green_input_white").and_then(|v| v.as_u64()) {
-            self.green_input_white = (value as u8).min(255);
+            self.green_input_white = value as u8;
         }
         if let Some(value) = parameters.get("green_gamma").and_then(|v| v.as_f64()) {
             self.green_gamma = (value as f32).clamp(0.1, 9.99);
@@ -449,30 +449,30 @@ impl Adjustment for LevelsAdjustment {
             .get("green_output_black")
             .and_then(|v| v.as_u64())
         {
-            self.green_output_black = (value as u8).min(255);
+            self.green_output_black = value as u8;
         }
         if let Some(value) = parameters
             .get("green_output_white")
             .and_then(|v| v.as_u64())
         {
-            self.green_output_white = (value as u8).min(255);
+            self.green_output_white = value as u8;
         }
 
         // Blue channel parameters
         if let Some(value) = parameters.get("blue_input_black").and_then(|v| v.as_u64()) {
-            self.blue_input_black = (value as u8).min(255);
+            self.blue_input_black = value as u8;
         }
         if let Some(value) = parameters.get("blue_input_white").and_then(|v| v.as_u64()) {
-            self.blue_input_white = (value as u8).min(255);
+            self.blue_input_white = value as u8;
         }
         if let Some(value) = parameters.get("blue_gamma").and_then(|v| v.as_f64()) {
             self.blue_gamma = (value as f32).clamp(0.1, 9.99);
         }
         if let Some(value) = parameters.get("blue_output_black").and_then(|v| v.as_u64()) {
-            self.blue_output_black = (value as u8).min(255);
+            self.blue_output_black = value as u8;
         }
         if let Some(value) = parameters.get("blue_output_white").and_then(|v| v.as_u64()) {
-            self.blue_output_white = (value as u8).min(255);
+            self.blue_output_white = value as u8;
         }
 
         Ok(())
