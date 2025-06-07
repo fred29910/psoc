@@ -73,7 +73,7 @@ psoc-ui-toolkit = { path = "crates/psoc-ui-toolkit" }
 psoc-plugins = { path = "crates/psoc-plugins", optional = true }
 
 # Optional plugin system dependencies
-mlua = { version = "0.10.5", features = ["luajit"], optional = true }
+mlua = { version = "0.10.5", features = ["lua54", "vendored"], optional = true }
 wasmtime = { version = "33.0.0", optional = true }
 uuid = { version = "1.17.0", features = ["v4"] }
 
