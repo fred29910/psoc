@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_render_empty_document() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let document = Document::new("Test".to_string(), 100, 100);
 
         let result = engine.render_document(&document).unwrap();
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_render_document_with_layers() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let mut document = Document::new("Test".to_string(), 100, 100);
 
         let mut layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
@@ -582,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_render_region() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let mut document = Document::new("Test".to_string(), 100, 100);
 
         let mut layer = Layer::new_pixel("Test Layer".to_string(), 50, 50);
@@ -605,7 +605,7 @@ mod tests {
 
     #[test]
     fn test_render_with_adjustment_layer() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let mut document = Document::new("Test".to_string(), 100, 100);
 
         // Add a base layer with gray pixels
@@ -639,7 +639,7 @@ mod tests {
 
     #[test]
     fn test_adjustment_layer_opacity() {
-        let engine = RenderEngine::new();
+        let mut engine = RenderEngine::new();
         let mut document = Document::new("Test".to_string(), 100, 100);
 
         // Add a base layer with gray pixels

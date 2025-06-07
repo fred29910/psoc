@@ -2887,8 +2887,17 @@ impl PsocApp {
     /// Handle tool events
     fn handle_tool_event(&mut self, event: crate::tools::ToolEvent) {
         if let Some(ref mut document) = self.state.current_document {
-            if let Err(e) = self.tool_manager.handle_event(event, document) {
+            // Use mask-aware event handling
+            if let Err(e) = self.tool_manager.handle_event_with_mask_mode(
+                event,
+                document,
+                self.state.mask_editing_mode,
+                self.state.mask_editing_layer,
+            ) {
                 self.error_message = Some(format!("Tool error: {}", e));
+            } else {
+                // Update canvas after successful tool operation
+                self.canvas.set_document(document.clone());
             }
         }
     }

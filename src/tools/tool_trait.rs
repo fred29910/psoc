@@ -88,6 +88,9 @@ pub trait Tool: Debug + Send + Sync {
     fn get_option(&self, _name: &str) -> Option<ToolOptionValue> {
         None
     }
+
+    /// Get a mutable reference to the tool as Any for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 /// Events that can be sent to tools

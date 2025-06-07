@@ -195,6 +195,10 @@ impl Tool for SelectTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Ellipse selection tool for making elliptical selections
@@ -332,6 +336,10 @@ impl Tool for EllipseTool {
             "anti_alias" => Some(ToolOptionValue::Bool(self.anti_alias)),
             _ => None,
         }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -488,13 +496,26 @@ impl Tool for BrushTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 impl BrushTool {
     fn paint_at_position(&self, position: Point, document: &mut Document) -> ToolResult<()> {
+        self.paint_at_position_with_mask_mode(position, document, false)
+    }
+
+    pub fn paint_at_position_with_mask_mode(
+        &self,
+        position: Point,
+        document: &mut Document,
+        mask_editing_mode: bool,
+    ) -> ToolResult<()> {
         debug!(
-            "Painting at position: {:?} with size: {} and color: {:?}",
-            position, self.brush_size, self.brush_color
+            "Painting at position: {:?} with size: {} and color: {:?}, mask_mode: {}",
+            position, self.brush_size, self.brush_color, mask_editing_mode
         );
 
         // Get the active layer
@@ -507,15 +528,26 @@ impl BrushTool {
         let layer = active_layer.unwrap();
 
         // Check if we should paint on the mask or the layer
-        // For now, we'll always paint on the layer data
-        // TODO: Add mask editing support based on application state
-        if !layer.has_pixel_data() {
-            debug!("Active layer has no pixel data");
-            return Ok(());
+        if mask_editing_mode {
+            // Paint on the mask
+            if !layer.has_mask() {
+                debug!("Active layer has no mask to paint on");
+                return Ok(());
+            }
+        } else {
+            // Paint on the layer data
+            if !layer.has_pixel_data() {
+                debug!("Active layer has no pixel data");
+                return Ok(());
+            }
         }
 
         // Paint a circular brush at the position
-        self.paint_circular_brush(position, layer)?;
+        if mask_editing_mode {
+            self.paint_circular_brush_on_mask(position, layer)?;
+        } else {
+            self.paint_circular_brush(position, layer)?;
+        }
         document.mark_dirty();
 
         Ok(())
@@ -683,6 +715,106 @@ impl BrushTool {
 
         psoc_core::RgbaPixel::new(result_r, result_g, result_b, result_a)
     }
+
+    /// Paint a circular brush on the mask at the given position
+    fn paint_circular_brush_on_mask(
+        &self,
+        center: Point,
+        layer: &mut psoc_core::Layer,
+    ) -> ToolResult<()> {
+        let radius = self.brush_size / 2.0;
+
+        // Get mask dimensions
+        let mask_dims = layer.mask_dimensions();
+        if mask_dims.is_none() {
+            return Ok(());
+        }
+
+        let (mask_width, mask_height) = mask_dims.unwrap();
+
+        // Calculate the bounding box of the brush
+        let min_x = ((center.x - radius).floor() as i32).max(0);
+        let max_x = ((center.x + radius).ceil() as i32).min(mask_width as i32 - 1);
+        let min_y = ((center.y - radius).floor() as i32).max(0);
+        let max_y = ((center.y + radius).ceil() as i32).min(mask_height as i32 - 1);
+
+        // Paint each pixel in the brush area on the mask
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let pixel_x = x as f32;
+                let pixel_y = y as f32;
+
+                // Calculate distance from brush center
+                let dx = pixel_x - center.x;
+                let dy = pixel_y - center.y;
+                let distance = (dx * dx + dy * dy).sqrt();
+
+                if distance <= radius {
+                    // Calculate brush alpha based on distance and hardness
+                    let alpha = self.calculate_brush_alpha(distance, radius);
+
+                    if alpha > 0.0 {
+                        // Paint on the mask (use brush color's grayscale value)
+                        self.paint_mask_pixel_at(x as u32, y as u32, alpha, layer)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Paint a pixel on the mask using the brush color's grayscale value
+    fn paint_mask_pixel_at(
+        &self,
+        x: u32,
+        y: u32,
+        alpha: f32,
+        layer: &mut psoc_core::Layer,
+    ) -> ToolResult<()> {
+        // Get the existing mask pixel
+        let existing_pixel = layer
+            .get_mask_pixel(x, y)
+            .unwrap_or(psoc_core::RgbaPixel::new(255, 255, 255, 255)); // Default to white (fully visible)
+
+        // Convert brush color to grayscale for mask painting
+        let grayscale_value = ((self.brush_color.r as f32 * 0.299
+            + self.brush_color.g as f32 * 0.587
+            + self.brush_color.b as f32 * 0.114)
+            * alpha) as u8;
+
+        // Create mask pixel (grayscale value in all channels)
+        let mask_pixel = psoc_core::RgbaPixel::new(
+            grayscale_value,
+            grayscale_value,
+            grayscale_value,
+            255, // Mask alpha is always 255
+        );
+
+        // Blend with existing mask pixel
+        let blended_pixel = self.blend_mask_pixels(existing_pixel, mask_pixel, alpha);
+
+        // Set the blended pixel on the mask
+        layer.set_mask_pixel(x, y, blended_pixel)?;
+
+        Ok(())
+    }
+
+    /// Blend two mask pixels (simple alpha blending for grayscale)
+    fn blend_mask_pixels(
+        &self,
+        base: psoc_core::RgbaPixel,
+        overlay: psoc_core::RgbaPixel,
+        alpha: f32,
+    ) -> psoc_core::RgbaPixel {
+        let base_value = base.r as f32;
+        let overlay_value = overlay.r as f32;
+
+        // Simple alpha blending for mask values
+        let result_value = (base_value * (1.0 - alpha) + overlay_value * alpha) as u8;
+
+        psoc_core::RgbaPixel::new(result_value, result_value, result_value, 255)
+    }
 }
 
 /// Eraser tool for erasing pixels
@@ -812,13 +944,26 @@ impl Tool for EraserTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 impl EraserTool {
     fn erase_at_position(&self, position: Point, document: &mut Document) -> ToolResult<()> {
+        self.erase_at_position_with_mask_mode(position, document, false)
+    }
+
+    pub fn erase_at_position_with_mask_mode(
+        &self,
+        position: Point,
+        document: &mut Document,
+        mask_editing_mode: bool,
+    ) -> ToolResult<()> {
         debug!(
-            "Erasing at position: {:?} with size: {} and hardness: {}",
-            position, self.eraser_size, self.eraser_hardness
+            "Erasing at position: {:?} with size: {} and hardness: {}, mask_mode: {}",
+            position, self.eraser_size, self.eraser_hardness, mask_editing_mode
         );
 
         // Get the active layer
@@ -829,13 +974,28 @@ impl EraserTool {
         }
 
         let layer = active_layer.unwrap();
-        if !layer.has_pixel_data() {
-            debug!("Active layer has no pixel data");
-            return Ok(());
+
+        // Check if we should erase on the mask or the layer
+        if mask_editing_mode {
+            // Erase on the mask
+            if !layer.has_mask() {
+                debug!("Active layer has no mask to erase on");
+                return Ok(());
+            }
+        } else {
+            // Erase on the layer data
+            if !layer.has_pixel_data() {
+                debug!("Active layer has no pixel data");
+                return Ok(());
+            }
         }
 
         // Erase a circular area at the position
-        self.erase_circular_area(position, layer)?;
+        if mask_editing_mode {
+            self.erase_circular_area_on_mask(position, layer)?;
+        } else {
+            self.erase_circular_area(position, layer)?;
+        }
         document.mark_dirty();
 
         Ok(())
@@ -969,6 +1129,86 @@ impl EraserTool {
 
         // Set the erased pixel
         layer.set_pixel(x, y, erased_pixel)?;
+
+        Ok(())
+    }
+
+    /// Erase a circular area on the mask at the given position
+    fn erase_circular_area_on_mask(
+        &self,
+        center: Point,
+        layer: &mut psoc_core::Layer,
+    ) -> ToolResult<()> {
+        let radius = self.eraser_size / 2.0;
+
+        // Get mask dimensions
+        let mask_dims = layer.mask_dimensions();
+        if mask_dims.is_none() {
+            return Ok(());
+        }
+
+        let (mask_width, mask_height) = mask_dims.unwrap();
+
+        // Calculate the bounding box of the eraser
+        let min_x = ((center.x - radius).floor() as i32).max(0);
+        let max_x = ((center.x + radius).ceil() as i32).min(mask_width as i32 - 1);
+        let min_y = ((center.y - radius).floor() as i32).max(0);
+        let max_y = ((center.y + radius).ceil() as i32).min(mask_height as i32 - 1);
+
+        // Erase each pixel in the eraser area on the mask
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let pixel_x = x as f32;
+                let pixel_y = y as f32;
+
+                // Calculate distance from eraser center
+                let dx = pixel_x - center.x;
+                let dy = pixel_y - center.y;
+                let distance = (dx * dx + dy * dy).sqrt();
+
+                if distance <= radius {
+                    // Calculate eraser alpha based on distance and hardness
+                    let erase_strength = self.calculate_eraser_alpha(distance, radius);
+
+                    if erase_strength > 0.0 {
+                        // Apply erasing to the mask pixel
+                        self.erase_mask_pixel_at(x as u32, y as u32, erase_strength, layer)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Erase (darken) mask pixel at the given coordinates
+    fn erase_mask_pixel_at(
+        &self,
+        x: u32,
+        y: u32,
+        erase_strength: f32,
+        layer: &mut psoc_core::Layer,
+    ) -> ToolResult<()> {
+        // Get the existing mask pixel
+        let existing_pixel = layer
+            .get_mask_pixel(x, y)
+            .unwrap_or(psoc_core::RgbaPixel::new(255, 255, 255, 255)); // Default to white (fully visible)
+
+        // Calculate new mask value after erasing (darken the mask)
+        let current_value = existing_pixel.r as f32 / 255.0;
+        let new_value = current_value * (1.0 - erase_strength);
+        let new_value_u8 = (new_value * 255.0) as u8;
+
+        // Create the erased mask pixel (darker = more transparent)
+        let erased_pixel = psoc_core::RgbaPixel::new(
+            new_value_u8,
+            new_value_u8,
+            new_value_u8,
+            255, // Mask alpha is always 255
+        );
+
+        // Set the erased mask pixel
+        layer.set_mask_pixel(x, y, erased_pixel)?;
 
         Ok(())
     }
@@ -1143,6 +1383,10 @@ impl Tool for LassoTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Move tool for moving layers and selections
@@ -1276,6 +1520,10 @@ impl Tool for MoveTool {
             "grid_size" => Some(ToolOptionValue::Float(self.grid_size)),
             _ => None,
         }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -1479,6 +1727,10 @@ impl Tool for MagicWandTool {
             "sample_merged" => Some(ToolOptionValue::Bool(self.sample_merged)),
             _ => None,
         }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -2831,6 +3083,10 @@ impl Tool for TransformTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 #[cfg(test)]
@@ -3670,6 +3926,10 @@ impl Tool for TextTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Gradient tool for creating and applying gradients
@@ -4070,6 +4330,10 @@ impl Tool for GradientTool {
             "apply_to_selection" => Some(ToolOptionValue::Bool(self.apply_to_selection)),
             _ => None,
         }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -4723,6 +4987,10 @@ impl Tool for RectangleTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Ellipse tool for drawing ellipses and circles
@@ -5120,6 +5388,10 @@ impl Tool for EllipseShapeTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Line tool for drawing straight lines
@@ -5510,6 +5782,10 @@ impl Tool for LineTool {
             "line_width" => Some(ToolOptionValue::Float(self.line_width)),
             _ => None,
         }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -5987,6 +6263,10 @@ impl Tool for PolygonTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 // ============================================================================
@@ -6428,6 +6708,10 @@ impl Tool for CropTool {
             _ => None,
         }
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 // Crop tool tests
@@ -6861,6 +7145,10 @@ impl Tool for EyedropperTool {
             }
             _ => None,
         }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

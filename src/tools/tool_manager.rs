@@ -144,12 +144,40 @@ impl ToolManager {
 
     /// Handle a tool event
     pub fn handle_event(&mut self, event: ToolEvent, document: &mut Document) -> ToolResult<()> {
+        self.handle_event_with_mask_mode(event, document, false, None)
+    }
+
+    /// Handle a tool event with mask editing mode support
+    pub fn handle_event_with_mask_mode(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        mask_editing_mode: bool,
+        mask_editing_layer: Option<usize>,
+    ) -> ToolResult<()> {
         if let Some(tool_type) = self.active_tool_type {
             if let Some(tool) = self.tools.get_mut(&tool_type) {
                 // Check if the tool can handle this event
                 if tool.can_handle_event(&event) {
-                    debug!("Handling event with tool: {}", tool.name());
-                    tool.handle_event(event, document, &mut self.tool_state)?;
+                    debug!(
+                        "Handling event with tool: {} (mask_mode: {})",
+                        tool.name(),
+                        mask_editing_mode
+                    );
+
+                    // For mask-aware tools, we need to handle them specially
+                    if mask_editing_mode
+                        && (tool_type == ToolType::Brush || tool_type == ToolType::Eraser)
+                    {
+                        self.handle_mask_aware_event(
+                            event,
+                            document,
+                            tool_type,
+                            mask_editing_layer,
+                        )?;
+                    } else {
+                        tool.handle_event(event, document, &mut self.tool_state)?;
+                    }
                 } else {
                     debug!("Tool {} cannot handle event: {:?}", tool.name(), event);
                 }
@@ -301,6 +329,156 @@ impl ToolManager {
             }
             .into())
         }
+    }
+
+    /// Handle events for mask-aware tools (Brush and Eraser)
+    fn handle_mask_aware_event(
+        &mut self,
+        event: ToolEvent,
+        document: &mut Document,
+        tool_type: ToolType,
+        _mask_editing_layer: Option<usize>,
+    ) -> ToolResult<()> {
+        // For now, we'll use a simpler approach - modify the tools to accept mask mode
+        // This is a temporary implementation until we can properly refactor the tool trait
+        match event {
+            ToolEvent::MousePressed { position, .. } => {
+                match tool_type {
+                    ToolType::Brush => {
+                        // Handle brush painting in mask mode
+                        self.handle_brush_mask_paint(position, document)?;
+                    }
+                    ToolType::Eraser => {
+                        // Handle eraser in mask mode
+                        self.handle_eraser_mask_erase(position, document)?;
+                    }
+                    _ => {}
+                }
+                self.tool_state.is_active = true;
+                self.tool_state.last_position = Some(position);
+            }
+            ToolEvent::MouseDragged { position, .. } => {
+                if self.tool_state.is_active {
+                    if let Some(last_pos) = self.tool_state.last_position {
+                        match tool_type {
+                            ToolType::Brush => {
+                                self.handle_brush_mask_stroke(last_pos, position, document)?;
+                            }
+                            ToolType::Eraser => {
+                                self.handle_eraser_mask_stroke(last_pos, position, document)?;
+                            }
+                            _ => {}
+                        }
+                    }
+                    self.tool_state.last_position = Some(position);
+                }
+            }
+            ToolEvent::MouseReleased { .. } => {
+                self.tool_state.is_active = false;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Handle brush painting in mask mode
+    fn handle_brush_mask_paint(
+        &mut self,
+        position: psoc_core::Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        use super::tools::BrushTool;
+
+        if let Some(_brush_tool) = self.tools.get(&ToolType::Brush) {
+            // Get brush tool reference and call mask painting method
+            // This is a simplified implementation - in a real scenario we'd need better access patterns
+            let active_layer = document.active_layer_mut();
+            if let Some(layer) = active_layer {
+                if layer.has_mask() {
+                    // Create a temporary brush tool to get the painting logic
+                    let temp_brush = BrushTool::new();
+                    temp_brush.paint_at_position_with_mask_mode(position, document, true)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle brush stroke in mask mode
+    fn handle_brush_mask_stroke(
+        &mut self,
+        from: psoc_core::Point,
+        to: psoc_core::Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        // Interpolate between points for smooth strokes
+        let distance = from.distance_to(&to);
+        if distance < 1.0 {
+            return self.handle_brush_mask_paint(to, document);
+        }
+
+        let steps = (distance / 2.0).ceil() as i32;
+        let steps = steps.max(1);
+
+        for i in 0..=steps {
+            let t = i as f32 / steps as f32;
+            let interpolated_x = from.x + (to.x - from.x) * t;
+            let interpolated_y = from.y + (to.y - from.y) * t;
+            let interpolated_pos = psoc_core::Point::new(interpolated_x, interpolated_y);
+
+            self.handle_brush_mask_paint(interpolated_pos, document)?;
+        }
+
+        Ok(())
+    }
+
+    /// Handle eraser in mask mode
+    fn handle_eraser_mask_erase(
+        &mut self,
+        position: psoc_core::Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        use super::tools::EraserTool;
+
+        if let Some(_eraser_tool) = self.tools.get(&ToolType::Eraser) {
+            let active_layer = document.active_layer_mut();
+            if let Some(layer) = active_layer {
+                if layer.has_mask() {
+                    // Create a temporary eraser tool to get the erasing logic
+                    let temp_eraser = EraserTool::new();
+                    temp_eraser.erase_at_position_with_mask_mode(position, document, true)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle eraser stroke in mask mode
+    fn handle_eraser_mask_stroke(
+        &mut self,
+        from: psoc_core::Point,
+        to: psoc_core::Point,
+        document: &mut Document,
+    ) -> ToolResult<()> {
+        // Interpolate between points for smooth strokes
+        let distance = from.distance_to(&to);
+        if distance < 1.0 {
+            return self.handle_eraser_mask_erase(to, document);
+        }
+
+        let steps = (distance / 2.0).ceil() as i32;
+        let steps = steps.max(1);
+
+        for i in 0..=steps {
+            let t = i as f32 / steps as f32;
+            let interpolated_x = from.x + (to.x - from.x) * t;
+            let interpolated_y = from.y + (to.y - from.y) * t;
+            let interpolated_pos = psoc_core::Point::new(interpolated_x, interpolated_y);
+
+            self.handle_eraser_mask_erase(interpolated_pos, document)?;
+        }
+
+        Ok(())
     }
 }
 
