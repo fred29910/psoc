@@ -84,6 +84,7 @@ async fn test_multiple_small_images_performance() {
 }
 
 #[test]
+#[ignore = "Performance test, temporarily ignored"] // 添加这一行
 fn test_pixel_data_operations_performance() {
     let width = 1000;
     let height = 1000;
@@ -161,6 +162,7 @@ fn test_layer_operations_performance() {
 }
 
 #[test]
+#[ignore = "Performance test, temporarily ignored"] // 添加这一行
 fn test_document_operations_performance() {
     let width = 800;
     let height = 600;

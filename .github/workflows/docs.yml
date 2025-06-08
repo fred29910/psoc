@@ -73,7 +73,6 @@ jobs:
           
           - [Introduction](README.md)
           - [Project Structure](project.md)
-          - [Development Tasks](README.md)
           EOF
           fi
           mdbook build
