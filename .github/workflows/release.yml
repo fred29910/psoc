@@ -12,6 +12,8 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # This is needed to create a GitHub release
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       release_version: ${{ env.RELEASE_VERSION }}
@@ -87,6 +89,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev imagemagick inkscape
 
+      - name: Install system dependencies (macOS)
+        if: matrix.build == 'macos'
+        run: |
+          brew install imagemagick inkscape
+
       - name: Install packaging tools (Windows)
         if: matrix.build == 'windows'
         run: |
@@ -108,9 +115,9 @@ jobs:
         run: |
           chmod +x scripts/package.sh
           if [ "${{ matrix.build }}" = "linux" ]; then
-            scripts/package/linux.sh ${{ needs.create-release.outputs.release_version }} release true
+            scripts/package/linux.sh ${{ needs.create-release.outputs.release_version }} release true ${{ matrix.target }}
           elif [ "${{ matrix.build }}" = "macos" ]; then
-            scripts/package/macos.sh ${{ needs.create-release.outputs.release_version }} release true
+            scripts/package/macos.sh ${{ needs.create-release.outputs.release_version }} release true ${{ matrix.target }}
           elif [ "${{ matrix.build }}" = "windows" ]; then
             pwsh scripts/package/windows.ps1 -Version ${{ needs.create-release.outputs.release_version }} -Configuration release -SkipBuild:$true
           fi

@@ -8,9 +8,10 @@ set -e
 VERSION="${1:-0.8.6}"
 CONFIGURATION="${2:-release}"
 SKIP_BUILD="${3:-false}"
+TARGET="${4:-x86_64-apple-darwin}"
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BUILD_DIR="$PROJECT_ROOT/target/release"
+BUILD_DIR="$PROJECT_ROOT/target/$TARGET/release"
 PACKAGE_DIR="$PROJECT_ROOT/packages/macos"
 RESOURCES_DIR="$PROJECT_ROOT/resources"
 
@@ -40,6 +41,7 @@ fi
 
 # Verify executable exists
 EXECUTABLE_PATH="$BUILD_DIR/psoc"
+
 if [ ! -f "$EXECUTABLE_PATH" ]; then
     echo "❌ Executable not found at $EXECUTABLE_PATH"
     exit 1
@@ -150,7 +152,7 @@ MOUNT_DIR=$(hdiutil attach -readwrite -noverify -noautoopen "$TEMP_DMG_PATH" | e
 ln -sf /Applications "$MOUNT_DIR/Applications"
 
 # Set DMG window properties (if osascript is available)
-if command -v osascript &> /dev/null; then
+if command -v osascript &> /dev/null && [ -z "$CI" ]; then
     osascript << EOF
 tell application "Finder"
     tell disk "PSOC $VERSION"
@@ -170,6 +172,12 @@ tell application "Finder"
     end tell
 end tell
 EOF
+else
+    if [ -n "$CI" ]; then
+        echo "Skipping DMG appearance customization in CI environment."
+    else
+        echo "osascript not found, skipping DMG appearance customization."
+    fi
 fi
 
 # Unmount the DMG
