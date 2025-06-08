@@ -209,11 +209,11 @@ create_deb() {
     if [ -f "$RESOURCES_DIR/icons/psoc.png" ]; then
         cp "$RESOURCES_DIR/icons/psoc.png" "$deb_dir/usr/share/icons/hicolor/256x256/apps/"
     fi
-    
+    DEB_VERSION=$(echo "$VERSION" | sed 's/^v//') # Remove 'v' prefix if present
     # Create control file
     cat > "$control_dir/control" << EOF
 Package: psoc
-Version: $VERSION
+Version: $DEB_VERSION
 Section: graphics
 Priority: optional
 Architecture: amd64
