@@ -82,7 +82,7 @@ jobs:
         if: matrix.build == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev imagemagick inkscape
+          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev imagemagick inkscape libfuse2
 
       - name: Install system dependencies (macOS)
         if: matrix.build == 'macos'
