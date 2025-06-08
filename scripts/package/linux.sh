@@ -8,9 +8,10 @@ set -e
 VERSION="${1:-0.8.6}"
 CONFIGURATION="${2:-release}"
 SKIP_BUILD="${3:-false}"
+TARGET="${4:-x86_64-unknown-linux-gnu}"
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BUILD_DIR="$PROJECT_ROOT/target/release"
+BUILD_DIR="$PROJECT_ROOT/target/$TARGET/release"
 PACKAGE_DIR="$PROJECT_ROOT/packages/linux"
 RESOURCES_DIR="$PROJECT_ROOT/resources"
 

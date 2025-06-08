@@ -115,9 +115,9 @@ jobs:
         run: |
           chmod +x scripts/package.sh
           if [ "${{ matrix.build }}" = "linux" ]; then
-            scripts/package/linux.sh ${{ needs.create-release.outputs.release_version }} release true
+            scripts/package/linux.sh ${{ needs.create-release.outputs.release_version }} release true ${{ matrix.target }}
           elif [ "${{ matrix.build }}" = "macos" ]; then
-            scripts/package/macos.sh ${{ needs.create-release.outputs.release_version }} release true
+            scripts/package/macos.sh ${{ needs.create-release.outputs.release_version }} release true ${{ matrix.target }}
           elif [ "${{ matrix.build }}" = "windows" ]; then
             pwsh scripts/package/windows.ps1 -Version ${{ needs.create-release.outputs.release_version }} -Configuration release -SkipBuild:$true
           fi
