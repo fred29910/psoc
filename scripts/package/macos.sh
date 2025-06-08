@@ -152,7 +152,7 @@ MOUNT_DIR=$(hdiutil attach -readwrite -noverify -noautoopen "$TEMP_DMG_PATH" | e
 ln -sf /Applications "$MOUNT_DIR/Applications"
 
 # Set DMG window properties (if osascript is available)
-if command -v osascript &> /dev/null; then
+if command -v osascript &> /dev/null && [ -z "$CI" ]; then
     osascript << EOF
 tell application "Finder"
     tell disk "PSOC $VERSION"
@@ -172,6 +172,12 @@ tell application "Finder"
     end tell
 end tell
 EOF
+else
+    if [ -n "$CI" ]; then
+        echo "Skipping DMG appearance customization in CI environment."
+    else
+        echo "osascript not found, skipping DMG appearance customization."
+    fi
 fi
 
 # Unmount the DMG
