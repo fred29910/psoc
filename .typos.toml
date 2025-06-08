@@ -1,0 +1,3 @@
+[default.extend-words]
+flate2 = "flate2"
+flate = "flate"
