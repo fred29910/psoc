@@ -11,6 +11,8 @@ pub mod dialogs;
 #[cfg(feature = "gui")]
 pub mod icons;
 #[cfg(feature = "gui")]
+pub mod fonts;
+#[cfg(feature = "gui")]
 pub mod theme;
 #[cfg(feature = "gui")]
 pub mod animations;
@@ -35,6 +37,8 @@ pub use dialogs::{
 };
 #[cfg(feature = "gui")]
 pub use icons::Icon;
+#[cfg(feature = "gui")]
+pub use fonts::{FontConfig, FontManager, initialize_fonts};
 #[cfg(feature = "gui")]
 pub use theme::{ButtonStyle, ColorPalette, ContainerStyle, MenuStyle, PsocTheme, VisualStyle};
 #[cfg(feature = "gui")]

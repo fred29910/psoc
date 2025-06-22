@@ -2,6 +2,16 @@
 //!
 //! This module provides multi-language support using the Fluent localization system.
 //! It manages language resources, locale detection, and text translation throughout the application.
+//!
+//! ## Features
+//! - Legacy i18n system (original implementation)
+//! - Enhanced i18n system with lazy loading and performance optimizations
+//! - Thread-safe concurrent access
+//! - Memory-efficient caching
+//! - Embedded resource management
+
+pub mod enhanced;
+pub mod migration;
 
 use fluent::{FluentBundle, FluentResource};
 use fluent_bundle::FluentArgs;
@@ -346,3 +356,13 @@ pub fn t_with_args(key: &str, args: &FluentArgs) -> String {
         key.to_string()
     }
 }
+
+// Re-export enhanced i18n system
+pub use enhanced::{
+    EnhancedLocalizationManager, TranslationStats,
+    create_enhanced_localization_manager, init_thread_local_enhanced_localization,
+    t_enhanced, t_enhanced_with_args,
+};
+
+// Re-export enhanced Language enum (which includes more languages)
+pub use enhanced::Language as EnhancedLanguage;
