@@ -12,12 +12,22 @@ pub mod dialogs;
 pub mod icons;
 #[cfg(feature = "gui")]
 pub mod theme;
+#[cfg(feature = "gui")]
+pub mod animations;
+#[cfg(feature = "gui")]
+pub mod styles;
 
 // Re-export main components
 #[cfg(feature = "gui")]
 pub use application::{AppState, LayerMessage, Message, PsocApp};
 #[cfg(feature = "gui")]
 pub use canvas::{ImageCanvas, ImageData};
+#[cfg(feature = "gui")]
+pub use components::{
+    MenuCategory, MenuCategoryId, MenuFactory, MenuItem, MenuMessage, MenuSystem,
+    ResponsiveLayoutManager, ResponsiveLayoutMessage, PanelId, PanelState, ScreenSize,
+    KeyboardNavigationManager, KbNavMessage, FocusTarget, NavigationAction,
+};
 #[cfg(feature = "gui")]
 pub use dialogs::{
     AboutDialog, BrightnessContrastDialog, ColorPaletteDialog, ColorPickerDialog,
@@ -26,4 +36,8 @@ pub use dialogs::{
 #[cfg(feature = "gui")]
 pub use icons::Icon;
 #[cfg(feature = "gui")]
-pub use theme::{ButtonStyle, ColorPalette, ContainerStyle, PsocTheme};
+pub use theme::{ButtonStyle, ColorPalette, ContainerStyle, MenuStyle, PsocTheme, VisualStyle};
+#[cfg(feature = "gui")]
+pub use animations::{MenuAnimationManager, TransitionType};
+#[cfg(feature = "gui")]
+pub use styles::{VisualEffectStyle, GlassEffect, FrostedGlassStyle, ShadowConfig};

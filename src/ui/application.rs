@@ -3,14 +3,18 @@
 #[cfg(feature = "gui")]
 use iced::{
     keyboard,
-    widget::{column, container},
+    widget::{column, container, row, text, Space},
     Element, Length, Settings, Subscription, Task, Theme,
 };
 use tracing::{debug, error, info};
 
 use super::{
     canvas::{ImageCanvas, ImageData},
-    components::{self, ColorHistory},
+    components::{
+        self, ColorHistory, MenuFactory, MenuMessage, MenuSystem,
+        ResponsiveLayoutManager, ResponsiveLayoutMessage, KeyboardNavigationManager,
+        KbNavMessage, FocusTarget, NavigationAction,
+    },
     dialogs::{
         AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage,
         ColorPaletteDialog, ColorPaletteMessage, ColorPickerDialog, ColorPickerMessage,
@@ -20,6 +24,19 @@ use super::{
     icons::Icon,
     theme::{spacing, PsocTheme},
 };
+// Temporary logging macros until log crate is added
+macro_rules! debug {
+    ($($arg:tt)*) => { println!("[DEBUG] {}", format!($($arg)*)) };
+}
+macro_rules! info {
+    ($($arg:tt)*) => { println!("[INFO] {}", format!($($arg)*)) };
+}
+macro_rules! warn {
+    ($($arg:tt)*) => { println!("[WARN] {}", format!($($arg)*)) };
+}
+macro_rules! error {
+    ($($arg:tt)*) => { println!("[ERROR] {}", format!($($arg)*)) };
+}
 use crate::i18n::{Language, LocalizationManager};
 
 use crate::{
@@ -75,9 +92,15 @@ pub struct PsocApp {
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
     tool_manager: ToolManager,
+    /// New menu system
+    menu_system: MenuSystem<Message>,
     /// Shortcut manager for keyboard shortcuts
     #[allow(dead_code)]
     shortcut_manager: ShortcutManager,
+    /// Responsive layout manager
+    layout_manager: ResponsiveLayoutManager,
+    /// Keyboard navigation manager
+    keyboard_nav: KeyboardNavigationManager,
 }
 
 /// Application state
@@ -159,6 +182,12 @@ pub enum Message {
     ImageSaved,
     /// Exit the application
     Exit,
+    /// Menu system messages
+    Menu(MenuMessage),
+    /// Responsive layout messages
+    ResponsiveLayout(ResponsiveLayoutMessage),
+    /// Keyboard navigation messages
+    KeyboardNavigation(KbNavMessage),
     /// Change the current tool
     ToolChanged(ToolType),
     /// Tool option changed
@@ -211,6 +240,8 @@ pub enum Message {
     History(HistoryMessage),
     /// Language changed
     LanguageChanged(Language),
+    /// Refresh menu system (for language changes)
+    RefreshMenuSystem,
     /// Error occurred
     Error(String),
 }
@@ -420,6 +451,10 @@ pub enum ViewMessage {
 
 impl Default for PsocApp {
     fn default() -> Self {
+        // Create the menu system with all categories
+        let menu_categories = MenuFactory::create_all_menus();
+        let menu_system = MenuSystem::new(menu_categories);
+
         Self {
             state: AppState::default(),
             error_message: None,
@@ -433,6 +468,9 @@ impl Default for PsocApp {
             canvas: ImageCanvas::new(),
             tool_manager: ToolManager::new(),
             shortcut_manager: ShortcutManager::new(),
+            menu_system,
+            layout_manager: ResponsiveLayoutManager::new(),
+            keyboard_nav: KeyboardNavigationManager::new(),
         }
     }
 }
@@ -458,7 +496,7 @@ impl Default for AppState {
             file_manager: crate::file_io::FileManager::new(),
             mouse_position: None,
             current_pixel_color: None,
-            color_history: ColorHistory::new(),
+            color_history: ColorHistory::new(16),
             mask_editing_mode: false,
             mask_editing_layer: None,
             current_language,
@@ -557,6 +595,10 @@ impl PsocApp {
             error!("Failed to initialize localization: {}", e);
         }
 
+        // Create the menu system with all categories
+        let menu_categories = MenuFactory::create_all_menus();
+        let menu_system = MenuSystem::new(menu_categories);
+
         (
             Self {
                 state: AppState::default(),
@@ -571,6 +613,9 @@ impl PsocApp {
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
                 shortcut_manager: ShortcutManager::new(),
+                menu_system,
+                layout_manager: ResponsiveLayoutManager::new(),
+                keyboard_nav: KeyboardNavigationManager::new(),
             },
             Task::none(),
         )
@@ -648,9 +693,9 @@ impl PsocApp {
             }
             Message::ImageLoaded(image) => {
                 info!(
-                    width = image.width(),
-                    height = image.height(),
-                    "Image loaded successfully"
+                    "Image loaded successfully: {}x{}",
+                    image.width(),
+                    image.height()
                 );
 
                 // Create document from image
@@ -939,9 +984,25 @@ impl PsocApp {
                 debug!("Language changed to: {:?}", language);
                 self.handle_language_change(language);
             }
+            Message::RefreshMenuSystem => {
+                debug!("Refreshing menu system");
+                self.refresh_menu_system();
+            }
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.error_message = Some(error);
+            }
+            Message::Menu(menu_msg) => {
+                debug!("Menu message: {:?}", menu_msg);
+                return self.handle_menu_message(menu_msg);
+            }
+            Message::ResponsiveLayout(layout_msg) => {
+                debug!("Responsive layout message: {:?}", layout_msg);
+                self.handle_responsive_layout_message(layout_msg);
+            }
+            Message::KeyboardNavigation(kb_msg) => {
+                debug!("Keyboard navigation message: {:?}", kb_msg);
+                self.handle_keyboard_navigation_message(kb_msg);
             }
         }
 
@@ -949,19 +1010,28 @@ impl PsocApp {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        keyboard::on_key_press(|key, modifiers| {
-            // Convert iced key and modifiers to our types
-            if let Some(shortcut_key) = iced_key_to_shortcut_key(&key) {
-                let shortcut_modifiers = iced_modifiers_to_shortcut_modifiers(modifiers);
+        Subscription::batch([
+            // Keyboard shortcuts
+            keyboard::on_key_press(|key, modifiers| {
+                // Convert iced key and modifiers to our types
+                if let Some(shortcut_key) = iced_key_to_shortcut_key(&key) {
+                    let shortcut_modifiers = iced_modifiers_to_shortcut_modifiers(modifiers);
 
-                // Create a temporary shortcut manager to check for common shortcuts
-                let temp_manager = ShortcutManager::new();
-                if let Some(action) = temp_manager.find_action(shortcut_key, &shortcut_modifiers) {
-                    return Some(Message::Shortcut(action));
+                    // Create a temporary shortcut manager to check for common shortcuts
+                    let temp_manager = ShortcutManager::new();
+                    if let Some(action) = temp_manager.find_action(shortcut_key, &shortcut_modifiers) {
+                        return Some(Message::Shortcut(action));
+                    }
                 }
-            }
-            None
-        })
+
+                // Also handle keyboard navigation
+                Some(Message::KeyboardNavigation(KbNavMessage::KeyPressed(key, modifiers)))
+            }),
+            // Keyboard releases for navigation
+            keyboard::on_key_release(|key, modifiers| {
+                Some(Message::KeyboardNavigation(KbNavMessage::KeyReleased(key, modifiers)))
+            }),
+        ])
     }
 
     fn view(&self) -> Element<Message> {
@@ -1218,34 +1288,9 @@ impl PsocApp {
 
     /// Create the menu bar
     fn menu_bar(&self) -> Element<Message> {
-        components::localized_menu_bar(
-            Message::NewDocument,
-            Message::OpenDocument,
-            Message::SaveDocument,
-            Message::SaveAsDocument,
-            Message::Undo,
-            Message::Redo,
-            Message::Adjustment(AdjustmentMessage::ShowBrightnessContrast),
-            Message::Adjustment(AdjustmentMessage::ShowHsl),
-            Message::Adjustment(AdjustmentMessage::ShowGrayscale),
-            Message::Adjustment(AdjustmentMessage::ShowColorBalance),
-            Message::Adjustment(AdjustmentMessage::ShowCurves),
-            Message::Adjustment(AdjustmentMessage::ShowLevels),
-            Message::Adjustment(AdjustmentMessage::ShowGaussianBlur),
-            Message::Adjustment(AdjustmentMessage::ShowUnsharpMask),
-            Message::Adjustment(AdjustmentMessage::ShowAddNoise),
-            Message::ShowColorPicker,
-            Message::ShowColorPalette,
-            Message::ShowPreferences,
-            Message::CreateSmartObject,
-            Message::View(ViewMessage::ToggleRulers),
-            Message::View(ViewMessage::ToggleGrid),
-            Message::View(ViewMessage::ToggleGuides),
-            Message::ShowAbout,
-            Message::Exit,
-            Message::LanguageChanged,
-            self.state.current_language,
-        )
+        // Use the new menu system
+        components::menu_system_view(&self.menu_system, self.state.theme)
+            .map(Message::Menu)
     }
 
     /// Create the toolbar
@@ -1619,12 +1664,11 @@ impl PsocApp {
                     if let Some(ToolOptionValue::Float(value)) =
                         self.tool_manager.get_tool_option(&option.name)
                     {
-                        ToolOptionControl::FloatSlider {
+                        ToolOptionControl::Slider {
                             label: option.display_name,
                             value,
                             min,
                             max,
-                            step: (max - min) / 100.0,
                             on_change: {
                                 let name = option.name.clone();
                                 Box::new(move |v| {
@@ -1643,17 +1687,17 @@ impl PsocApp {
                     if let Some(ToolOptionValue::Int(value)) =
                         self.tool_manager.get_tool_option(&option.name)
                     {
-                        ToolOptionControl::IntSlider {
+                        ToolOptionControl::Slider {
                             label: option.display_name,
-                            value,
-                            min,
-                            max,
+                            value: value as f32,
+                            min: min as f32,
+                            max: max as f32,
                             on_change: {
                                 let name = option.name.clone();
                                 Box::new(move |v| {
                                     Message::ToolOption(ToolOptionMessage::SetOption {
                                         name: name.clone(),
-                                        value: ToolOptionValue::Int(v),
+                                        value: ToolOptionValue::Int(v as i32),
                                     })
                                 })
                             },
@@ -1666,16 +1710,20 @@ impl PsocApp {
                     if let Some(ToolOptionValue::Color(value)) =
                         self.tool_manager.get_tool_option(&option.name)
                     {
-                        ToolOptionControl::ColorPicker {
+                        // Use Text control to display color value for now
+                        ToolOptionControl::Text {
                             label: option.display_name,
-                            value,
+                            value: format!("#{:02X}{:02X}{:02X}{:02X}",
+                                value[0], // r
+                                value[1], // g
+                                value[2], // b
+                                value[3]  // a
+                            ),
                             on_change: {
                                 let name = option.name.clone();
-                                Box::new(move |v| {
-                                    Message::ToolOption(ToolOptionMessage::SetOption {
-                                        name: name.clone(),
-                                        value: ToolOptionValue::Color(v),
-                                    })
+                                Box::new(move |_v| {
+                                    // For now, just return an error message
+                                    Message::Error("Color editing not yet implemented".to_string())
                                 })
                             },
                         }
@@ -1689,14 +1737,12 @@ impl PsocApp {
                     {
                         ToolOptionControl::Checkbox {
                             label: option.display_name,
-                            value,
-                            on_change: {
+                            checked: value,
+                            on_toggle: {
                                 let name = option.name.clone();
-                                Box::new(move |v| {
-                                    Message::ToolOption(ToolOptionMessage::SetOption {
-                                        name: name.clone(),
-                                        value: ToolOptionValue::Bool(v),
-                                    })
+                                Message::ToolOption(ToolOptionMessage::SetOption {
+                                    name: name.clone(),
+                                    value: ToolOptionValue::Bool(!value),
                                 })
                             },
                         }
@@ -1708,10 +1754,9 @@ impl PsocApp {
                     if let Some(ToolOptionValue::String(value)) =
                         self.tool_manager.get_tool_option(&option.name)
                     {
-                        ToolOptionControl::TextInput {
+                        ToolOptionControl::Text {
                             label: option.display_name,
                             value,
-                            placeholder: option.description,
                             on_change: {
                                 let name = option.name.clone();
                                 Box::new(move |v| {
@@ -1730,10 +1775,10 @@ impl PsocApp {
                     if let Some(ToolOptionValue::String(value)) =
                         self.tool_manager.get_tool_option(&option.name)
                     {
-                        ToolOptionControl::Dropdown {
+                        // Use Text control to display enum value for now
+                        ToolOptionControl::Text {
                             label: option.display_name,
-                            options: enum_options.clone(),
-                            selected: value,
+                            value: value.clone(),
                             on_change: {
                                 let name = option.name.clone();
                                 Box::new(move |v| {
@@ -1753,22 +1798,15 @@ impl PsocApp {
                         self.tool_manager.get_tool_option(&option.name)
                     {
                         let selected_text = choice_options.get(value).cloned().unwrap_or_default();
-                        ToolOptionControl::Dropdown {
+                        // Use Text control to display choice value for now
+                        ToolOptionControl::Text {
                             label: option.display_name,
-                            options: choice_options.clone(),
-                            selected: selected_text,
+                            value: selected_text,
                             on_change: {
                                 let name = option.name.clone();
-                                let options = choice_options.clone();
-                                Box::new(move |v| {
-                                    if let Some(index) = options.iter().position(|opt| opt == &v) {
-                                        Message::ToolOption(ToolOptionMessage::SetOption {
-                                            name: name.clone(),
-                                            value: ToolOptionValue::Choice(index),
-                                        })
-                                    } else {
-                                        Message::Error(format!("Invalid choice: {}", v))
-                                    }
+                                Box::new(move |_v| {
+                                    // For now, just return an error message
+                                    Message::Error("Choice editing not yet implemented".to_string())
                                 })
                             },
                         }
@@ -1785,8 +1823,40 @@ impl PsocApp {
 
     /// Create the status bar
     fn status_bar(&self) -> Element<Message> {
-        let status_info = StatusInfo::from_app_state(&self.state);
-        components::enhanced_status_bar(&status_info)
+        let app_status_info = StatusInfo::from_app_state(&self.state);
+
+        // Create status bar directly to avoid borrowing issues
+        let position_text = if let Some((x, y)) = app_status_info.mouse_position {
+            format!("X: {:.0}, Y: {:.0}", x, y)
+        } else {
+            "No position".to_string()
+        };
+
+        let zoom_text = format!("Zoom: {:.0}%", app_status_info.zoom_level * 100.0);
+
+        let size_text = if let Some((w, h)) = app_status_info.image_size {
+            format!("Size: {}x{}", w, h)
+        } else {
+            "No document".to_string()
+        };
+
+        let tool_info = format!("Tool: {}", self.state.current_tool);
+
+        container(
+            row![
+                text(tool_info).size(12.0),
+                Space::new(Length::Fill, Length::Shrink),
+                text(position_text).size(12.0),
+                text(" | ").size(12.0),
+                text(zoom_text).size(12.0),
+                text(" | ").size(12.0),
+                text(size_text).size(12.0),
+            ]
+            .spacing(8.0)
+            .align_y(iced::alignment::Vertical::Center)
+        )
+        .padding(4.0)
+        .into()
     }
 
     /// Create the layers panel content
@@ -1827,32 +1897,18 @@ impl PsocApp {
             vec![components::layer_panel(
                 layers,
                 Message::Layer(LayerMessage::AddEmptyLayer),
-                active_index.map(|i| Message::Layer(LayerMessage::DeleteLayer(i))),
-                active_index.map(|i| Message::Layer(LayerMessage::DuplicateLayer(i))),
-                active_index.and_then(|i| {
-                    if i > 0 {
-                        Some(Message::Layer(LayerMessage::MoveLayerUp(i)))
-                    } else {
-                        None
-                    }
-                }),
-                active_index.and_then(|i| {
-                    if i < layer_count - 1 {
-                        Some(Message::Layer(LayerMessage::MoveLayerDown(i)))
-                    } else {
-                        None
-                    }
-                }),
+                active_index.map(|i| Message::Layer(LayerMessage::DeleteLayer(i)))
+                    .unwrap_or_else(|| Message::Error("No active layer".to_string())),
+                active_index.map(|i| Message::Layer(LayerMessage::DuplicateLayer(i)))
+                    .unwrap_or_else(|| Message::Error("No active layer".to_string())),
             )]
         } else {
             // No document open - return empty layer panel
             vec![components::layer_panel(
                 vec![],
                 Message::Error("No document open".to_string()),
-                None,
-                None,
-                None,
-                None,
+                Message::Error("No document open".to_string()),
+                Message::Error("No document open".to_string()),
             )]
         }
     }
@@ -1861,8 +1917,10 @@ impl PsocApp {
     fn create_history_content(&self) -> Element<Message> {
         if let Some(ref document) = self.state.current_document {
             let history_entries = document.command_history.get_history_entries();
+            let current_position = document.command_history.current_position();
             components::history_panel(
                 history_entries,
+                current_position,
                 |position| Message::History(HistoryMessage::NavigateToPosition(position)),
                 Message::History(HistoryMessage::ClearHistory),
             )
@@ -1870,6 +1928,7 @@ impl PsocApp {
             // No document open - return empty history panel
             components::history_panel(
                 vec![],
+                0,
                 |_| Message::Error("No document open".to_string()),
                 Message::Error("No document open".to_string()),
             )
@@ -1897,7 +1956,21 @@ impl PsocApp {
             }
         }
 
+        // Refresh the menu system with new translations
+        self.refresh_menu_system();
+
         info!("Language successfully changed to: {:?}", language);
+    }
+
+    /// Refresh the menu system with current language translations
+    fn refresh_menu_system(&mut self) {
+        info!("Refreshing menu system with current language");
+
+        // Recreate menu categories with updated translations
+        let menu_categories = MenuFactory::create_all_menus();
+        self.menu_system = MenuSystem::new(menu_categories);
+
+        debug!("Menu system refreshed successfully");
     }
 
     /// Handle history-specific messages
@@ -3344,6 +3417,121 @@ impl PsocApp {
         info!("Applied preferences to application state");
     }
 
+    /// Handle menu system messages
+    fn handle_menu_message(&mut self, message: MenuMessage) -> Task<Message> {
+        use super::components::MenuMessage;
+
+        match message {
+            MenuMessage::OpenMenu(category_id) => {
+                debug!("Opening menu: {:?}", category_id);
+                self.menu_system.open_menu(category_id);
+                Task::none()
+            }
+            MenuMessage::CloseAllMenus => {
+                debug!("Closing all menus");
+                self.menu_system.close_all();
+                Task::none()
+            }
+            MenuMessage::SelectItem(item_id) => {
+                debug!("Menu item selected: {}", item_id);
+                // Close menus first
+                self.menu_system.close_all();
+
+                // Find and execute the action for this item
+                return self.execute_menu_action(&item_id);
+            }
+            MenuMessage::HoverItem(category_id, item_index) => {
+                debug!("Hovering over menu item: {:?}[{}]", category_id, item_index);
+                self.menu_system.hover_item = Some((
+                    self.menu_system.categories.iter().position(|c| c.id == category_id).unwrap_or(0),
+                    item_index
+                ));
+                Task::none()
+            }
+            MenuMessage::LeaveHover => {
+                self.menu_system.hover_item = None;
+                Task::none()
+            }
+            MenuMessage::UpdateAnimations => {
+                // Handle animation updates
+                Task::none()
+            }
+            MenuMessage::KeyboardNavigation(kb_nav_msg) => {
+                debug!("Menu keyboard navigation: {:?}", kb_nav_msg);
+                // Handle keyboard navigation within menus
+                // This would integrate with the enhanced menu state
+                Task::none()
+            }
+        }
+    }
+
+    /// Execute a menu action based on item ID
+    fn execute_menu_action(&mut self, item_id: &str) -> Task<Message> {
+        debug!("Executing menu action for item: {}", item_id);
+
+        // Map menu item IDs to actions
+        match item_id {
+            // File menu
+            "new" => Task::done(Message::NewDocument),
+            "open" => Task::done(Message::OpenDocument),
+            "save" => Task::done(Message::SaveDocument),
+            "save_as" => Task::done(Message::SaveAsDocument),
+            "exit" => Task::done(Message::Exit),
+
+            // Edit menu
+            "undo" => Task::done(Message::Undo),
+            "redo" => Task::done(Message::Redo),
+            "preferences" => Task::done(Message::ShowPreferences),
+
+            // Image menu
+            "brightness_contrast" => Task::done(Message::Adjustment(AdjustmentMessage::ShowBrightnessContrast)),
+            "hsl" => Task::done(Message::Adjustment(AdjustmentMessage::ShowHsl)),
+            "color_balance" => Task::done(Message::Adjustment(AdjustmentMessage::ShowColorBalance)),
+            "curves" => Task::done(Message::Adjustment(AdjustmentMessage::ShowCurves)),
+            "levels" => Task::done(Message::Adjustment(AdjustmentMessage::ShowLevels)),
+            "grayscale" => Task::done(Message::Adjustment(AdjustmentMessage::ShowGrayscale)),
+
+            // Layer menu
+            "add_layer" => Task::done(Message::Layer(LayerMessage::AddEmptyLayer)),
+            "add_layer_from_file" => Task::done(Message::Layer(LayerMessage::AddLayerFromFile)),
+            "duplicate_layer" => Task::done(Message::Layer(LayerMessage::DuplicateLayer(0))),
+
+            // Text menu
+            "text_tool" => Task::done(Message::ToolChanged(crate::tools::ToolType::Text)),
+
+            // Select menu
+            "select_tool" => Task::done(Message::ToolChanged(crate::tools::ToolType::Select)),
+            "ellipse_select_tool" => Task::done(Message::ToolChanged(crate::tools::ToolType::EllipseSelect)),
+            "lasso_tool" => Task::done(Message::ToolChanged(crate::tools::ToolType::LassoSelect)),
+            "magic_wand_tool" => Task::done(Message::ToolChanged(crate::tools::ToolType::MagicWand)),
+
+            // Filter menu
+            "gaussian_blur" => Task::done(Message::Adjustment(AdjustmentMessage::ShowGaussianBlur)),
+            "unsharp_mask" => Task::done(Message::Adjustment(AdjustmentMessage::ShowUnsharpMask)),
+            "add_noise" => Task::done(Message::Adjustment(AdjustmentMessage::ShowAddNoise)),
+
+            // View menu
+            "zoom_in" => Task::done(Message::ZoomIn),
+            "zoom_out" => Task::done(Message::ZoomOut),
+            "zoom_reset" => Task::done(Message::ZoomReset),
+            "toggle_rulers" => Task::done(Message::View(ViewMessage::ToggleRulers)),
+            "toggle_grid" => Task::done(Message::View(ViewMessage::ToggleGrid)),
+            "toggle_guides" => Task::done(Message::View(ViewMessage::ToggleGuides)),
+
+            // Window menu
+            "show_color_picker" => Task::done(Message::ShowColorPicker),
+            "show_color_palette" => Task::done(Message::ShowColorPalette),
+
+            // Help menu
+            "about" => Task::done(Message::ShowAbout),
+
+            _ => {
+                warn!("Unknown menu item ID: {}", item_id);
+                Task::none()
+            }
+        }
+    }
+
     /// Handle view-related messages (rulers, grid, guides)
     fn handle_view_message(&mut self, message: ViewMessage) {
         match message {
@@ -3812,6 +4000,99 @@ impl PsocApp {
             }
         } else {
             self.error_message = Some("No document open".to_string());
+        }
+    }
+
+    /// Handle responsive layout messages
+    fn handle_responsive_layout_message(&mut self, message: ResponsiveLayoutMessage) {
+        use super::components::ResponsiveLayoutMessage;
+
+        match message {
+            ResponsiveLayoutMessage::WindowResized(size) => {
+                debug!("Window resized to: {:?}", size);
+                self.layout_manager.update_window_size(size);
+            }
+            ResponsiveLayoutMessage::TogglePanel(panel_id) => {
+                debug!("Toggling panel: {:?}", panel_id);
+                self.layout_manager.toggle_panel(panel_id);
+            }
+            ResponsiveLayoutMessage::TogglePanelMinimized(panel_id) => {
+                debug!("Toggling panel minimized state: {:?}", panel_id);
+                self.layout_manager.toggle_panel_minimized(panel_id);
+            }
+            ResponsiveLayoutMessage::ResizePanel(panel_id, new_width) => {
+                debug!("Resizing panel {:?} to width: {:.1}", panel_id, new_width);
+                self.layout_manager.resize_panel(panel_id, new_width);
+            }
+            ResponsiveLayoutMessage::ToggleCompactMode => {
+                debug!("Toggling compact mode");
+                if self.layout_manager.compact_mode {
+                    self.layout_manager.exit_compact_mode();
+                } else {
+                    self.layout_manager.enter_compact_mode();
+                }
+            }
+        }
+    }
+
+    /// Handle keyboard navigation messages
+    fn handle_keyboard_navigation_message(&mut self, message: KbNavMessage) {
+        use super::components::KbNavMessage;
+
+        match message {
+            KbNavMessage::KeyPressed(key, modifiers) => {
+                if let Some(action) = self.keyboard_nav.handle_key_press(key, modifiers) {
+                    if let Some(target) = self.keyboard_nav.execute_action(action) {
+                        debug!("Keyboard navigation focused: {:?}", target);
+                        // Handle focus changes here
+                        self.handle_focus_change(target);
+                    }
+                }
+            }
+            KbNavMessage::KeyReleased(key, modifiers) => {
+                self.keyboard_nav.handle_key_release(key, modifiers);
+            }
+            KbNavMessage::Focus(target) => {
+                debug!("Focusing target: {:?}", target);
+                self.keyboard_nav.tab_order.focus(target);
+                self.handle_focus_change(target);
+            }
+            KbNavMessage::ClearFocus => {
+                debug!("Clearing focus");
+                self.keyboard_nav.tab_order.clear();
+            }
+            KbNavMessage::ToggleEnabled => {
+                debug!("Toggling keyboard navigation");
+                self.keyboard_nav.set_enabled(!self.keyboard_nav.enabled);
+            }
+            KbNavMessage::ToggleFocusIndicators => {
+                debug!("Toggling focus indicators");
+                self.keyboard_nav.set_show_focus_indicators(!self.keyboard_nav.show_focus_indicators);
+            }
+        }
+    }
+
+    /// Handle focus changes
+    fn handle_focus_change(&mut self, target: FocusTarget) {
+        match target {
+            FocusTarget::MenuBar => {
+                // Activate menu bar
+                if let Some(first_category) = self.menu_system.categories.first() {
+                    self.menu_system.open_menu(first_category.id);
+                }
+            }
+            FocusTarget::MenuCategory(category_id) => {
+                // Open specific menu category
+                self.menu_system.open_menu(category_id);
+            }
+            FocusTarget::Canvas => {
+                // Focus canvas - close any open menus
+                self.menu_system.close_all();
+            }
+            _ => {
+                // For other targets, just close menus
+                self.menu_system.close_all();
+            }
         }
     }
 }

@@ -41,6 +41,8 @@ menu-view-guides = Show Guides
 # Layer Menu
 menu-layer = Layer
 menu-layer-new = New Layer
+menu-layer-add-empty = Add Empty Layer
+menu-layer-add-from-file = Add Layer from File
 menu-layer-duplicate = Duplicate Layer
 menu-layer-delete = Delete Layer
 menu-layer-merge-down = Merge Down
@@ -70,14 +72,30 @@ menu-filter-noise = Noise
 menu-filter-add-noise = Add Noise
 menu-filter-reduce-noise = Reduce Noise
 
-# Tools Menu
-menu-tools = Tools
-menu-tools-color-picker = Color Picker
-menu-tools-color-palette = Color Palette
+# Text Menu
+menu-text = Text
+menu-text-tool = Text Tool
+
+# Select Menu
+menu-select = Select
+menu-select-rectangle = Rectangle Selection
+menu-select-ellipse = Ellipse Selection
+menu-select-lasso = Lasso Selection
+menu-select-magic-wand = Magic Wand
+menu-select-all = Select All
+menu-select-deselect = Deselect
+menu-select-invert = Invert Selection
+
+# Window Menu
+menu-window = Window
+menu-window-color-picker = Color Picker
+menu-window-color-palette = Color Palette
+menu-window-preferences = Preferences
 
 # Help Menu
 menu-help = Help
-menu-help-about = About
+menu-help-about = About PSOC
+menu-help-help = Help Documentation
 
 # Toolbar Tools
 tool-select = Select

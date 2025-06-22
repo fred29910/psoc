@@ -1,6 +1,6 @@
 //! Modern theme system for PSOC Image Editor
 
-use iced::{Color, Theme};
+use iced::{Color, Theme, Border, Shadow, Vector};
 
 /// PSOC custom theme
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -54,6 +54,60 @@ pub struct ColorPalette {
     pub border: Color,
     /// Shadow color
     pub shadow: Color,
+    /// Tech blue accent color (#00BFFF)
+    pub tech_blue: Color,
+    /// Dark background color (#222222)
+    pub dark_bg: Color,
+    /// Dark panel color (#2a2a2e)
+    pub dark_panel: Color,
+    /// Menu hover color
+    pub menu_hover: Color,
+    /// Menu active color
+    pub menu_active: Color,
+    /// Glass background for frosted glass effect
+    pub glass_bg: Color,
+}
+
+impl ColorPalette {
+    /// Get menu background color
+    pub fn menu_background(&self) -> Color {
+        self.glass_bg
+    }
+
+    /// Get menu hover color
+    pub fn menu_hover_color(&self) -> Color {
+        self.menu_hover
+    }
+
+    /// Get menu active color
+    pub fn menu_active_color(&self) -> Color {
+        self.menu_active
+    }
+
+    /// Get menu separator color
+    pub fn menu_separator(&self) -> Color {
+        Color::from_rgba(self.border.r, self.border.g, self.border.b, 0.3)
+    }
+
+    /// Get tech blue with custom alpha
+    pub fn tech_blue_alpha(&self, alpha: f32) -> Color {
+        Color::from_rgba(self.tech_blue.r, self.tech_blue.g, self.tech_blue.b, alpha)
+    }
+
+    /// Get surface color with custom alpha
+    pub fn surface_alpha(&self, alpha: f32) -> Color {
+        Color::from_rgba(self.surface.r, self.surface.g, self.surface.b, alpha)
+    }
+
+    /// Get shadow color for the theme
+    pub fn shadow_color(&self, intensity: f32) -> Color {
+        Color::from_rgba(0.0, 0.0, 0.0, intensity)
+    }
+
+    /// Get highlight color for borders and accents
+    pub fn highlight_color(&self) -> Color {
+        Color::from_rgba(1.0, 1.0, 1.0, 0.1)
+    }
 }
 
 impl PsocTheme {
@@ -72,6 +126,12 @@ impl PsocTheme {
                 error: Color::from_rgb(0.9, 0.2, 0.2),         // #e63333
                 border: Color::from_rgb(0.3, 0.3, 0.3),        // #4d4d4d
                 shadow: Color::from_rgba(0.0, 0.0, 0.0, 0.3),  // rgba(0,0,0,0.3)
+                tech_blue: Color::from_rgb(0.0, 0.75, 1.0),    // #00BFFF
+                dark_bg: Color::from_rgb(0.13, 0.13, 0.13),    // #222222
+                dark_panel: Color::from_rgb(0.16, 0.16, 0.18), // #2a2a2e
+                menu_hover: Color::from_rgba(0.0, 0.75, 1.0, 0.1), // tech_blue with alpha
+                menu_active: Color::from_rgba(0.0, 0.75, 1.0, 0.2), // tech_blue with alpha
+                glass_bg: Color::from_rgba(0.16, 0.16, 0.16, 0.8), // surface with alpha
             },
             PsocTheme::Light => ColorPalette {
                 background: Color::from_rgb(0.98, 0.98, 0.98), // #fafafa
@@ -85,6 +145,12 @@ impl PsocTheme {
                 error: Color::from_rgb(0.8, 0.1, 0.1),         // #cc1a1a
                 border: Color::from_rgb(0.8, 0.8, 0.8),        // #cccccc
                 shadow: Color::from_rgba(0.0, 0.0, 0.0, 0.1),  // rgba(0,0,0,0.1)
+                tech_blue: Color::from_rgb(0.0, 0.75, 1.0),    // #00BFFF
+                dark_bg: Color::from_rgb(0.95, 0.95, 0.95),    // Light equivalent
+                dark_panel: Color::from_rgb(0.92, 0.92, 0.92), // Light equivalent
+                menu_hover: Color::from_rgba(0.0, 0.75, 1.0, 0.1), // tech_blue with alpha
+                menu_active: Color::from_rgba(0.0, 0.75, 1.0, 0.2), // tech_blue with alpha
+                glass_bg: Color::from_rgba(1.0, 1.0, 1.0, 0.8), // white with alpha
             },
             PsocTheme::HighContrast => ColorPalette {
                 background: Color::BLACK,                       // #000000
@@ -98,6 +164,12 @@ impl PsocTheme {
                 error: Color::from_rgb(1.0, 0.0, 0.0),          // #ff0000
                 border: Color::WHITE,                           // #ffffff
                 shadow: Color::from_rgba(1.0, 1.0, 1.0, 0.2),   // rgba(255,255,255,0.2)
+                tech_blue: Color::from_rgb(0.0, 1.0, 1.0),      // Bright cyan for high contrast
+                dark_bg: Color::BLACK,                          // #000000
+                dark_panel: Color::from_rgb(0.1, 0.1, 0.1),     // #1a1a1a
+                menu_hover: Color::from_rgba(0.0, 1.0, 1.0, 0.2), // tech_blue with alpha
+                menu_active: Color::from_rgba(0.0, 1.0, 1.0, 0.3), // tech_blue with alpha
+                glass_bg: Color::from_rgba(0.1, 0.1, 0.1, 0.9), // surface with alpha
             },
         }
     }
@@ -108,6 +180,77 @@ impl PsocTheme {
             PsocTheme::Dark => Theme::Dark,
             PsocTheme::Light => Theme::Light,
             PsocTheme::HighContrast => Theme::Dark, // Use dark as base for high contrast
+        }
+    }
+
+    /// Get enhanced container style with visual effects
+    pub fn enhanced_container_style(self, style: VisualStyle) -> iced::widget::container::Style {
+        let palette = self.palette();
+
+        match style {
+            VisualStyle::None => iced::widget::container::Style::default(),
+            VisualStyle::FrostedGlass => iced::widget::container::Style {
+                text_color: Some(palette.text),
+                background: Some(palette.glass_bg.into()),
+                border: Border {
+                    color: Color::from_rgba(palette.border.r, palette.border.g, palette.border.b, 0.3),
+                    width: 1.0,
+                    radius: 12.0.into(),
+                },
+                shadow: Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.3),
+                    offset: Vector::new(0.0, 8.0),
+                    blur_radius: 24.0,
+                },
+            },
+            VisualStyle::TechAccent => iced::widget::container::Style {
+                text_color: Some(palette.text),
+                background: Some(palette.surface.into()),
+                border: Border {
+                    color: palette.tech_blue,
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                shadow: Shadow {
+                    color: Color::from_rgba(palette.tech_blue.r, palette.tech_blue.g, palette.tech_blue.b, 0.3),
+                    offset: Vector::new(0.0, 2.0),
+                    blur_radius: 8.0,
+                },
+            },
+            VisualStyle::Hover => iced::widget::container::Style {
+                text_color: Some(palette.text),
+                background: Some(palette.menu_hover.into()),
+                border: Border {
+                    color: Color::from_rgba(palette.tech_blue.r, palette.tech_blue.g, palette.tech_blue.b, 0.2),
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                shadow: Shadow::default(),
+            },
+            VisualStyle::Active => iced::widget::container::Style {
+                text_color: Some(palette.text),
+                background: Some(palette.menu_active.into()),
+                border: Border {
+                    color: Color::from_rgba(palette.tech_blue.r, palette.tech_blue.g, palette.tech_blue.b, 0.4),
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                shadow: Shadow::default(),
+            },
+            VisualStyle::Floating => iced::widget::container::Style {
+                text_color: Some(palette.text),
+                background: Some(palette.surface.into()),
+                border: Border {
+                    color: palette.border,
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                shadow: Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.25),
+                    offset: Vector::new(0.0, 8.0),
+                    blur_radius: 16.0,
+                },
+            },
         }
     }
 }
@@ -135,6 +278,31 @@ pub enum ContainerStyle {
     Card,
     Toolbar,
     StatusBar,
+    MenuBar,
+    MenuDropdown,
+}
+
+/// Menu-specific styles
+#[derive(Debug, Clone, Copy, Default)]
+pub enum MenuStyle {
+    #[default]
+    TopBar,
+    Dropdown,
+    MenuItem,
+    Separator,
+    Submenu,
+}
+
+/// Visual effect styles for modern UI
+#[derive(Debug, Clone, Copy, Default)]
+pub enum VisualStyle {
+    #[default]
+    None,
+    FrostedGlass,
+    TechAccent,
+    Hover,
+    Active,
+    Floating,
 }
 
 /// Spacing constants for consistent layout
