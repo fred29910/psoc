@@ -46,6 +46,7 @@ pub enum Icon {
     // View operations
     ZoomIn,
     ZoomOut,
+    ZoomReset,
     ZoomFit,
     ZoomActual,
     Fullscreen,
@@ -139,6 +140,7 @@ impl Icon {
             // View operations
             Icon::ZoomIn => '+',
             Icon::ZoomOut => '-',
+            Icon::ZoomReset => '0',
             Icon::ZoomFit => '⊞',
             Icon::ZoomActual => '1',
             Icon::Fullscreen => '□',
@@ -238,6 +240,7 @@ impl Icon {
             Icon::Polygon => "Polygon",
             Icon::ZoomIn => "Zoom In",
             Icon::ZoomOut => "Zoom Out",
+            Icon::ZoomReset => "Reset Zoom",
             Icon::ZoomFit => "Zoom to Fit",
             Icon::ZoomActual => "Actual Size",
             Icon::Fullscreen => "Fullscreen",

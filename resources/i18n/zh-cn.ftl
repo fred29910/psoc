@@ -41,6 +41,8 @@ menu-view-guides = 显示参考线
 # 图层菜单
 menu-layer = 图层
 menu-layer-new = 新建图层
+menu-layer-add-empty = 添加空白图层
+menu-layer-add-from-file = 从文件添加图层
 menu-layer-duplicate = 复制图层
 menu-layer-delete = 删除图层
 menu-layer-merge-down = 向下合并
@@ -70,14 +72,30 @@ menu-filter-noise = 噪点
 menu-filter-add-noise = 添加噪点
 menu-filter-reduce-noise = 降噪
 
-# 工具菜单
-menu-tools = 工具
-menu-tools-color-picker = 颜色选择器
-menu-tools-color-palette = 调色板
+# 文字菜单
+menu-text = 文字
+menu-text-tool = 文字工具
+
+# 选择菜单
+menu-select = 选择
+menu-select-rectangle = 矩形选择
+menu-select-ellipse = 椭圆选择
+menu-select-lasso = 套索选择
+menu-select-magic-wand = 魔术棒
+menu-select-all = 全选
+menu-select-deselect = 取消选择
+menu-select-invert = 反选
+
+# 窗口菜单
+menu-window = 窗口
+menu-window-color-picker = 颜色选择器
+menu-window-color-palette = 调色板
+menu-window-preferences = 首选项
 
 # 帮助菜单
 menu-help = 帮助
-menu-help-about = 关于
+menu-help-about = 关于 PSOC
+menu-help-help = 帮助文档
 
 # 工具栏工具
 tool-select = 选择
