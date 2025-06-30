@@ -140,14 +140,14 @@ fn main() {
     }
 
     println!("\nCreating File Menu with English translations:");
-    let file_menu = MenuFactory::create_file_menu();
-    println!("Menu Category: {:?}", file_menu.id);
+    let file_menu = MenuFactory::create_file_menu(); // Use the specific factory method
+    println!("Menu Category: {}", psoc::i18n::t(&file_menu.title_key)); // Translate title_key
     println!("Menu Items:");
     for item in &file_menu.items {
         if item.is_separator {
             println!("  - [Separator]");
         } else {
-            println!("  - {} ({})", item.label, item.id);
+            println!("  - {} ({})", psoc::i18n::t(&item.label_key), item.id); // Translate label_key
         }
     }
 
@@ -157,14 +157,14 @@ fn main() {
     }
 
     println!("\nCreating File Menu with Chinese translations:");
-    let file_menu_cn = MenuFactory::create_file_menu();
-    println!("Menu Category: {:?}", file_menu_cn.id);
+    let file_menu_cn = MenuFactory::create_file_menu(); // Re-create for current language
+    println!("Menu Category: {}", psoc::i18n::t(&file_menu_cn.title_key)); // Translate title_key
     println!("Menu Items:");
     for item in &file_menu_cn.items {
         if item.is_separator {
             println!("  - [分隔符]");
         } else {
-            println!("  - {} ({})", item.label, item.id);
+            println!("  - {} ({})", psoc::i18n::t(&item.label_key), item.id); // Translate label_key
         }
     }
 

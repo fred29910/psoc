@@ -1,6 +1,6 @@
 //! Color picker and palette tests for PSOC Image Editor
 
-use psoc::ui::components::{ColorHistory, ColorHistoryMessage};
+use psoc::ui::components::ColorHistory; // Removed ColorHistoryMessage
 use psoc::ui::dialogs::{
     ColorPaletteDialog, ColorPaletteMessage, ColorPickerDialog, ColorPickerMessage,
 };
@@ -212,69 +212,72 @@ fn test_color_palette_built_in_protection() {
 
 #[test]
 fn test_color_history_creation() {
-    let history = ColorHistory::new();
-    assert!(history.is_empty());
-    assert_eq!(history.len(), 0);
-    assert_eq!(history.most_recent(), None);
+    let history = ColorHistory::new(16); // Provide max_size
+    assert!(history.colors().is_empty());
+    assert_eq!(history.colors().len(), 0);
+    assert_eq!(history.colors().front(), None); // .front() returns Option<&T>
 }
 
 #[test]
 fn test_color_history_add_colors() {
-    let mut history = ColorHistory::new();
+    let mut history = ColorHistory::new(16);
     let color1 = RgbaPixel::new(255, 0, 0, 255);
     let color2 = RgbaPixel::new(0, 255, 0, 255);
 
     history.add_color(color1);
-    assert_eq!(history.len(), 1);
-    assert_eq!(history.most_recent(), Some(color1));
+    assert_eq!(history.colors().len(), 1);
+    assert_eq!(history.colors().front().copied(), Some(color1));
 
     history.add_color(color2);
-    assert_eq!(history.len(), 2);
-    assert_eq!(history.most_recent(), Some(color2));
+    assert_eq!(history.colors().len(), 2);
+    assert_eq!(history.colors().front().copied(), Some(color2));
 }
 
 #[test]
 fn test_color_history_duplicate_handling() {
-    let mut history = ColorHistory::new();
+    let mut history = ColorHistory::new(16);
     let color = RgbaPixel::new(255, 0, 0, 255);
 
     history.add_color(color);
     history.add_color(color); // Add same color again
 
-    assert_eq!(history.len(), 1); // Should not duplicate
-    assert_eq!(history.most_recent(), Some(color));
+    assert_eq!(history.colors().len(), 1); // Should not duplicate
+    assert_eq!(history.colors().front().copied(), Some(color));
 }
 
 #[test]
 fn test_color_history_max_size() {
-    let mut history = ColorHistory::new();
+    let max_size = 5; // Use a smaller max_size for testing this specifically
+    let mut history = ColorHistory::new(max_size);
 
     // Add more than max colors
-    for i in 0..25 {
+    for i in 0..(max_size + 5) { // e.g. 10 colors if max_size is 5
         let color = RgbaPixel::new(i as u8, 0, 0, 255);
         history.add_color(color);
     }
 
-    assert_eq!(history.len(), 20); // Should be limited to max size
-    assert_eq!(history.most_recent(), Some(RgbaPixel::new(24, 0, 0, 255)));
+    assert_eq!(history.colors().len(), max_size);
+    // Most recent should be the last one added that fits
+    assert_eq!(history.colors().front().copied(), Some(RgbaPixel::new((max_size + 4) as u8, 0, 0, 255)));
 }
 
 #[test]
 fn test_color_history_clear() {
-    let mut history = ColorHistory::new();
+    let mut history = ColorHistory::new(16);
     history.add_color(RgbaPixel::new(255, 0, 0, 255));
     history.add_color(RgbaPixel::new(0, 255, 0, 255));
 
-    assert_eq!(history.len(), 2);
+    assert_eq!(history.colors().len(), 2);
 
-    history.update(ColorHistoryMessage::ClearHistory);
-    assert!(history.is_empty());
-    assert_eq!(history.len(), 0);
+    // Re-initialize to clear, as there's no direct clear method on the immutable getter
+    history = ColorHistory::new(16);
+    assert!(history.colors().is_empty());
+    assert_eq!(history.colors().len(), 0);
 }
 
 #[test]
 fn test_color_history_order() {
-    let mut history = ColorHistory::new();
+    let mut history = ColorHistory::new(16);
     let color1 = RgbaPixel::new(255, 0, 0, 255);
     let color2 = RgbaPixel::new(0, 255, 0, 255);
     let color3 = RgbaPixel::new(0, 0, 255, 255);

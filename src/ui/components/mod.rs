@@ -12,20 +12,25 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 pub mod menu_system;
-pub mod modern_menu;
+// pub mod modern_menu; // Assuming this will be replaced or integrated with menu_system
 pub mod menu_factory;
 pub mod responsive_layout;
 pub mod keyboard_navigation;
 
-// Re-export main components
+// Re-export main components from the new menu_system
 pub use menu_system::{
-    AnimationState, MenuCategory, MenuCategoryId, MenuItem, MenuSystem,
+    MenuCategory, MenuCategoryId, MenuItem, MenuSystem, MenuMessage, menu_system_view, // Added menu_system_view
+    // AnimationState, // Will be re-added if used by menu_system.rs
 };
-pub use modern_menu::{
-    dropdown_menu, menu_bar, menu_system_view, MenuMessage,
-    enhanced_menu_bar, enhanced_dropdown_menu, EnhancedMenuState,
-    KeyboardNavigationMessage, KeyboardNavigationState,
-};
+
+// Commenting out old modern_menu exports, assuming they will be replaced.
+// If modern_menu.rs is still needed and distinct, these can be reinstated or adapted.
+// pub use modern_menu::{
+//     dropdown_menu, menu_bar, menu_system_view,
+//     enhanced_menu_bar, enhanced_dropdown_menu, EnhancedMenuState,
+//     KeyboardNavigationMessage, KeyboardNavigationState,
+// };
+
 pub use responsive_layout::{
     ResponsiveLayoutManager, ResponsiveLayoutMessage, PanelId, PanelState, ScreenSize,
 };
@@ -33,7 +38,7 @@ pub use keyboard_navigation::{
     KeyboardNavigationManager, KeyboardNavigationMessage as KbNavMessage,
     FocusTarget, NavigationAction, TabOrder,
 };
-pub use menu_factory::MenuFactory;
+pub use menu_factory::MenuFactory; // MenuFactory will need to be updated to use new structures
 
 // Type aliases for complex layer information tuples
 #[allow(clippy::type_complexity)]

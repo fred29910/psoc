@@ -74,6 +74,17 @@ pub enum Icon {
     // UI elements
     Menu,
     Settings,
+    // Menu Category Icons (as per docs/ui_upgrade.md)
+    MenuFile,
+    MenuEdit,
+    MenuImage,
+    MenuLayer,
+    MenuText,
+    MenuSelect,
+    MenuFilter,
+    MenuView,
+    MenuWindow,
+    MenuHelp,
     Close,
     Minimize,
     Maximize,
@@ -166,8 +177,19 @@ impl Icon {
             Icon::ChevronRight => '>',
 
             // UI elements
-            Icon::Menu => '≡',
-            Icon::Settings => '⚙',
+            Icon::Menu => '≡', // Standard menu hamburger
+            Icon::Settings => '⚙', // Gear icon
+            // Menu Category Icons - using some common unicode, might need specific font glyphs
+            Icon::MenuFile => '📁', // Folder for File
+            Icon::MenuEdit => 'E', // Pencil for Edit - Simplified
+            Icon::MenuImage => 'I', // Framed picture for Image - Simplified
+            Icon::MenuLayer => 'L', // Placeholder (Korean char meaning layers/겹치다) - Simplified
+            Icon::MenuText => 'T', // Text icon - Simplified
+            Icon::MenuSelect => 'S', // Dotted square for Select - Simplified
+            Icon::MenuFilter => 'F', // Funnel/Filter icon (triangle) - Simplified
+            Icon::MenuView => 'V', // Eye for View - Simplified
+            Icon::MenuWindow => 'W', // Window icon - Simplified
+            Icon::MenuHelp => '?', // Question mark for Help - Already single char
             Icon::Close => '×',
             Icon::Minimize => '_',
             Icon::Maximize => '□',
@@ -195,12 +217,18 @@ impl Icon {
 
     /// Create an icon text element
     pub fn text<Message>(self) -> Element<'static, Message> {
-        text(self.unicode()).size(16.0).into()
+        text(self.unicode())
+            .font(ICON_FONT)
+            .size(16.0)
+            .into()
     }
 
     /// Create an icon text element with custom size
     pub fn text_sized<Message>(self, size: f32) -> Element<'static, Message> {
-        text(self.unicode()).size(size).into()
+        text(self.unicode())
+            .font(ICON_FONT)
+            .size(size)
+            .into()
     }
 
     /// Create a text-based icon (more reliable than Unicode)
@@ -262,6 +290,16 @@ impl Icon {
             Icon::ChevronRight => "Expand Right",
             Icon::Menu => "Menu",
             Icon::Settings => "Settings",
+            Icon::MenuFile => "File",
+            Icon::MenuEdit => "Edit",
+            Icon::MenuImage => "Image",
+            Icon::MenuLayer => "Layer",
+            Icon::MenuText => "Text",
+            Icon::MenuSelect => "Select",
+            Icon::MenuFilter => "Filter",
+            Icon::MenuView => "View",
+            Icon::MenuWindow => "Window",
+            Icon::MenuHelp => "Help",
             Icon::Close => "Close",
             Icon::Minimize => "Minimize",
             Icon::Maximize => "Maximize",

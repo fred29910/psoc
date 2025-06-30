@@ -3419,50 +3419,81 @@ impl PsocApp {
 
     /// Handle menu system messages
     fn handle_menu_message(&mut self, message: MenuMessage) -> Task<Message> {
-        use super::components::MenuMessage;
+        // Updated to use MenuMessage from src/ui/components/menu_system.rs
+        // which is already correctly imported via `use super::components::{..., MenuMessage, ...};`
 
         match message {
-            MenuMessage::OpenMenu(category_id) => {
-                debug!("Opening menu: {:?}", category_id);
-                self.menu_system.open_menu(category_id);
-                Task::none()
+            MenuMessage::ToggleMenu(category_id) => {
+                debug!("Toggling menu: {:?}", category_id);
+                if let Some(idx) = self.menu_system.categories.iter().position(|c| c.id == category_id) {
+                    self.menu_system.toggle_menu(category_id, idx);
+                }
             }
             MenuMessage::CloseAllMenus => {
-                debug!("Closing all menus");
-                self.menu_system.close_all();
-                Task::none()
+                debug!("Closing all menus (requested by MenuMessage)");
+                self.menu_system.close_active_menu();
             }
-            MenuMessage::SelectItem(item_id) => {
-                debug!("Menu item selected: {}", item_id);
-                // Close menus first
-                self.menu_system.close_all();
-
-                // Find and execute the action for this item
+            MenuMessage::SelectItemById(item_id) => {
+                debug!("Menu item selected by ID: {}", item_id);
+                self.menu_system.close_active_menu();
                 return self.execute_menu_action(&item_id);
             }
-            MenuMessage::HoverItem(category_id, item_index) => {
-                debug!("Hovering over menu item: {:?}[{}]", category_id, item_index);
-                self.menu_system.hover_item = Some((
-                    self.menu_system.categories.iter().position(|c| c.id == category_id).unwrap_or(0),
-                    item_index
-                ));
-                Task::none()
+            MenuMessage::HoverItemPath(path) => {
+                self.menu_system.hover_item_path = path;
             }
-            MenuMessage::LeaveHover => {
-                self.menu_system.hover_item = None;
-                Task::none()
+            MenuMessage::FocusMenuBar => {
+                self.menu_system.focus_menu_bar(true);
+            }
+            MenuMessage::FocusNextMenuCategory => {
+                self.menu_system.focus_next_menu_category();
+            }
+            MenuMessage::FocusPrevMenuCategory => {
+                self.menu_system.focus_prev_menu_category();
+            }
+            MenuMessage::OpenFocusedMenuCategory => {
+                self.menu_system.open_focused_menu_category_dropdown();
+            }
+            MenuMessage::FocusNextItem => {
+                self.menu_system.focus_next_item_in_dropdown();
+            }
+            MenuMessage::FocusPrevItem => {
+                self.menu_system.focus_prev_item_in_dropdown();
+            }
+            MenuMessage::ActivateFocusedItem => {
+                if let Some(focused_item) = self.menu_system.get_focused_item() {
+                    if focused_item.submenu.is_some() {
+                        self.menu_system.open_focused_submenu();
+                    } else if let Some(action) = focused_item.action.clone() {
+                        self.menu_system.close_active_menu();
+                        return Task::done(action);
+                    } else if !focused_item.is_enabled || focused_item.is_separator {
+                        // Do nothing
+                    } else {
+                        self.menu_system.close_active_menu();
+                    }
+                }
+            }
+            MenuMessage::OpenFocusedSubmenu => {
+                self.menu_system.open_focused_submenu();
+            }
+            MenuMessage::CloseSubmenuToParent => {
+                self.menu_system.close_submenu_or_active_menu();
+            }
+            MenuMessage::HandleEscape => {
+                if self.menu_system.active_menu_category_id.is_some() ||
+                   self.menu_system.focused_item_path.as_ref().map_or(false, |p| p.len() > 1) {
+                    self.menu_system.close_submenu_or_active_menu();
+                } else if self.menu_system.focused_category_index.is_some() {
+                    self.menu_system.focus_menu_bar(false);
+                    self.keyboard_nav.tab_order.clear();
+                }
             }
             MenuMessage::UpdateAnimations => {
-                // Handle animation updates
-                Task::none()
-            }
-            MenuMessage::KeyboardNavigation(kb_nav_msg) => {
-                debug!("Menu keyboard navigation: {:?}", kb_nav_msg);
-                // Handle keyboard navigation within menus
-                // This would integrate with the enhanced menu state
-                Task::none()
+                // This message could be sent by a subscription to drive animations.
+                // For now, animations might be updated as part of the main view/update loop.
             }
         }
+        Task::none()
     }
 
     /// Execute a menu action based on item ID
@@ -4036,16 +4067,103 @@ impl PsocApp {
     }
 
     /// Handle keyboard navigation messages
-    fn handle_keyboard_navigation_message(&mut self, message: KbNavMessage) {
-        use super::components::KbNavMessage;
-
+    fn handle_keyboard_navigation_message(&mut self, message: KbNavMessage) -> Task<Message> {
+        // KbNavMessage is from src/ui/components/keyboard_navigation.rs
         match message {
-            KbNavMessage::KeyPressed(key, modifiers) => {
-                if let Some(action) = self.keyboard_nav.handle_key_press(key, modifiers) {
-                    if let Some(target) = self.keyboard_nav.execute_action(action) {
-                        debug!("Keyboard navigation focused: {:?}", target);
-                        // Handle focus changes here
-                        self.handle_focus_change(target);
+            KbNavMessage::KeyPressed(key_code, modifiers) => {
+                let menu_is_active = self.menu_system.focused_category_index.is_some() ||
+                                     self.menu_system.active_menu_category_id.is_some();
+
+                if menu_is_active {
+                    // Menu-specific keyboard handling
+                    match key_code {
+                        keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
+                            if self.menu_system.active_menu_category_id.is_some() &&
+                               self.menu_system.focused_item_path.as_ref().map_or(false, |p| p.len() > 2) {
+                                // Submenu is open, ArrowLeft closes it
+                                return Task::done(Message::Menu(MenuMessage::CloseSubmenuToParent));
+                            } else if self.menu_system.focused_category_index.is_some() && self.menu_system.active_menu_category_id.is_none() {
+                                // Menu bar is focused, no dropdown open
+                                return Task::done(Message::Menu(MenuMessage::FocusPrevMenuCategory));
+                            } else if self.menu_system.active_menu_category_id.is_some() {
+                                // A top-level dropdown is open, ArrowLeft should move to prev category and open it
+                                self.menu_system.focus_prev_menu_category(); // This also opens the new menu
+                                return Task::none();
+                            }
+                        }
+                        keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
+                            if self.menu_system.active_menu_category_id.is_some() {
+                                // Dropdown is open
+                                if let Some(item) = self.menu_system.get_focused_item() {
+                                    if item.submenu.is_some() {
+                                        return Task::done(Message::Menu(MenuMessage::OpenFocusedSubmenu));
+                                    } else {
+                                         // If on an item without submenu, and a dropdown is open, move to next category
+                                         self.menu_system.focus_next_menu_category(); // This also opens the new menu
+                                         return Task::none();
+                                    }
+                                }
+                            } else if self.menu_system.focused_category_index.is_some() {
+                                // Menu bar is focused, no dropdown open
+                                return Task::done(Message::Menu(MenuMessage::FocusNextMenuCategory));
+                            }
+                        }
+                        keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+                            if self.menu_system.active_menu_category_id.is_some() {
+                                return Task::done(Message::Menu(MenuMessage::FocusPrevItem));
+                            }
+                        }
+                        keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+                            if self.menu_system.active_menu_category_id.is_some() {
+                                return Task::done(Message::Menu(MenuMessage::FocusNextItem));
+                            } else if self.menu_system.focused_category_index.is_some() {
+                                // Menu bar is focused, ArrowDown opens the category
+                                return Task::done(Message::Menu(MenuMessage::OpenFocusedMenuCategory));
+                            }
+                        }
+                        keyboard::Key::Named(keyboard::key::Named::Enter) => {
+                            if self.menu_system.active_menu_category_id.is_some() {
+                                // Item in dropdown is focused
+                                return Task::done(Message::Menu(MenuMessage::ActivateFocusedItem));
+                            } else if self.menu_system.focused_category_index.is_some() {
+                                // Category in menu bar is focused
+                                return Task::done(Message::Menu(MenuMessage::OpenFocusedMenuCategory));
+                            }
+                        }
+                        keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                            return Task::done(Message::Menu(MenuMessage::HandleEscape));
+                        }
+                        keyboard::Key::Named(keyboard::key::Named::Tab) => {
+                            // Allow Tab to escape the menu system
+                            self.menu_system.close_all_force();
+                            self.keyboard_nav.alt_pressed = false; // Ensure Alt state is reset
+                            // Let KeyboardNavigationManager handle Tab for general UI focus change
+                            if let Some(action) = self.keyboard_nav.handle_key_press(key_code, modifiers) {
+                                if let Some(target) = self.keyboard_nav.execute_action(action) {
+                                    self.handle_focus_change(target);
+                                }
+                            }
+                            return Task::none();
+                        }
+                        _ => {} // Other keys are not handled by menu navigation while menu is active
+                    }
+                } else {
+                    // General keyboard navigation if menu is not active
+                    if let Some(action) = self.keyboard_nav.handle_key_press(key_code, modifiers) {
+                        if matches!(action, NavigationAction::ToggleMenuBar) {
+                             // This action from KNM means Alt key was likely pressed to activate menu bar
+                             self.menu_system.focus_menu_bar(true);
+                             // Ensure KNM also knows the menu bar is the current focus for its TabOrder logic
+                             if self.keyboard_nav.tab_order.current() != Some(FocusTarget::MenuBar) {
+                                 self.keyboard_nav.tab_order.focus(FocusTarget::MenuBar);
+                             }
+                             // self.handle_focus_change(FocusTarget::MenuBar); // Called by tab_order.focus or KNM execute_action
+                             return Task::none();
+                        }
+                        // For other actions, let KNM execute them and then handle focus change
+                        if let Some(target) = self.keyboard_nav.execute_action(action) {
+                            self.handle_focus_change(target);
+                        }
                     }
                 }
             }
@@ -4053,45 +4171,45 @@ impl PsocApp {
                 self.keyboard_nav.handle_key_release(key, modifiers);
             }
             KbNavMessage::Focus(target) => {
-                debug!("Focusing target: {:?}", target);
-                self.keyboard_nav.tab_order.focus(target);
-                self.handle_focus_change(target);
+                // This message comes from KNM when it explicitly sets focus
+                self.keyboard_nav.tab_order.focus(target); // Ensure KNM state is primary
+                self.handle_focus_change(target);      // Then sync app state
             }
             KbNavMessage::ClearFocus => {
-                debug!("Clearing focus");
                 self.keyboard_nav.tab_order.clear();
+                self.menu_system.close_all_force();
             }
             KbNavMessage::ToggleEnabled => {
-                debug!("Toggling keyboard navigation");
                 self.keyboard_nav.set_enabled(!self.keyboard_nav.enabled);
             }
             KbNavMessage::ToggleFocusIndicators => {
-                debug!("Toggling focus indicators");
                 self.keyboard_nav.set_show_focus_indicators(!self.keyboard_nav.show_focus_indicators);
             }
         }
+        Task::none()
     }
 
     /// Handle focus changes
     fn handle_focus_change(&mut self, target: FocusTarget) {
+        debug!("Handling focus change to: {:?}", target);
         match target {
             FocusTarget::MenuBar => {
-                // Activate menu bar
-                if let Some(first_category) = self.menu_system.categories.first() {
-                    self.menu_system.open_menu(first_category.id);
-                }
+                self.menu_system.focus_menu_bar(true);
             }
-            FocusTarget::MenuCategory(category_id) => {
-                // Open specific menu category
-                self.menu_system.open_menu(category_id);
+            FocusTarget::MenuCategory(_) => {
+                // This case might not be directly focused by KeyboardNavigationManager if MenuBar is the entry.
+                // If it can be, ensure the specific category is focused in menu_system.
+                // For now, this is primarily handled by internal menu navigation logic
+                // (e.g., when FocusNextMenuCategory results in a MenuBar focus internally).
+                // If KNM directly focuses a MenuCategory, menu_system should probably open it.
+                // However, current KNM focuses MenuBar first.
             }
             FocusTarget::Canvas => {
-                // Focus canvas - close any open menus
-                self.menu_system.close_all();
+                self.menu_system.close_all_force();
             }
             _ => {
-                // For other targets, just close menus
-                self.menu_system.close_all();
+                // For other focus targets (ToolPanel, PropertiesPanel, etc.)
+                self.menu_system.close_all_force();
             }
         }
     }

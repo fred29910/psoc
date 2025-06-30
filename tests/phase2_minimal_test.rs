@@ -285,6 +285,7 @@ mod minimal_tests {
         // Test that different visual effects can work together
         
         // Simulate a dropdown menu with multiple effects
+        #[derive(Clone, Debug)] // Added Clone
         struct DropdownStyle {
             glass_transparency: f32,
             shadow_blur: f32,
@@ -321,7 +322,8 @@ mod minimal_tests {
         }
 
         let initial_style = DropdownStyle::new();
-        let animated_style = initial_style.with_animation_progress(0.5);
+        // Clone initial_style for the method call that consumes self
+        let animated_style = initial_style.clone().with_animation_progress(0.5);
         
         assert_eq!(animated_style.animation_progress, 0.5);
         assert!(animated_style.get_effective_opacity() > 0.0);

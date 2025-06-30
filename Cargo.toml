@@ -62,6 +62,7 @@ sys-locale = "0.3.2"
 # Additional dependencies for enhanced i18n
 parking_lot = "0.12.3"  # For better synchronization
 dashmap = "6.1.0"       # For concurrent hash maps
+rand = "0.8"            # For generating random numbers (e.g. menu separator IDs)
 
 # System utilities
 dirs = "6.0.0"

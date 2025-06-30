@@ -29,70 +29,69 @@ impl MenuFactory {
     /// Create File menu (文件)
     pub fn create_file_menu() -> MenuCategory<Message> {
         let items = vec![
-            MenuItem::new("new", &t("menu-file-new"), Message::NewDocument)
+            MenuItem::new("file-new", &t("menu-file-new"), Some(Message::NewDocument))
                 .with_icon(Icon::New)
-                .with_shortcut("Ctrl+N"),
-            MenuItem::new("open", &t("menu-file-open"), Message::OpenDocument)
+                .with_shortcut("shortcut-new"), // Changed to key
+            MenuItem::new("file-open", &t("menu-file-open"), Some(Message::OpenDocument))
                 .with_icon(Icon::Open)
-                .with_shortcut("Ctrl+O"),
+                .with_shortcut("shortcut-open"), // Changed to key
             MenuItem::separator(),
-            MenuItem::new("save", &t("menu-file-save"), Message::SaveDocument)
+            MenuItem::new("file-save", &t("menu-file-save"), Some(Message::SaveDocument))
                 .with_icon(Icon::Save)
-                .with_shortcut("Ctrl+S"),
-            MenuItem::new("save_as", &t("menu-file-save-as"), Message::SaveAsDocument)
+                .with_shortcut("shortcut-save"), // Changed to key
+            MenuItem::new("file-save-as", &t("menu-file-save-as"), Some(Message::SaveAsDocument))
                 .with_icon(Icon::SaveAs)
-                .with_shortcut("Ctrl+Shift+S"),
-            MenuItem::new("export", &t("menu-file-export"), Message::SaveAsDocument)
+                .with_shortcut("shortcut-save-as"), // Changed to key
+            MenuItem::new("file-export", &t("menu-file-export"), Some(Message::SaveAsDocument))
                 .with_icon(Icon::Export)
-                .with_shortcut("Ctrl+E"),
-            MenuItem::new("import", &t("menu-file-import"), Message::OpenDocument)
+                .with_shortcut("shortcut-export"), // Changed to key
+            MenuItem::new("file-import", &t("menu-file-import"), Some(Message::OpenDocument))
                 .with_icon(Icon::Import)
-                .with_shortcut("Ctrl+I"),
+                .with_shortcut("shortcut-import"), // Changed to key
             MenuItem::separator(),
-            MenuItem::new("recent", &t("menu-file-recent"), Message::NewDocument)
-                .with_icon(Icon::Open),
+            MenuItem::new("file-recent", &t("menu-file-recent"), Some(Message::NewDocument)), // Placeholder action, no shortcut for now
             MenuItem::separator(),
-            MenuItem::new("exit", &t("menu-file-exit"), Message::Exit)
-                .with_shortcut("Alt+F4"),
+            MenuItem::new("file-exit", &t("menu-file-exit"), Some(Message::Exit))
+                .with_shortcut("shortcut-exit"), // Changed to key
         ];
 
-        MenuCategory::new(MenuCategoryId::File, items)
+        MenuCategory::new(MenuCategoryId::File, &t("menu-file"), items)
     }
 
     /// Create Edit menu (编辑)
     pub fn create_edit_menu() -> MenuCategory<Message> {
         let items = vec![
-            MenuItem::new("undo", &t("menu-edit-undo"), Message::Undo)
+            MenuItem::new("edit-undo", &t("menu-edit-undo"), Some(Message::Undo))
                 .with_icon(Icon::Undo)
-                .with_shortcut("Ctrl+Z"),
-            MenuItem::new("redo", &t("menu-edit-redo"), Message::Redo)
+                .with_shortcut("shortcut-undo"), // Changed to key
+            MenuItem::new("edit-redo", &t("menu-edit-redo"), Some(Message::Redo))
                 .with_icon(Icon::Redo)
-                .with_shortcut("Ctrl+Y"),
+                .with_shortcut("shortcut-redo"), // Changed to key
             MenuItem::separator(),
-            MenuItem::new("cut", &t("menu-edit-cut"), Message::NewDocument)
+            MenuItem::new("edit-cut", &t("menu-edit-cut"), Some(Message::NewDocument)) // Placeholder
                 .with_icon(Icon::Cut)
-                .with_shortcut("Ctrl+X"),
-            MenuItem::new("copy", &t("menu-edit-copy"), Message::NewDocument)
+                .with_shortcut("shortcut-cut"), // Changed to key
+            MenuItem::new("edit-copy", &t("menu-edit-copy"), Some(Message::NewDocument)) // Placeholder
                 .with_icon(Icon::Copy)
-                .with_shortcut("Ctrl+C"),
-            MenuItem::new("paste", &t("menu-edit-paste"), Message::NewDocument)
+                .with_shortcut("shortcut-copy"), // Changed to key
+            MenuItem::new("edit-paste", &t("menu-edit-paste"), Some(Message::NewDocument)) // Placeholder
                 .with_icon(Icon::Paste)
-                .with_shortcut("Ctrl+V"),
-            MenuItem::new("delete", &t("menu-edit-delete"), Message::NewDocument)
+                .with_shortcut("shortcut-paste"), // Changed to key
+            MenuItem::new("edit-delete", &t("menu-edit-delete"), Some(Message::NewDocument)) // Placeholder
                 .with_icon(Icon::Delete)
-                .with_shortcut("Delete"),
+                .with_shortcut("shortcut-delete"), // Changed to key
             MenuItem::separator(),
-            MenuItem::new("select_all", &t("menu-edit-select-all"), Message::NewDocument)
-                .with_shortcut("Ctrl+A"),
-            MenuItem::new("deselect", &t("menu-edit-deselect"), Message::NewDocument)
-                .with_shortcut("Ctrl+D"),
+            MenuItem::new("edit-select-all", &t("menu-edit-select-all"), Some(Message::NewDocument)) // Placeholder
+                .with_shortcut("shortcut-select-all"), // Changed to key
+            MenuItem::new("edit-deselect", &t("menu-edit-deselect"), Some(Message::NewDocument)) // Placeholder
+                .with_shortcut("shortcut-deselect"), // Changed to key
             MenuItem::separator(),
-            MenuItem::new("preferences", &t("menu-edit-preferences"), Message::ShowPreferences)
+            MenuItem::new("edit-preferences", &t("menu-edit-preferences"), Some(Message::ShowPreferences))
                 .with_icon(Icon::Settings)
-                .with_shortcut("Ctrl+,"),
+                .with_shortcut("shortcut-preferences"), // Changed to key
         ];
 
-        MenuCategory::new(MenuCategoryId::Edit, items)
+        MenuCategory::new(MenuCategoryId::Edit, &t("menu-edit"), items)
     }
 
     /// Create Image menu (图像)
@@ -101,39 +100,39 @@ impl MenuFactory {
 
         let items = vec![
             MenuItem::new(
-                "brightness_contrast",
+                "image-brightness-contrast",
                 &t("menu-image-brightness-contrast"),
-                Message::Adjustment(AdjustmentMessage::ShowBrightnessContrast),
+                Some(Message::Adjustment(AdjustmentMessage::ShowBrightnessContrast)),
             ),
             MenuItem::new(
-                "hsl",
+                "image-hsl",
                 &t("menu-image-hsl"),
-                Message::Adjustment(AdjustmentMessage::ShowHsl),
+                Some(Message::Adjustment(AdjustmentMessage::ShowHsl)),
             ),
             MenuItem::new(
-                "color_balance",
+                "image-color-balance",
                 &t("menu-image-color-balance"),
-                Message::Adjustment(AdjustmentMessage::ShowColorBalance),
+                Some(Message::Adjustment(AdjustmentMessage::ShowColorBalance)),
             ),
             MenuItem::new(
-                "curves",
+                "image-curves",
                 &t("menu-image-curves"),
-                Message::Adjustment(AdjustmentMessage::ShowCurves),
+                Some(Message::Adjustment(AdjustmentMessage::ShowCurves)),
             ),
             MenuItem::new(
-                "levels",
+                "image-levels",
                 &t("menu-image-levels"),
-                Message::Adjustment(AdjustmentMessage::ShowLevels),
+                Some(Message::Adjustment(AdjustmentMessage::ShowLevels)),
             ),
             MenuItem::separator(),
             MenuItem::new(
-                "grayscale",
+                "image-grayscale",
                 &t("menu-image-grayscale"),
-                Message::Adjustment(AdjustmentMessage::ShowGrayscale),
+                Some(Message::Adjustment(AdjustmentMessage::ShowGrayscale)),
             ),
         ];
 
-        MenuCategory::new(MenuCategoryId::Image, items)
+        MenuCategory::new(MenuCategoryId::Image, &t("menu-image"), items)
     }
 
     /// Create Layer menu (图层)
@@ -142,32 +141,32 @@ impl MenuFactory {
 
         let items = vec![
             MenuItem::new(
-                "add_layer",
+                "layer-add-empty",
                 &t("menu-layer-add-empty"),
-                Message::Layer(LayerMessage::AddEmptyLayer),
+                Some(Message::Layer(LayerMessage::AddEmptyLayer)),
             )
-            .with_shortcut("Ctrl+Shift+N"),
+            .with_shortcut("shortcut-new-layer"), // Changed to key
             MenuItem::new(
-                "add_layer_from_file",
+                "layer-add-from-file",
                 &t("menu-layer-add-from-file"),
-                Message::Layer(LayerMessage::AddLayerFromFile),
-            ),
+                Some(Message::Layer(LayerMessage::AddLayerFromFile)),
+            ), // No standard shortcut, or add if available
             MenuItem::separator(),
             MenuItem::new(
-                "duplicate_layer",
+                "layer-duplicate",
                 &t("menu-layer-duplicate"),
-                Message::Layer(LayerMessage::DuplicateLayer(0)), // Will be updated with actual index
+                Some(Message::Layer(LayerMessage::DuplicateLayer(0))), // Placeholder index
             )
-            .with_shortcut("Ctrl+J"),
+            .with_shortcut("shortcut-duplicate-layer"), // Changed to key
             MenuItem::new(
-                "delete_layer",
+                "layer-delete",
                 &t("menu-layer-delete"),
-                Message::Layer(LayerMessage::DeleteLayer(0)),
+                Some(Message::Layer(LayerMessage::DeleteLayer(0))), // Placeholder index
             )
-            .with_shortcut("Delete"),
+            .with_shortcut("shortcut-delete-layer"), // Changed to key (might be same as edit-delete)
         ];
 
-        MenuCategory::new(MenuCategoryId::Layer, items)
+        MenuCategory::new(MenuCategoryId::Layer, &t("menu-layer"), items)
     }
 
     /// Create Text menu (文字)
@@ -176,15 +175,15 @@ impl MenuFactory {
 
         let items = vec![
             MenuItem::new(
-                "text_tool",
+                "text-tool",
                 &t("menu-text-tool"),
-                Message::ToolChanged(ToolType::Text),
+                Some(Message::ToolChanged(ToolType::Text)),
             )
             .with_icon(Icon::Text)
-            .with_shortcut("T"),
+            .with_shortcut("shortcut-text-tool"), // Changed to key
         ];
 
-        MenuCategory::new(MenuCategoryId::Text, items)
+        MenuCategory::new(MenuCategoryId::Text, &t("menu-text"), items)
     }
 
     /// Create Select menu (选择)
@@ -193,40 +192,39 @@ impl MenuFactory {
 
         let items = vec![
             MenuItem::new(
-                "select_tool",
+                "select-rectangle",
                 &t("menu-select-rectangle"),
-                Message::ToolChanged(ToolType::Select),
+                Some(Message::ToolChanged(ToolType::Select)),
             )
-            .with_icon(Icon::Select)
-            .with_shortcut("M"),
+            .with_icon(Icon::Select) // Assuming Icon::Select is for rectangle
+            .with_shortcut("shortcut-select-tool"), // Changed to key (M)
             MenuItem::new(
-                "ellipse_select_tool",
+                "select-ellipse",
                 &t("menu-select-ellipse"),
-                Message::ToolChanged(ToolType::EllipseSelect),
-            )
-            .with_shortcut("E"),
+                Some(Message::ToolChanged(ToolType::EllipseSelect)),
+            ), // No standard shortcut, or add if available
             MenuItem::new(
-                "lasso_tool",
+                "select-lasso",
                 &t("menu-select-lasso"),
-                Message::ToolChanged(ToolType::LassoSelect),
+                Some(Message::ToolChanged(ToolType::LassoSelect)),
             )
-            .with_shortcut("L"),
+            .with_shortcut("shortcut-lasso-tool"), // Changed to key (L)
             MenuItem::new(
-                "magic_wand_tool",
+                "select-magic-wand",
                 &t("menu-select-magic-wand"),
-                Message::ToolChanged(ToolType::MagicWand),
+                Some(Message::ToolChanged(ToolType::MagicWand)),
             )
-            .with_shortcut("W"),
+            .with_shortcut("shortcut-magic-wand-tool"), // Changed to key (W)
             MenuItem::separator(),
-            MenuItem::new("select_all", &t("menu-select-all"), Message::NewDocument)
-                .with_shortcut("Ctrl+A"),
-            MenuItem::new("deselect", &t("menu-select-deselect"), Message::NewDocument)
-                .with_shortcut("Ctrl+D"),
-            MenuItem::new("invert_selection", &t("menu-select-invert"), Message::NewDocument)
-                .with_shortcut("Ctrl+Shift+I"),
+            MenuItem::new("select-all", &t("menu-select-all"), Some(Message::NewDocument)) // Placeholder
+                .with_shortcut("shortcut-select-all"), // Re-uses edit-select-all key
+            MenuItem::new("select-deselect", &t("menu-select-deselect"), Some(Message::NewDocument)) // Placeholder
+                .with_shortcut("shortcut-deselect"), // Re-uses edit-deselect key
+            MenuItem::new("select-invert", &t("menu-select-invert"), Some(Message::NewDocument)) // Placeholder
+                .with_shortcut("shortcut-invert-selection"), // Changed to key
         ];
 
-        MenuCategory::new(MenuCategoryId::Select, items)
+        MenuCategory::new(MenuCategoryId::Select, &t("menu-select"), items)
     }
 
     /// Create Filter menu (滤镜)
@@ -235,40 +233,40 @@ impl MenuFactory {
 
         let items = vec![
             MenuItem::new(
-                "gaussian_blur",
+                "filter-gaussian-blur",
                 &t("menu-filter-gaussian-blur"),
-                Message::Adjustment(AdjustmentMessage::ShowGaussianBlur),
+                Some(Message::Adjustment(AdjustmentMessage::ShowGaussianBlur)),
             ),
             MenuItem::new(
-                "motion_blur",
+                "filter-motion-blur",
                 &t("menu-filter-motion-blur"),
-                Message::Adjustment(AdjustmentMessage::ShowMotionBlur),
+                Some(Message::Adjustment(AdjustmentMessage::ShowMotionBlur)),
             ),
             MenuItem::separator(),
             MenuItem::new(
-                "unsharp_mask",
+                "filter-unsharp-mask",
                 &t("menu-filter-unsharp-mask"),
-                Message::Adjustment(AdjustmentMessage::ShowUnsharpMask),
+                Some(Message::Adjustment(AdjustmentMessage::ShowUnsharpMask)),
             ),
             MenuItem::new(
-                "sharpen",
+                "filter-sharpen",
                 &t("menu-filter-sharpen"),
-                Message::Adjustment(AdjustmentMessage::ShowSharpen),
+                Some(Message::Adjustment(AdjustmentMessage::ShowSharpen)),
             ),
             MenuItem::separator(),
             MenuItem::new(
-                "add_noise",
+                "filter-add-noise",
                 &t("menu-filter-add-noise"),
-                Message::Adjustment(AdjustmentMessage::ShowAddNoise),
+                Some(Message::Adjustment(AdjustmentMessage::ShowAddNoise)),
             ),
             MenuItem::new(
-                "reduce_noise",
+                "filter-reduce-noise",
                 &t("menu-filter-reduce-noise"),
-                Message::Adjustment(AdjustmentMessage::ShowReduceNoise),
+                Some(Message::Adjustment(AdjustmentMessage::ShowReduceNoise)),
             ),
         ];
 
-        MenuCategory::new(MenuCategoryId::Filter, items)
+        MenuCategory::new(MenuCategoryId::Filter, &t("menu-filter"), items)
     }
 
     /// Create View menu (视图)
@@ -276,61 +274,63 @@ impl MenuFactory {
         use crate::ui::application::ViewMessage;
 
         let items = vec![
-            MenuItem::new("zoom_in", &t("menu-view-zoom-in"), Message::ZoomIn)
-                .with_shortcut("Ctrl++"),
-            MenuItem::new("zoom_out", &t("menu-view-zoom-out"), Message::ZoomOut)
-                .with_shortcut("Ctrl+-"),
-            MenuItem::new("zoom_reset", &t("menu-view-zoom-reset"), Message::ZoomReset)
-                .with_shortcut("Ctrl+0"),
-            MenuItem::new("zoom_fit", &t("menu-view-zoom-fit"), Message::ZoomReset)
-                .with_shortcut("Ctrl+Shift+0"),
+            MenuItem::new("view-zoom-in", &t("menu-view-zoom-in"), Some(Message::ZoomIn))
+                .with_shortcut("shortcut-zoom-in"), // Changed to key
+            MenuItem::new("view-zoom-out", &t("menu-view-zoom-out"), Some(Message::ZoomOut))
+                .with_shortcut("shortcut-zoom-out"), // Changed to key
+            MenuItem::new("view-zoom-reset", &t("menu-view-zoom-reset"), Some(Message::ZoomReset))
+                .with_shortcut("shortcut-zoom-reset"), // Changed to key
+            MenuItem::new("view-zoom-fit", &t("menu-view-zoom-fit"), Some(Message::ZoomReset)) // Placeholder action
+                .with_shortcut("shortcut-zoom-fit"), // Changed to key
             MenuItem::separator(),
             MenuItem::new(
-                "toggle_rulers",
+                "view-rulers",
                 &t("menu-view-rulers"),
-                Message::View(ViewMessage::ToggleRulers),
+                Some(Message::View(ViewMessage::ToggleRulers)),
             )
-            .with_shortcut("Ctrl+R"),
+            .with_shortcut("shortcut-rulers"), // Changed to key
             MenuItem::new(
-                "toggle_grid",
+                "view-grid",
                 &t("menu-view-grid"),
-                Message::View(ViewMessage::ToggleGrid),
+                Some(Message::View(ViewMessage::ToggleGrid)),
             )
-            .with_shortcut("Ctrl+G"),
+            .with_shortcut("shortcut-grid"), // Changed to key
             MenuItem::new(
-                "toggle_guides",
+                "view-guides",
                 &t("menu-view-guides"),
-                Message::View(ViewMessage::ToggleGuides),
+                Some(Message::View(ViewMessage::ToggleGuides)),
             )
-            .with_shortcut("Ctrl+;"),
+            .with_shortcut("shortcut-guides"), // Changed to key
             MenuItem::separator(),
-            MenuItem::new("fullscreen", &t("menu-view-fullscreen"), Message::NewDocument)
-                .with_shortcut("F11"),
+            MenuItem::new("view-fullscreen", &t("menu-view-fullscreen"), Some(Message::NewDocument)) // Placeholder
+                .with_shortcut("shortcut-fullscreen"), // Changed to key
         ];
 
-        MenuCategory::new(MenuCategoryId::View, items)
+        MenuCategory::new(MenuCategoryId::View, &t("menu-view"), items)
     }
 
     /// Create Window menu (窗口)
     pub fn create_window_menu() -> MenuCategory<Message> {
         let items = vec![
-            MenuItem::new("show_color_picker", &t("menu-window-color-picker"), Message::ShowColorPicker),
-            MenuItem::new("show_color_palette", &t("menu-window-color-palette"), Message::ShowColorPalette),
-            MenuItem::new("show_preferences", &t("menu-window-preferences"), Message::ShowPreferences),
+            MenuItem::new("window-color-picker", &t("menu-window-color-picker"), Some(Message::ShowColorPicker)),
+            MenuItem::new("window-color-palette", &t("menu-window-color-palette"), Some(Message::ShowColorPalette)),
+            // Preferences was moved to Edit menu in docs, but can be here too if desired.
+            // For now, following the doc and removing from here. If it should be here, add it back.
+            // MenuItem::new("window-preferences", &t("menu-window-preferences"), Some(Message::ShowPreferences)),
         ];
 
-        MenuCategory::new(MenuCategoryId::Window, items)
+        MenuCategory::new(MenuCategoryId::Window, &t("menu-window"), items)
     }
 
     /// Create Help menu (帮助)
     pub fn create_help_menu() -> MenuCategory<Message> {
         let items = vec![
-            MenuItem::new("about", &t("menu-help-about"), Message::ShowAbout)
-                .with_shortcut("F1"),
-            MenuItem::new("help", &t("menu-help-help"), Message::NewDocument)
-                .with_shortcut("Ctrl+F1"),
+            MenuItem::new("help-about", &t("menu-help-about"), Some(Message::ShowAbout))
+                .with_shortcut("shortcut-about"), // Changed to key
+            MenuItem::new("help-docs", &t("menu-help-help"), Some(Message::NewDocument)) // Placeholder
+                .with_shortcut("shortcut-help-docs"), // Changed to key
         ];
 
-        MenuCategory::new(MenuCategoryId::Help, items)
+        MenuCategory::new(MenuCategoryId::Help, &t("menu-help"), items)
     }
 }
