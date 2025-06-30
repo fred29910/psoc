@@ -161,20 +161,20 @@ impl PixelData {
         Self::Rgba(array)
     }
 
-    /// Create pixel data from image
+    /// Create pixel data from image (Optimized version)
     pub fn from_image(image: &DynamicImage) -> Result<Self> {
-        let rgba_image = image.to_rgba8();
+        let rgba_image = image.to_rgba8(); // This ensures we have RGBA data.
         let (width, height) = rgba_image.dimensions();
 
-        let mut array = Array3::zeros((height as usize, width as usize, 4));
+        // Get the raw pixel data as Vec<u8>.
+        // This consumes rgba_image.
+        let raw_data: Vec<u8> = rgba_image.into_raw();
 
-        for (x, y, pixel) in rgba_image.enumerate_pixels() {
-            let rgba = RgbaPixel::from(*pixel);
-            array[[y as usize, x as usize, 0]] = rgba.r;
-            array[[y as usize, x as usize, 1]] = rgba.g;
-            array[[y as usize, x as usize, 2]] = rgba.b;
-            array[[y as usize, x as usize, 3]] = rgba.a;
-        }
+        // Create Array3 from the raw_data.
+        // Data is in row-major order (R,G,B,A, R,G,B,A, ...).
+        // ndarray shape is (rows, cols, channels) which is (height, width, 4).
+        let array = ndarray::Array::from_shape_vec((height as usize, width as usize, 4), raw_data)
+            .map_err(|e| anyhow::anyhow!("Failed to create Array3 from raw image data: {}", e))?;
 
         Ok(Self::Rgba(array))
     }

@@ -7,7 +7,22 @@ use psoc_core::{ColorManager, IccProfile};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
+use std::sync::Arc; // Added for Arc<IccProfile>
 use tracing::{debug, instrument, warn};
+
+use once_cell::sync::Lazy; // For static Lazy initialization
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+// Cache for parsed ICC Profiles from PNG files
+// Key: Raw profile bytes (Vec<u8>) after decompression
+// Value: Parsed IccProfile object, wrapped in Arc for shared ownership
+type PngIccProfileCacheMap = Mutex<HashMap<Vec<u8>, Arc<IccProfile>>>;
+
+static PNG_PROFILE_CACHE: Lazy<PngIccProfileCacheMap> = Lazy::new(|| {
+    Mutex::new(HashMap::new())
+});
+
 
 /// PNG loading result with optional ICC profile
 #[derive(Debug)]
@@ -168,14 +183,37 @@ fn parse_iccp_chunk(data: &[u8]) -> Result<Option<IccProfile>> {
         profile_data.len()
     );
 
-    // Create ICC profile using ColorManager
-    let mut color_manager = ColorManager::new().context("Failed to create color manager")?;
+    // Attempt to retrieve from cache or parse
+    let profile_key = profile_data.clone(); // Clone for potential cache insertion
 
-    let icc_profile = color_manager
-        .load_profile_from_data(&profile_data, profile_name)
-        .context("Failed to load ICC profile from data")?;
+    // Check cache first (read lock)
+    let cache_guard_read = PNG_PROFILE_CACHE.lock().unwrap();
+    if let Some(cached_profile_arc) = cache_guard_read.get(&profile_key) {
+        debug!("ICC Profile cache hit for PNG ('{}', {} bytes)", profile_name, profile_key.len());
+        // Assuming IccProfile is Clone.
+        let profile_to_return = IccProfile::clone(&*cached_profile_arc);
+        drop(cache_guard_read); // Release lock
+        return Ok(Some(profile_to_return));
+    }
+    drop(cache_guard_read); // Release read lock
 
-    Ok(Some(icc_profile))
+    debug!("ICC Profile cache miss for PNG ('{}', {} bytes), parsing...", profile_name, profile_key.len());
+    let mut color_manager = ColorManager::new().context("Failed to create color manager for PNG profile")?;
+    match color_manager.load_profile_from_data(&profile_data, profile_name) {
+        Ok(parsed_profile) => {
+            // Assuming IccProfile is Clone
+            let arc_profile = Arc::new(parsed_profile.clone());
+            // Acquire write lock to insert into cache
+            let mut cache_guard_write = PNG_PROFILE_CACHE.lock().unwrap();
+            cache_guard_write.insert(profile_key, arc_profile);
+            drop(cache_guard_write); // Release write lock
+            Ok(Some(parsed_profile))
+        }
+        Err(e) => {
+            warn!("Failed to load ICC profile ('{}', {} bytes) from PNG data: {}. Proceeding without profile.", profile_name, profile_data.len(), e);
+            Ok(None) // Proceed without profile if parsing fails
+        }
+    }
 }
 
 /// Save a PNG image to a file path

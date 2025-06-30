@@ -217,22 +217,29 @@ impl RenderEngine {
         let blend_mode = layer.blend_mode;
         let opacity = layer.effective_opacity();
 
-        // Collect pixel updates
-        let updates: Result<Vec<_>> = tiles
+        // Collect pixel updates in parallel.
+        // Each task processes one tile and returns a Vec of (doc_x, doc_y, blended_pixel).
+        let all_tile_updates_results: Result<Vec<Vec<(u32, u32, crate::pixel::RgbaPixel)>>> = tiles
             .par_iter()
             .map(|tile| {
-                let mut tile_updates = Vec::new();
+                let mut single_tile_pixel_updates = Vec::new();
 
-                for y in tile.y..tile.y + tile.height {
-                    for x in tile.x..tile.x + tile.width {
-                        if x >= params.layer_width || y >= params.layer_height {
+                for y_in_tile in 0..tile.height { // Iterate over coordinates local to the tile
+                    for x_in_tile in 0..tile.width {
+                        let current_layer_x = tile.x + x_in_tile; // Coordinate in the full layer_data space
+                        let current_layer_y = tile.y + y_in_tile;
+
+                        // These checks ensure we are within the actual layer_data bounds,
+                        // though tile creation should already respect this.
+                        if current_layer_x >= params.layer_width || current_layer_y >= params.layer_height {
                             continue;
                         }
 
-                        let doc_x = x as i32 + params.offset_x;
-                        let doc_y = y as i32 + params.offset_y;
+                        // Translate to document coordinates
+                        let doc_x = current_layer_x as i32 + params.offset_x;
+                        let doc_y = current_layer_y as i32 + params.offset_y;
 
-                        // Check bounds
+                        // Check if the pixel falls within the result canvas bounds
                         if doc_x < 0
                             || doc_y < 0
                             || doc_x >= params.result_width as i32
@@ -241,23 +248,30 @@ impl RenderEngine {
                             continue;
                         }
 
-                        // Get pixel with mask applied
-                        if let Some(layer_pixel) = layer.get_masked_pixel(x, y) {
+                        // Get the overlay pixel from the current layer, considering its mask.
+                        // `get_masked_pixel` uses coordinates relative to the layer's own origin.
+                        if let Some(layer_pixel_after_mask) = layer.get_masked_pixel(current_layer_x, current_layer_y) {
+                            // Get the base pixel from the result canvas (what's "underneath")
                             if let Some(base_pixel) = result.get_pixel(doc_x as u32, doc_y as u32) {
-                                let blended = blend_mode.blend(base_pixel, layer_pixel, opacity);
-                                tile_updates.push((doc_x as u32, doc_y as u32, blended));
+                                let blended_pixel = blend_mode.blend(
+                                    base_pixel,
+                                    layer_pixel_after_mask,
+                                    opacity,
+                                );
+                                single_tile_pixel_updates.push((doc_x as u32, doc_y as u32, blended_pixel));
                             }
                         }
                     }
                 }
-
-                Ok(tile_updates)
+                Ok(single_tile_pixel_updates)
             })
             .collect();
 
-        // Apply updates sequentially to avoid race conditions
-        for tile_updates in updates? {
-            for (x, y, pixel) in tile_updates {
+        // Apply all collected updates sequentially to the result PixelData
+        // This loop iterates over Vecs, one for each tile.
+        for single_tile_updates in all_tile_updates_results? {
+            // This loop iterates over pixels calculated for that one tile.
+            for (x, y, pixel) in single_tile_updates {
                 result.set_pixel(x, y, pixel)?;
             }
         }

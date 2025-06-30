@@ -7,7 +7,22 @@ use psoc_core::{ColorManager, IccProfile};
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
+use std::sync::Arc; // Added for Arc<IccProfile>
 use tracing::{debug, instrument, warn};
+
+use once_cell::sync::Lazy; // For static Lazy initialization
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+// Cache for parsed ICC Profiles from JPEG files
+// Key: Raw profile bytes (Vec<u8>)
+// Value: Parsed IccProfile object, wrapped in Arc for shared ownership
+type JpegIccProfileCacheMap = Mutex<HashMap<Vec<u8>, Arc<IccProfile>>>;
+
+static JPEG_PROFILE_CACHE: Lazy<JpegIccProfileCacheMap> = Lazy::new(|| {
+    Mutex::new(HashMap::new())
+});
+
 
 /// JPEG loading result with optional ICC profile
 #[derive(Debug)]
@@ -146,14 +161,37 @@ fn extract_jpeg_icc_profile<P: AsRef<Path>>(path: P) -> Result<Option<IccProfile
         total_chunks
     );
 
-    // Create ICC profile using ColorManager
-    let mut color_manager = ColorManager::new().context("Failed to create color manager")?;
+    // Attempt to retrieve from cache or parse
+    let profile_key = complete_profile.clone(); // Clone for potential cache insertion
 
-    let icc_profile = color_manager
-        .load_profile_from_data(&complete_profile, "JPEG Embedded Profile".to_string())
-        .context("Failed to load ICC profile from data")?;
+    // Check cache first (read lock)
+    let cache_guard_read = JPEG_PROFILE_CACHE.lock().unwrap();
+    if let Some(cached_profile_arc) = cache_guard_read.get(&profile_key) {
+        debug!("ICC Profile cache hit for JPEG ({} bytes)", profile_key.len());
+        // Assuming IccProfile is Clone.
+        let profile_to_return = IccProfile::clone(&*cached_profile_arc);
+        drop(cache_guard_read); // Release lock
+        return Ok(Some(profile_to_return));
+    }
+    drop(cache_guard_read); // Release read lock before attempting to parse and write
 
-    Ok(Some(icc_profile))
+    debug!("ICC Profile cache miss for JPEG ({} bytes), parsing...", profile_key.len());
+    let mut color_manager = ColorManager::new().context("Failed to create color manager for JPEG profile")?;
+    match color_manager.load_profile_from_data(&complete_profile, "JPEG Embedded Profile".to_string()) {
+        Ok(parsed_profile) => {
+            // Assuming IccProfile is Clone to store a fresh Arc in cache and return owned.
+            let arc_profile = Arc::new(parsed_profile.clone());
+            // Acquire write lock to insert into cache
+            let mut cache_guard_write = JPEG_PROFILE_CACHE.lock().unwrap();
+            cache_guard_write.insert(profile_key, arc_profile);
+            drop(cache_guard_write); // Release write lock
+            Ok(Some(parsed_profile))
+        }
+        Err(e) => {
+            warn!("Failed to load ICC profile from JPEG data: {}. Proceeding without profile.", e);
+            Ok(None) // Proceed without profile if parsing fails
+        }
+    }
 }
 
 /// Save a JPEG image to a file path with default quality (85)
