@@ -1,6 +1,6 @@
 (
     interface: (
-        theme: Light,
+        theme: Dark,
         language: English,
         ui_scale: 1.0,
         font_size: 12,
@@ -10,7 +10,7 @@
         show_status_bar: true,
     ),
     performance: (
-        memory_limit: 4096,
+        memory_limit: 2048,
         cache_size: 512,
         worker_threads: 8,
         gpu_acceleration: true,
@@ -22,7 +22,7 @@
         auto_save_interval: 5,
         max_undo_history: 100,
         default_image_format: "PNG",
-        default_canvas_color: (1.0, 1.0, 1.0, 1.0),
+        default_canvas_color: (1.0, 1.0, 0.5, 1.0),
         confirm_close_unsaved: true,
         remember_window_state: true,
     ),

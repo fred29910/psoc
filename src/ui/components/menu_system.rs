@@ -339,13 +339,118 @@ impl<M: Clone> MenuSystem<M> { // Added Clone bound for M due to item.action.clo
 }
 
 pub fn menu_system_view<'a, M: 'a + Clone>( // M is the app's main message type (AppMessageGlobal)
-    _menu_system: &'a MenuSystem<M>,      // MenuSystem stores actions of type M
-    _theme: PsocTheme,
+    menu_system: &'a MenuSystem<M>,      // MenuSystem stores actions of type M
+    theme: PsocTheme,
 ) -> Element<'a, MenuMessage> { // This view function emits its own local MenuMessage
-    // The actual rendering logic will create elements that produce MenuMessage variants.
-    // e.g., a button for "File" might be:
-    // button(text("File")).on_press(MenuMessage::ToggleMenu(MenuCategoryId::File))
-    text("Menu System Placeholder (Emits local MenuMessage)").into()
+    use iced::widget::{button, row, text, container};
+    use iced::{Background, Border, Color, Length, Shadow, Vector};
+
+    let palette = theme.palette();
+
+    // Create menu category buttons
+    let menu_buttons: Vec<iced::Element<'_, MenuMessage>> = menu_system.categories
+        .iter()
+        .map(|category| {
+            let is_active = menu_system.active_menu_category_id == Some(category.id);
+            let palette_clone = palette.clone();
+
+            button(
+                text(&category.title_key)
+                    .size(14.0)
+                    .style(move |_theme| iced::widget::text::Style {
+                        color: Some(if is_active { Color::WHITE } else { palette_clone.text }),
+                    })
+            )
+            .on_press(MenuMessage::ToggleMenu(category.id))
+            .style(move |_theme, status| {
+                let palette_clone2 = palette_clone.clone();
+                modern_menu_button_style(&palette_clone2, status, is_active)
+            })
+            .padding([8.0, 16.0])
+            .into()
+        })
+        .collect();
+
+    // Create modern menu bar with glass effect
+    let palette_for_container = palette.clone();
+    container(
+        row(menu_buttons)
+            .spacing(0)
+            .align_y(iced::alignment::Vertical::Center)
+    )
+    .width(Length::Fill)
+    .height(Length::Fixed(40.0))
+    .padding([0.0, 16.0])
+    .style(move |_theme| {
+        iced::widget::container::Style {
+            text_color: Some(palette_for_container.text),
+            background: Some(Background::Color(palette_for_container.glass_bg_heavy)),
+            border: Border {
+                color: Color::from_rgba(palette_for_container.border.r, palette_for_container.border.g, palette_for_container.border.b, 0.1),
+                width: 0.0,
+                radius: 0.0.into(),
+            },
+            shadow: Shadow {
+                color: palette_for_container.shadow_color(0.1),
+                offset: Vector::new(0.0, 2.0),
+                blur_radius: 8.0,
+            },
+        }
+    })
+    .into()
+}
+
+/// Modern menu button styling
+fn modern_menu_button_style(
+    palette: &crate::ui::theme::ColorPalette,
+    status: iced::widget::button::Status,
+    is_active: bool,
+) -> iced::widget::button::Style {
+    use iced::{Background, Border, Color, Shadow, Vector};
+
+    let (background, border_color, shadow) = match (status, is_active) {
+        (_, true) => (
+            // Active menu - tech blue background
+            Some(Background::Color(palette.tech_blue_variant(20))),
+            palette.tech_blue,
+            Shadow {
+                color: palette.tech_blue_glow(),
+                offset: Vector::new(0.0, 0.0),
+                blur_radius: 4.0,
+            },
+        ),
+        (iced::widget::button::Status::Hovered, false) => (
+            // Hover state - subtle glass effect
+            Some(Background::Color(palette.glass_bg_light)),
+            Color::TRANSPARENT,
+            Shadow {
+                color: Color::TRANSPARENT,
+                offset: Vector::new(0.0, 0.0),
+                blur_radius: 0.0,
+            },
+        ),
+        _ => (
+            // Default state - transparent
+            Some(Background::Color(Color::TRANSPARENT)),
+            Color::TRANSPARENT,
+            Shadow {
+                color: Color::TRANSPARENT,
+                offset: Vector::new(0.0, 0.0),
+                blur_radius: 0.0,
+            },
+        ),
+    };
+
+    iced::widget::button::Style {
+        background,
+        text_color: if is_active { Color::WHITE } else { palette.text },
+        border: Border {
+            color: border_color,
+            width: if is_active { 0.0 } else { 0.0 },
+            radius: 0.0.into(),
+        },
+        shadow,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -389,5 +494,77 @@ impl MenuStyleSheet for PsocTheme {
             MenuElement::DropdownSeparator => container::Style { background: Some(palette.border.into()), ..Default::default() },
             _ => Default::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::theme::PsocTheme;
+
+    #[test]
+    fn test_modern_menu_button_style() {
+        let theme = PsocTheme::Dark;
+        let palette = theme.palette();
+
+        // Test active menu button style
+        let active_style = modern_menu_button_style(
+            &palette,
+            iced::widget::button::Status::Active,
+            true
+        );
+
+        // Active button should have tech blue background
+        assert!(active_style.background.is_some());
+        assert_eq!(active_style.text_color, iced::Color::WHITE);
+
+        // Test inactive button style
+        let inactive_style = modern_menu_button_style(
+            &palette,
+            iced::widget::button::Status::Active,
+            false
+        );
+
+        // Inactive button should have transparent background
+        assert!(inactive_style.background.is_some());
+        assert_eq!(inactive_style.text_color, palette.text);
+    }
+
+    #[test]
+    fn test_modern_menu_button_hover_style() {
+        let theme = PsocTheme::Dark;
+        let palette = theme.palette();
+
+        // Test hover state for inactive button
+        let hover_style = modern_menu_button_style(
+            &palette,
+            iced::widget::button::Status::Hovered,
+            false
+        );
+
+        // Hover button should have glass background
+        assert!(hover_style.background.is_some());
+    }
+
+    #[test]
+    fn test_menu_system_view_creation() {
+        // Create a simple menu system for testing
+        let categories: Vec<MenuCategory<()>> = vec![MenuCategory {
+            id: MenuCategoryId::File,
+            title_key: "File".to_string(),
+            items: vec![],
+            position: iced::Point::new(0.0, 0.0),
+            is_open: false,
+        }];
+        let menu_system = MenuSystem::new(categories);
+
+        let theme = PsocTheme::Dark;
+
+        // Test that menu system view can be created
+        let view = menu_system_view(&menu_system, theme);
+
+        // Should return an Element
+        // This is mainly a compilation test
+        let _ = view;
     }
 }

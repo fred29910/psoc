@@ -9,11 +9,12 @@ use iced::{
 use tracing::{debug, error, info};
 
 use super::{
+    animations::{ToolAnimationManager, ToolOptionAnimationManager, StatusAnimationManager},
     canvas::{ImageCanvas, ImageData},
     components::{
         self, ColorHistory, MenuFactory, MenuMessage, MenuSystem,
         ResponsiveLayoutManager, ResponsiveLayoutMessage, KeyboardNavigationManager,
-        KbNavMessage, FocusTarget, NavigationAction,
+        KbNavMessage, FocusTarget, NavigationAction, ModernLayerInfo,
     },
     dialogs::{
         AboutDialog, AboutMessage, BrightnessContrastDialog, BrightnessContrastMessage,
@@ -92,6 +93,12 @@ pub struct PsocApp {
     canvas: ImageCanvas,
     /// Tool manager for handling editing tools
     tool_manager: ToolManager,
+    /// Tool animation manager for smooth tool transitions
+    tool_animation_manager: ToolAnimationManager,
+    /// Tool options animation manager for panel animations
+    tool_option_animation_manager: ToolOptionAnimationManager,
+    /// Status animation manager for status panel animations
+    status_animation_manager: StatusAnimationManager,
     /// New menu system
     menu_system: MenuSystem<Message>,
     /// Shortcut manager for keyboard shortcuts
@@ -244,6 +251,8 @@ pub enum Message {
     RefreshMenuSystem,
     /// Error occurred
     Error(String),
+    /// Animation tick for updating animations
+    AnimationTick,
 }
 
 /// History panel messages
@@ -467,6 +476,9 @@ impl Default for PsocApp {
             preferences_dialog: PreferencesDialog::new(),
             canvas: ImageCanvas::new(),
             tool_manager: ToolManager::new(),
+            tool_animation_manager: ToolAnimationManager::new(),
+            tool_option_animation_manager: ToolOptionAnimationManager::new(),
+            status_animation_manager: StatusAnimationManager::new(),
             shortcut_manager: ShortcutManager::new(),
             menu_system,
             layout_manager: ResponsiveLayoutManager::new(),
@@ -612,6 +624,9 @@ impl PsocApp {
                 preferences_dialog: PreferencesDialog::new(),
                 canvas: ImageCanvas::new(),
                 tool_manager: ToolManager::new(),
+                tool_animation_manager: ToolAnimationManager::new(),
+                tool_option_animation_manager: ToolOptionAnimationManager::new(),
+                status_animation_manager: StatusAnimationManager::new(),
                 shortcut_manager: ShortcutManager::new(),
                 menu_system,
                 layout_manager: ResponsiveLayoutManager::new(),
@@ -803,6 +818,12 @@ impl PsocApp {
             Message::ToolChanged(tool) => {
                 debug!("Tool changed to: {}", tool);
                 self.state.current_tool = tool;
+
+                // Start tool activation animation
+                self.tool_animation_manager.start_tool_activation(tool);
+
+                // Show tool options panel with animation
+                self.tool_option_animation_manager.show_panel(tool);
 
                 // Update the tool manager
                 if let Err(e) = self.tool_manager.set_active_tool(tool) {
@@ -1004,13 +1025,21 @@ impl PsocApp {
                 debug!("Keyboard navigation message: {:?}", kb_msg);
                 self.handle_keyboard_navigation_message(kb_msg);
             }
+            Message::AnimationTick => {
+                // Update tool animations
+                self.tool_animation_manager.update();
+                // Update tool options animations
+                self.tool_option_animation_manager.update();
+                // Update status animations
+                self.status_animation_manager.update();
+            }
         }
 
         Task::none()
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        Subscription::batch([
+        let mut subscriptions = vec![
             // Keyboard shortcuts
             keyboard::on_key_press(|key, modifiers| {
                 // Convert iced key and modifiers to our types
@@ -1031,21 +1060,50 @@ impl PsocApp {
             keyboard::on_key_release(|key, modifiers| {
                 Some(Message::KeyboardNavigation(KbNavMessage::KeyReleased(key, modifiers)))
             }),
-        ])
+        ];
+
+        // Add animation subscription if animations are active
+        if self.tool_animation_manager.has_active_animations()
+            || self.tool_option_animation_manager.has_active_animations()
+            || self.status_animation_manager.has_active_animations() {
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_millis(16)) // ~60 FPS
+                    .map(|_| Message::AnimationTick)
+            );
+        }
+
+        Subscription::batch(subscriptions)
     }
 
     fn view(&self) -> Element<Message> {
-        let main_content = column![
+        // Modern layout: menu bar at top, then horizontal layout with vertical toolbar
+        let main_layout = column![
             self.menu_bar(),
-            self.toolbar(),
-            self.main_content(),
-            self.status_bar(),
+            row![
+                self.toolbar(), // Now vertical toolbar on the left
+                self.main_content_area(), // Canvas and panels
+            ]
+            .spacing(0)
+            .height(Length::Fill),
+            self.modern_status_bar(),
         ]
         .spacing(0);
 
-        let content = container(main_content)
+        let content = container(main_layout)
             .width(Length::Fill)
-            .height(Length::Fill);
+            .height(Length::Fill)
+            .style(|theme| {
+                use crate::ui::theme::PsocTheme;
+                use iced::{Background, Color};
+
+                let psoc_theme = PsocTheme::Dark; // TODO: Get from actual theme
+                let palette = psoc_theme.palette();
+
+                iced::widget::container::Style {
+                    background: Some(Background::Color(palette.dark_bg)),
+                    ..Default::default()
+                }
+            });
 
         // Layer dialogs on top if visible
         let mut layers = vec![content.into()];
@@ -1122,6 +1180,8 @@ impl PsocApp {
                 // Get color from document (considering layers)
                 if let Some(color) = self.get_pixel_color_from_document(document, img_x, img_y) {
                     self.state.current_pixel_color = Some(color);
+                    // Trigger status animation for pixel color
+                    self.status_animation_manager.set_pixel_color(color);
                 } else {
                     self.state.current_pixel_color = None;
                 }
@@ -1129,6 +1189,8 @@ impl PsocApp {
                 // Get color from simple image
                 if let Some(color) = self.get_pixel_color_from_image(image, img_x, img_y) {
                     self.state.current_pixel_color = Some(color);
+                    // Trigger status animation for pixel color
+                    self.status_animation_manager.set_pixel_color(color);
                 } else {
                     self.state.current_pixel_color = None;
                 }
@@ -1225,6 +1287,9 @@ impl PsocApp {
 
                 // Update mouse position in state
                 self.state.mouse_position = Some((x, y));
+
+                // Trigger status animation for mouse position
+                self.status_animation_manager.set_mouse_position(x, y);
 
                 // Get pixel color under cursor if image is available
                 self.update_pixel_color_at_position(x, y);
@@ -1359,11 +1424,11 @@ impl PsocApp {
             ),
         ];
 
-        components::toolbar(tools, Message::ZoomIn, Message::ZoomOut, Message::ZoomReset)
+        components::enhanced_toolbar_with_tooltips(tools, Message::ZoomIn, Message::ZoomOut, Message::ZoomReset)
     }
 
-    /// Create the main content area
-    fn main_content(&self) -> Element<Message> {
+    /// Create the main content area (canvas and panels, excluding toolbar)
+    fn main_content_area(&self) -> Element<Message> {
         iced::widget::row![self.left_panel(), self.canvas_area(), self.right_panel(),]
             .spacing(spacing::SM)
             .height(Length::Fill)
@@ -1436,7 +1501,7 @@ impl PsocApp {
             ),
         ];
 
-        let layers_content = self.create_layers_content();
+        let modern_layers_panel = self.create_modern_layers_content();
         let history_content = self.create_history_content();
 
         column![
@@ -1445,55 +1510,53 @@ impl PsocApp {
                 vec![components::tool_palette(tools)],
                 250.0
             ),
-            column(layers_content).spacing(0),
+            modern_layers_panel,
             history_content,
         ]
         .spacing(spacing::SM)
         .into()
     }
 
-    /// Create the canvas area
+    /// Create the modern canvas area with enhanced visual effects
     fn canvas_area(&self) -> Element<Message> {
-        if self.state.document_open {
-            // Use the actual canvas
-            self.canvas.view()
+        use crate::ui::components::{modern_canvas_placeholder, PlaceholderMessage};
+        use crate::ui::styles::modern_canvas_area_style;
+        use crate::ui::theme::PsocTheme;
+
+        let psoc_theme = PsocTheme::Dark; // TODO: Get from actual theme
+
+        let canvas_content = if self.state.document_open {
+            // Use the actual canvas with modern background
+            container(self.canvas.view())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(move |_theme| {
+                    use crate::ui::styles::modern_canvas_background_style;
+                    modern_canvas_background_style(&psoc_theme)
+                })
+                .into()
         } else {
-            container(
-                column![
-                    iced::widget::text(
-                        self.state
-                            .localization_manager
-                            .translate("canvas-no-document")
-                    )
-                    .size(24.0)
-                    .style(|_theme| iced::widget::text::Style {
-                        color: Some(iced::Color::from_rgb(0.7, 0.7, 0.7))
-                    }),
-                    iced::widget::text(
-                        self.state
-                            .localization_manager
-                            .translate("canvas-click-open")
-                    )
-                    .size(16.0)
-                    .style(|_theme| iced::widget::text::Style {
-                        color: Some(iced::Color::from_rgb(0.5, 0.5, 0.5))
-                    }),
-                ]
-                .align_x(iced::alignment::Horizontal::Center)
-                .spacing(spacing::LG),
-            )
+            // Show modern placeholder when no document is open
+            modern_canvas_placeholder(psoc_theme, |msg| match msg {
+                PlaceholderMessage::NewDocument => Message::NewDocument,
+                PlaceholderMessage::OpenDocument => Message::OpenDocument,
+                PlaceholderMessage::Custom(custom_msg) => custom_msg,
+            })
+        };
+
+        // Wrap in modern canvas area container
+        container(canvas_content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
+            .padding(16.0)
+            .style(move |_theme| modern_canvas_area_style(&psoc_theme))
             .into()
-        }
     }
 
     /// Create the right panel (properties and tool options)
     fn right_panel(&self) -> Element<Message> {
-        // Create tool options panel
-        let tool_options = self.create_tool_options_panel();
+        // Create animated tool options panel
+        let tool_options = self.create_animated_tool_options_panel();
 
         // Create document info section
         let mut doc_content = vec![components::section_header("Document".to_string())];
@@ -1632,7 +1695,26 @@ impl PsocApp {
         components::side_panel("Properties".to_string(), all_content, 250.0)
     }
 
-    /// Create the tool options panel
+    /// Create the animated tool options panel
+    fn create_animated_tool_options_panel(&self) -> Element<'static, Message> {
+        let animation_state = self.tool_option_animation_manager.get_panel_state();
+
+        if !self.tool_option_animation_manager.is_panel_visible() {
+            // Panel is hidden, return empty space
+            return container(Space::new(Length::Shrink, Length::Shrink)).into();
+        }
+
+        let current_tool = self.state.current_tool;
+        let options = vec![]; // TODO: Implement get_tool_options method or use existing tool option logic
+
+        components::animated_tool_options_panel(
+            current_tool,
+            options,
+            animation_state,
+        )
+    }
+
+    /// Create the tool options panel (legacy)
     fn create_tool_options_panel(&self) -> Element<'static, Message> {
         use components::ToolOptionControl;
 
@@ -1821,7 +1903,45 @@ impl PsocApp {
         components::tool_options_panel(tool_name.to_string(), controls)
     }
 
-    /// Create the status bar
+    /// Create the modern status bar
+    fn modern_status_bar(&self) -> Element<Message> {
+        use crate::ui::components::{ModernStatusInfo, modern_status_panel};
+
+        // Get animated values from status animation manager
+        let animated_mouse_pos = self.status_animation_manager.get_mouse_position()
+            .or(self.state.mouse_position);
+        let animated_pixel_color = self.status_animation_manager.get_pixel_color()
+            .or(self.state.current_pixel_color);
+        let animated_zoom = self.status_animation_manager.get_zoom_level()
+            .unwrap_or(self.state.zoom_level);
+
+        let status_info = ModernStatusInfo {
+            mouse_position: animated_mouse_pos,
+            pixel_color: animated_pixel_color,
+            zoom_level: animated_zoom,
+            image_size: if let Some(ref document) = self.state.current_document {
+                Some((document.size.width as u32, document.size.height as u32))
+            } else {
+                self.state.current_image.as_ref().map(|image| (image.width(), image.height()))
+            },
+            document_status: if self.state.document_open {
+                if self.state.current_file_path.is_some() {
+                    "Saved".to_string()
+                } else {
+                    "Unsaved".to_string()
+                }
+            } else {
+                "No document".to_string()
+            },
+            current_tool: format!("{:?}", self.state.current_tool),
+            memory_usage: None, // TODO: Implement memory usage tracking
+            fps: None, // TODO: Implement FPS tracking
+        };
+
+        modern_status_panel(status_info)
+    }
+
+    /// Create the status bar (legacy)
     fn status_bar(&self) -> Element<Message> {
         let app_status_info = StatusInfo::from_app_state(&self.state);
 
@@ -1859,7 +1979,74 @@ impl PsocApp {
         .into()
     }
 
-    /// Create the layers panel content
+    /// Create modern layers panel content
+    fn create_modern_layers_content(&self) -> Element<'static, Message> {
+        if let Some(ref document) = self.state.current_document {
+            // Convert layers to modern format
+            let modern_layers: Vec<ModernLayerInfo> = document
+                .layers
+                .iter()
+                .enumerate()
+                .rev() // Display in reverse order (top to bottom in UI)
+                .map(|(index, layer)| {
+                    let is_selected = document.active_layer_index == Some(index);
+                    let layer_type = match &layer.layer_type {
+                        psoc_core::LayerType::Adjustment {
+                            adjustment_type, ..
+                        } => adjustment_type.clone(),
+                        psoc_core::LayerType::SmartObject { .. } => "Smart".to_string(),
+                        _ => "Pixel".to_string(),
+                    };
+
+                    ModernLayerInfo {
+                        name: layer.name.clone(),
+                        visible: layer.visible,
+                        selected: is_selected,
+                        opacity: layer.opacity,
+                        blend_mode: layer.blend_mode,
+                        layer_type,
+                        has_mask: layer.has_mask(),
+                        thumbnail: None, // TODO: Generate actual thumbnails
+                    }
+                })
+                .collect();
+
+            // Create message pairs for each layer
+            let layer_messages: Vec<(Message, Message)> = document
+                .layers
+                .iter()
+                .enumerate()
+                .rev()
+                .map(|(index, _)| {
+                    (
+                        Message::Layer(LayerMessage::ToggleLayerVisibility(index)),
+                        Message::Layer(LayerMessage::SelectLayer(index)),
+                    )
+                })
+                .collect();
+
+            let active_index = document.active_layer_index;
+
+            components::modern_layer_panel(
+                modern_layers,
+                Message::Layer(LayerMessage::AddEmptyLayer),
+                active_index.map(|i| Message::Layer(LayerMessage::DeleteLayer(i))),
+                active_index.map(|i| Message::Layer(LayerMessage::DuplicateLayer(i))),
+                layer_messages,
+            )
+        } else {
+            // Empty state
+            components::modern_layer_panel(
+                vec![],
+                Message::Layer(LayerMessage::AddEmptyLayer),
+                None,
+                None,
+                vec![],
+            )
+        }
+    }
+
+    /// Create the layers panel content (legacy)
     fn create_layers_content(&self) -> Vec<Element<'static, Message>> {
         if let Some(ref document) = self.state.current_document {
             // Create layer data for the panel

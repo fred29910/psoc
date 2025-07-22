@@ -156,10 +156,9 @@ pub fn initialize_fonts() -> FontConfig {
     let mut config = FontConfig::new();
 
     // Try to find a good Chinese font
-    for font_name in get_chinese_fonts() {
+    if let Some(font_name) = get_chinese_fonts().into_iter().next() {
         let chinese_font = Font::with_name(font_name);
         config = config.with_chinese_font(chinese_font);
-        break; // Use the first available font
     }
 
     config

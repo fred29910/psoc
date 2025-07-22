@@ -8,7 +8,8 @@ use iced::{
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::ui::theme::{PsocTheme, spacing};
+use crate::ui::theme::PsocTheme;
+use crate::ui::animations::{TransitionManager, AnimationDirection};
 
 /// Screen size breakpoints for responsive design
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -59,6 +60,8 @@ pub struct PanelState {
     pub minimized: bool,
     /// Current panel width
     pub width: f32,
+    /// Current panel height
+    pub height: f32,
     /// Minimum allowed width
     pub min_width: f32,
     /// Maximum allowed width
@@ -75,6 +78,7 @@ impl Default for PanelState {
             visible: true,
             minimized: false,
             width: 250.0,
+            height: 400.0,
             min_width: 150.0,
             max_width: 400.0,
             resizable: true,
@@ -96,8 +100,19 @@ pub enum PanelId {
     HistoryPanel,
 }
 
-/// Responsive layout manager
-#[derive(Debug, Clone)]
+/// Toolbar layout modes
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ToolbarLayout {
+    /// Full horizontal toolbar
+    Full,
+    /// Compact horizontal toolbar
+    Compact,
+    /// Vertical toolbar for small screens
+    Vertical,
+}
+
+/// Enhanced responsive layout manager with animation support
+#[derive(Debug)]
 pub struct ResponsiveLayoutManager {
     /// Current screen size
     pub screen_size: ScreenSize,
@@ -107,12 +122,16 @@ pub struct ResponsiveLayoutManager {
     pub window_size: Size,
     /// Whether layout is in compact mode
     pub compact_mode: bool,
+    /// Transition animation manager
+    pub transition_manager: TransitionManager,
+    /// Whether animations are enabled
+    pub animations_enabled: bool,
 }
 
 impl Default for ResponsiveLayoutManager {
     fn default() -> Self {
         let mut panel_states = HashMap::new();
-        
+
         // Initialize default panel states
         panel_states.insert(PanelId::ToolPanel, PanelState {
             width: 200.0,
@@ -120,21 +139,21 @@ impl Default for ResponsiveLayoutManager {
             max_width: 300.0,
             ..Default::default()
         });
-        
+
         panel_states.insert(PanelId::PropertiesPanel, PanelState {
             width: 250.0,
             min_width: 200.0,
             max_width: 350.0,
             ..Default::default()
         });
-        
+
         panel_states.insert(PanelId::LayersPanel, PanelState {
             width: 250.0,
             min_width: 200.0,
             max_width: 350.0,
             ..Default::default()
         });
-        
+
         panel_states.insert(PanelId::HistoryPanel, PanelState {
             width: 200.0,
             min_width: 150.0,
@@ -147,6 +166,8 @@ impl Default for ResponsiveLayoutManager {
             panel_states,
             window_size: Size::new(1200.0, 800.0),
             compact_mode: false,
+            transition_manager: TransitionManager::new(),
+            animations_enabled: true,
         }
     }
 }
@@ -173,34 +194,80 @@ impl ResponsiveLayoutManager {
         self.adjust_panel_widths();
     }
 
-    /// Enter compact mode (hide/minimize panels)
+    /// Enter compact mode (hide/minimize panels) with animation
     pub fn enter_compact_mode(&mut self) {
         self.compact_mode = true;
-        
-        // Hide secondary panels on small screens
+
+        // Hide secondary panels on small screens with slide animation
         if matches!(self.screen_size, ScreenSize::Small) {
-            self.panel_states.get_mut(&PanelId::LayersPanel)
-                .map(|state| state.visible = false);
-            self.panel_states.get_mut(&PanelId::HistoryPanel)
-                .map(|state| state.visible = false);
+            if let Some(state) = self.panel_states.get_mut(&PanelId::LayersPanel) {
+                if state.visible && self.animations_enabled {
+                    self.transition_manager.start_panel_slide(
+                        "layers_panel".to_string(),
+                        AnimationDirection::Right,
+                        state.width,
+                    );
+                }
+                state.visible = false;
+            }
+
+            if let Some(state) = self.panel_states.get_mut(&PanelId::HistoryPanel) {
+                if state.visible && self.animations_enabled {
+                    self.transition_manager.start_panel_slide(
+                        "history_panel".to_string(),
+                        AnimationDirection::Right,
+                        state.width,
+                    );
+                }
+                state.visible = false;
+            }
         }
-        
-        // Minimize remaining panels
-        for state in self.panel_states.values_mut() {
-            if state.visible {
+
+        // Minimize remaining panels with collapse animation
+        for (panel_id, state) in &mut self.panel_states {
+            if state.visible && !state.minimized {
+                if self.animations_enabled {
+                    let panel_name = format!("{:?}_panel", panel_id).to_lowercase();
+                    self.transition_manager.start_panel_expand(
+                        panel_name,
+                        false, // collapsing
+                        Size::new(state.width, state.height),
+                    );
+                }
                 state.minimized = true;
             }
         }
     }
 
-    /// Exit compact mode (restore panels)
+    /// Exit compact mode (restore panels) with animation
     pub fn exit_compact_mode(&mut self) {
         self.compact_mode = false;
-        
-        // Restore panel visibility
-        for state in self.panel_states.values_mut() {
-            state.visible = true;
-            state.minimized = false;
+
+        // Restore panel visibility with animations
+        for (panel_id, state) in &mut self.panel_states {
+            if !state.visible {
+                if self.animations_enabled {
+                    let panel_name = format!("{:?}_panel", panel_id).to_lowercase();
+                    self.transition_manager.start_panel_slide(
+                        panel_name,
+                        AnimationDirection::Left,
+                        state.width,
+                    );
+                }
+                state.visible = true;
+            }
+
+            if state.minimized {
+                if self.animations_enabled {
+                    let panel_name = format!("{:?}_panel", panel_id).to_lowercase();
+                    self.transition_manager.start_panel_expand(
+                        panel_name,
+                        true, // expanding
+                        Size::new(state.width, state.height),
+                    );
+                }
+                state.minimized = false;
+            }
         }
     }
 
@@ -215,18 +282,47 @@ impl ResponsiveLayoutManager {
         }
     }
 
-    /// Toggle panel visibility
+    /// Toggle panel visibility with animation
     pub fn toggle_panel(&mut self, panel_id: PanelId) {
         if let Some(state) = self.panel_states.get_mut(&panel_id) {
+            let was_visible = state.visible;
             state.visible = !state.visible;
+
+            if self.animations_enabled {
+                let panel_name = format!("{:?}_panel", panel_id).to_lowercase();
+                if state.visible {
+                    // Panel becoming visible - slide in
+                    self.transition_manager.start_panel_slide(
+                        panel_name,
+                        AnimationDirection::Left,
+                        state.width,
+                    );
+                } else {
+                    // Panel becoming hidden - slide out
+                    self.transition_manager.start_panel_slide(
+                        panel_name,
+                        AnimationDirection::Right,
+                        state.width,
+                    );
+                }
+            }
         }
     }
 
-    /// Toggle panel minimized state
+    /// Toggle panel minimized state with animation
     pub fn toggle_panel_minimized(&mut self, panel_id: PanelId) {
         if let Some(state) = self.panel_states.get_mut(&panel_id) {
             if state.visible {
                 state.minimized = !state.minimized;
+
+                if self.animations_enabled {
+                    let panel_name = format!("{:?}_panel", panel_id).to_lowercase();
+                    self.transition_manager.start_panel_expand(
+                        panel_name,
+                        !state.minimized, // expanding if not minimized
+                        Size::new(state.width, state.height),
+                    );
+                }
             }
         }
     }
@@ -267,8 +363,46 @@ impl ResponsiveLayoutManager {
     pub fn get_canvas_width(&self) -> f32 {
         let left_panel_width = self.get_effective_panel_width(PanelId::ToolPanel);
         let right_panel_width = self.get_effective_panel_width(PanelId::PropertiesPanel);
-        
-        (self.window_size.width - left_panel_width - right_panel_width - spacing::MD * 3.0).max(300.0)
+
+        (self.window_size.width - left_panel_width - right_panel_width - 48.0).max(300.0) // Using fixed spacing
+    }
+
+    /// Update animations and return whether any are active
+    pub fn update_animations(&mut self) -> bool {
+        self.transition_manager.update()
+    }
+
+    /// Get current animation state for a panel
+    pub fn get_panel_animation_state(&self, panel_id: PanelId) -> Option<crate::ui::animations::TransitionState> {
+        let panel_name = format!("{:?}_panel", panel_id).to_lowercase();
+        self.transition_manager.get_current_state(&panel_name)
+    }
+
+    /// Enable or disable animations
+    pub fn set_animations_enabled(&mut self, enabled: bool) {
+        self.animations_enabled = enabled;
+        if !enabled {
+            self.transition_manager.stop_all_animations();
+        }
+    }
+
+    /// Check if any panel animations are active
+    pub fn has_active_animations(&self) -> bool {
+        self.transition_manager.active_animation_count() > 0
+    }
+
+    /// Get recommended toolbar layout
+    pub fn get_toolbar_layout(&self) -> ToolbarLayout {
+        match self.screen_size {
+            ScreenSize::Small => ToolbarLayout::Vertical,
+            ScreenSize::Medium => ToolbarLayout::Compact,
+            _ => ToolbarLayout::Full,
+        }
+    }
+
+    /// Check if layout should use compact mode
+    pub fn should_use_compact_mode(&self) -> bool {
+        self.screen_size.should_collapse_panels()
     }
 }
 
