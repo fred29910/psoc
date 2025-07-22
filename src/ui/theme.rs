@@ -66,6 +66,24 @@ pub struct ColorPalette {
     pub menu_active: Color,
     /// Glass background for frosted glass effect
     pub glass_bg: Color,
+
+    // Modern UI enhancements - Phase 1 additions
+    /// Light glass background for subtle effects
+    pub glass_bg_light: Color,
+    /// Medium glass background for moderate effects
+    pub glass_bg_medium: Color,
+    /// Heavy glass background for strong effects
+    pub glass_bg_heavy: Color,
+    /// Orange-red gradient start color
+    pub gradient_orange: Color,
+    /// Orange-red gradient end color
+    pub gradient_red: Color,
+    /// Tech blue variants with different transparencies
+    pub tech_blue_10: Color,  // 10% opacity
+    pub tech_blue_20: Color,  // 20% opacity
+    pub tech_blue_30: Color,  // 30% opacity
+    pub tech_blue_50: Color,  // 50% opacity
+    pub tech_blue_80: Color,  // 80% opacity
 }
 
 impl ColorPalette {
@@ -108,6 +126,54 @@ impl ColorPalette {
     pub fn highlight_color(&self) -> Color {
         Color::from_rgba(1.0, 1.0, 1.0, 0.1)
     }
+
+    // Modern UI enhancement methods - Phase 1 additions
+
+    /// Get gradient colors as a tuple (start, end)
+    pub fn orange_red_gradient(&self) -> (Color, Color) {
+        (self.gradient_orange, self.gradient_red)
+    }
+
+    /// Get tech blue variant by opacity level
+    pub fn tech_blue_variant(&self, opacity: u8) -> Color {
+        match opacity {
+            10 => self.tech_blue_10,
+            20 => self.tech_blue_20,
+            30 => self.tech_blue_30,
+            50 => self.tech_blue_50,
+            80 => self.tech_blue_80,
+            _ => self.tech_blue_alpha(opacity as f32 / 100.0),
+        }
+    }
+
+    /// Get glass background by intensity
+    pub fn glass_background(&self, intensity: GlassIntensity) -> Color {
+        match intensity {
+            GlassIntensity::Light => self.glass_bg_light,
+            GlassIntensity::Medium => self.glass_bg_medium,
+            GlassIntensity::Heavy => self.glass_bg_heavy,
+        }
+    }
+
+    /// Get modern container background with blur effect simulation
+    pub fn modern_container_bg(&self, blur_level: f32) -> Color {
+        let base = self.dark_panel;
+        let alpha = (0.7 + blur_level * 0.2).min(0.95);
+        Color::from_rgba(base.r, base.g, base.b, alpha)
+    }
+
+    /// Get tech blue glow color for active states
+    pub fn tech_blue_glow(&self) -> Color {
+        Color::from_rgba(self.tech_blue.r, self.tech_blue.g, self.tech_blue.b, 0.3)
+    }
+}
+
+/// Glass effect intensity levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlassIntensity {
+    Light,
+    Medium,
+    Heavy,
 }
 
 impl PsocTheme {
@@ -132,6 +198,18 @@ impl PsocTheme {
                 menu_hover: Color::from_rgba(0.0, 0.75, 1.0, 0.1), // tech_blue with alpha
                 menu_active: Color::from_rgba(0.0, 0.75, 1.0, 0.2), // tech_blue with alpha
                 glass_bg: Color::from_rgba(0.16, 0.16, 0.16, 0.8), // surface with alpha
+
+                // Modern UI enhancements - Phase 1 additions
+                glass_bg_light: Color::from_rgba(0.16, 0.16, 0.16, 0.6),   // Light glass
+                glass_bg_medium: Color::from_rgba(0.16, 0.16, 0.16, 0.8),  // Medium glass
+                glass_bg_heavy: Color::from_rgba(0.16, 0.16, 0.16, 0.95),  // Heavy glass
+                gradient_orange: Color::from_rgb(1.0, 0.54, 0.0),          // #ff8a00
+                gradient_red: Color::from_rgb(0.9, 0.18, 0.44),            // #e52e71
+                tech_blue_10: Color::from_rgba(0.0, 0.75, 1.0, 0.1),       // 10% opacity
+                tech_blue_20: Color::from_rgba(0.0, 0.75, 1.0, 0.2),       // 20% opacity
+                tech_blue_30: Color::from_rgba(0.0, 0.75, 1.0, 0.3),       // 30% opacity
+                tech_blue_50: Color::from_rgba(0.0, 0.75, 1.0, 0.5),       // 50% opacity
+                tech_blue_80: Color::from_rgba(0.0, 0.75, 1.0, 0.8),       // 80% opacity
             },
             PsocTheme::Light => ColorPalette {
                 background: Color::from_rgb(0.98, 0.98, 0.98), // #fafafa
@@ -151,6 +229,18 @@ impl PsocTheme {
                 menu_hover: Color::from_rgba(0.0, 0.75, 1.0, 0.1), // tech_blue with alpha
                 menu_active: Color::from_rgba(0.0, 0.75, 1.0, 0.2), // tech_blue with alpha
                 glass_bg: Color::from_rgba(1.0, 1.0, 1.0, 0.8), // white with alpha
+
+                // Modern UI enhancements - Phase 1 additions
+                glass_bg_light: Color::from_rgba(1.0, 1.0, 1.0, 0.6),      // Light glass
+                glass_bg_medium: Color::from_rgba(1.0, 1.0, 1.0, 0.8),     // Medium glass
+                glass_bg_heavy: Color::from_rgba(1.0, 1.0, 1.0, 0.95),     // Heavy glass
+                gradient_orange: Color::from_rgb(1.0, 0.54, 0.0),          // #ff8a00
+                gradient_red: Color::from_rgb(0.9, 0.18, 0.44),            // #e52e71
+                tech_blue_10: Color::from_rgba(0.0, 0.75, 1.0, 0.1),       // 10% opacity
+                tech_blue_20: Color::from_rgba(0.0, 0.75, 1.0, 0.2),       // 20% opacity
+                tech_blue_30: Color::from_rgba(0.0, 0.75, 1.0, 0.3),       // 30% opacity
+                tech_blue_50: Color::from_rgba(0.0, 0.75, 1.0, 0.5),       // 50% opacity
+                tech_blue_80: Color::from_rgba(0.0, 0.75, 1.0, 0.8),       // 80% opacity
             },
             PsocTheme::HighContrast => ColorPalette {
                 background: Color::BLACK,                       // #000000
@@ -170,6 +260,18 @@ impl PsocTheme {
                 menu_hover: Color::from_rgba(0.0, 1.0, 1.0, 0.2), // tech_blue with alpha
                 menu_active: Color::from_rgba(0.0, 1.0, 1.0, 0.3), // tech_blue with alpha
                 glass_bg: Color::from_rgba(0.1, 0.1, 0.1, 0.9), // surface with alpha
+
+                // Modern UI enhancements - Phase 1 additions
+                glass_bg_light: Color::from_rgba(0.1, 0.1, 0.1, 0.7),      // Light glass
+                glass_bg_medium: Color::from_rgba(0.1, 0.1, 0.1, 0.9),     // Medium glass
+                glass_bg_heavy: Color::from_rgba(0.1, 0.1, 0.1, 0.98),     // Heavy glass
+                gradient_orange: Color::from_rgb(1.0, 0.6, 0.0),           // #ff9900 (brighter for contrast)
+                gradient_red: Color::from_rgb(1.0, 0.2, 0.5),              // #ff3380 (brighter for contrast)
+                tech_blue_10: Color::from_rgba(0.0, 1.0, 1.0, 0.1),        // 10% opacity
+                tech_blue_20: Color::from_rgba(0.0, 1.0, 1.0, 0.2),        // 20% opacity
+                tech_blue_30: Color::from_rgba(0.0, 1.0, 1.0, 0.3),        // 30% opacity
+                tech_blue_50: Color::from_rgba(0.0, 1.0, 1.0, 0.5),        // 50% opacity
+                tech_blue_80: Color::from_rgba(0.0, 1.0, 1.0, 0.8),        // 80% opacity
             },
         }
     }
@@ -335,4 +437,87 @@ pub mod typography {
     pub const XLARGE: f32 = 24.0;
     /// Heading text size
     pub const HEADING: f32 = 32.0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_color_palette_modern_enhancements() {
+        let theme = PsocTheme::Dark;
+        let palette = theme.palette();
+
+        // Test gradient colors
+        let (orange, red) = palette.orange_red_gradient();
+        assert_eq!(orange, Color::from_rgb(1.0, 0.54, 0.0)); // #ff8a00
+        assert_eq!(red, Color::from_rgb(0.9, 0.18, 0.44)); // #e52e71
+
+        // Test tech blue variants
+        assert_eq!(palette.tech_blue_variant(10), palette.tech_blue_10);
+        assert_eq!(palette.tech_blue_variant(20), palette.tech_blue_20);
+        assert_eq!(palette.tech_blue_variant(50), palette.tech_blue_50);
+
+        // Test glass backgrounds
+        assert_eq!(palette.glass_background(GlassIntensity::Light), palette.glass_bg_light);
+        assert_eq!(palette.glass_background(GlassIntensity::Medium), palette.glass_bg_medium);
+        assert_eq!(palette.glass_background(GlassIntensity::Heavy), palette.glass_bg_heavy);
+    }
+
+    #[test]
+    fn test_glass_intensity_enum() {
+        let light = GlassIntensity::Light;
+        let medium = GlassIntensity::Medium;
+        let heavy = GlassIntensity::Heavy;
+
+        assert_ne!(light, medium);
+        assert_ne!(medium, heavy);
+        assert_ne!(light, heavy);
+    }
+
+    #[test]
+    fn test_tech_blue_glow() {
+        let theme = PsocTheme::Dark;
+        let palette = theme.palette();
+        let glow = palette.tech_blue_glow();
+
+        // Should be tech blue with 30% opacity
+        assert_eq!(glow.r, palette.tech_blue.r);
+        assert_eq!(glow.g, palette.tech_blue.g);
+        assert_eq!(glow.b, palette.tech_blue.b);
+        assert_eq!(glow.a, 0.3);
+    }
+
+    #[test]
+    fn test_modern_container_bg() {
+        let theme = PsocTheme::Dark;
+        let palette = theme.palette();
+
+        let bg_light = palette.modern_container_bg(0.0);
+        let bg_heavy = palette.modern_container_bg(1.0);
+
+        // Should have different alpha values
+        assert!(bg_light.a < bg_heavy.a);
+        assert!(bg_heavy.a <= 0.95); // Should not exceed max alpha
+    }
+
+    #[test]
+    fn test_theme_consistency_across_variants() {
+        let themes = [PsocTheme::Dark, PsocTheme::Light, PsocTheme::HighContrast];
+
+        for theme in themes {
+            let palette = theme.palette();
+
+            // All themes should have consistent tech blue variants
+            assert_eq!(palette.tech_blue_10.a, 0.1);
+            assert_eq!(palette.tech_blue_20.a, 0.2);
+            assert_eq!(palette.tech_blue_30.a, 0.3);
+            assert_eq!(palette.tech_blue_50.a, 0.5);
+            assert_eq!(palette.tech_blue_80.a, 0.8);
+
+            // Glass backgrounds should have proper alpha ordering
+            assert!(palette.glass_bg_light.a <= palette.glass_bg_medium.a);
+            assert!(palette.glass_bg_medium.a <= palette.glass_bg_heavy.a);
+        }
+    }
 }

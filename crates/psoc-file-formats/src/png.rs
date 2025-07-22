@@ -199,7 +199,7 @@ fn parse_iccp_chunk(data: &[u8]) -> Result<Option<IccProfile>> {
 
     debug!("ICC Profile cache miss for PNG ('{}', {} bytes), parsing...", profile_name, profile_key.len());
     let mut color_manager = ColorManager::new().context("Failed to create color manager for PNG profile")?;
-    match color_manager.load_profile_from_data(&profile_data, profile_name) {
+    match color_manager.load_profile_from_data(&profile_data, profile_name.clone()) {
         Ok(parsed_profile) => {
             // Assuming IccProfile is Clone
             let arc_profile = Arc::new(parsed_profile.clone());

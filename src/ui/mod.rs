@@ -40,8 +40,12 @@ pub use icons::Icon;
 #[cfg(feature = "gui")]
 pub use fonts::{FontConfig, FontManager, initialize_fonts};
 #[cfg(feature = "gui")]
-pub use theme::{ButtonStyle, ColorPalette, ContainerStyle, MenuStyle, PsocTheme, VisualStyle};
+pub use theme::{ButtonStyle, ColorPalette, ContainerStyle, MenuStyle, PsocTheme, VisualStyle, GlassIntensity};
 #[cfg(feature = "gui")]
 pub use animations::{MenuAnimationManager, TransitionType};
 #[cfg(feature = "gui")]
-pub use styles::{VisualEffectStyle, GlassEffect, FrostedGlassStyle, ShadowConfig};
+pub use styles::{
+    VisualEffectStyle, GlassEffect, FrostedGlassStyle, ShadowConfig,
+    ModernContainerStyle, ModernContainerConfig, modern_container_style, glass_container_style,
+    Gradient, GradientDirection, GradientStop, PsocGradient, GradientUtils
+};
